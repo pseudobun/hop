@@ -321,8 +321,10 @@ final class LauncherController: NSObject, LauncherContext, NSTableViewDataSource
     func numberOfRows(in tableView: NSTableView) -> Int { rows.count }
 
     func tableView(_ tableView: NSTableView, heightOfRow row: Int) -> CGFloat {
-        if case .header = rows[row] { return 30 }
-        return 40
+        switch rows[row] {
+        case .header: return 30
+        case .item(let item): return item.calculation == nil ? 40 : 116
+        }
     }
 
     func tableView(_ tableView: NSTableView, shouldSelectRow row: Int) -> Bool {
@@ -343,6 +345,11 @@ final class LauncherController: NSObject, LauncherContext, NSTableViewDataSource
                 ?? SectionHeaderView(frame: .zero)
             v.configure(title)
             return v
+        case .item(let item) where item.calculation != nil:
+            let v = tableView.makeView(withIdentifier: CalculationCellView.identifier, owner: nil) as? CalculationCellView
+                ?? CalculationCellView(frame: .zero)
+            v.configure(item.calculation!.expression, item.calculation!.result)
+            return v
         case .item(let item):
             let v = tableView.makeView(withIdentifier: ResultCellView.identifier, owner: nil) as? ResultCellView
                 ?? ResultCellView(frame: .zero)
@@ -361,6 +368,10 @@ final class LauncherController: NSObject, LauncherContext, NSTableViewDataSource
         glass.cornerRadius = panel.frameCornerRadius
         glass.tintColor = Theme.background.withAlphaComponent(0.78)
         let content = NSView()
+        // DS surfaces are dark and quiet: a mostly opaque #0c0c09 over the glass.
+        content.wantsLayer = true
+        content.layer?.backgroundColor = Theme.background.withAlphaComponent(0.82).cgColor
+        content.layer?.cornerRadius = panel.frameCornerRadius
         glass.contentView = content
         panel.contentView = glass
 
@@ -433,19 +444,22 @@ final class LauncherController: NSObject, LauncherContext, NSTableViewDataSource
         emptyLabel.font = Theme.body
         emptyLabel.isHidden = true
 
-        let bunny = NSImageView(image: NSApp.applicationIconImage ?? NSImage())
-        bunny.imageScaling = .scaleProportionallyUpOrDown
         footerTitle.font = .systemFont(ofSize: 12, weight: .medium)
         footerTitle.textColor = .secondaryLabelColor
         footerActions.font = .systemFont(ofSize: 12, weight: .medium)
         footerActions.textColor = .secondaryLabelColor
         let footerSpacer = NSView()
         footerSpacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        let footer = NSStackView(views: [bunny, footerSpacer, footerTitle, footerActions])
+        let footer = NSStackView(views: [footerSpacer, footerTitle, footerActions])
         footer.spacing = 16
         footer.edgeInsets = NSEdgeInsets(top: 0, left: 18, bottom: 0, right: 18)
 
         actionPanel.isHidden = true
+
+        // The bunny as a faint watermark in the middle, behind everything.
+        let watermark = WatermarkView(frame: NSRect(origin: .zero, size: LauncherPanel.size))
+        watermark.autoresizingMask = [.width, .height]
+        content.addSubview(watermark)
 
         for v in [header, topDivider, scroll, emptyLabel, bottomDivider, footer, actionPanel] as [NSView] {
             v.translatesAutoresizingMaskIntoConstraints = false
@@ -474,12 +488,30 @@ final class LauncherController: NSObject, LauncherContext, NSTableViewDataSource
             footer.trailingAnchor.constraint(equalTo: content.trailingAnchor),
             footer.bottomAnchor.constraint(equalTo: content.bottomAnchor),
             footer.heightAnchor.constraint(equalToConstant: 40),
-            bunny.widthAnchor.constraint(equalToConstant: 20),
-            bunny.heightAnchor.constraint(equalToConstant: 20),
             actionPanel.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -10),
             actionPanel.bottomAnchor.constraint(equalTo: footer.topAnchor, constant: -6),
             actionPanel.widthAnchor.constraint(equalToConstant: 320),
             actionPanelHeight,
         ])
+    }
+}
+
+/// Draws the bunny logo centred and faint; outside Auto Layout so it can never size the window.
+final class WatermarkView: NSView {
+    private let image: NSImage? = Bundle.main.url(forResource: "bunny", withExtension: "svg").flatMap(NSImage.init(contentsOf:))
+
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+    override func viewDidMoveToSuperview() {
+        super.viewDidMoveToSuperview()
+        if let s = superview { frame = s.bounds }
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        guard let image else { return }
+        let b = superview?.bounds ?? bounds
+        let side = b.height * 0.82
+        let rect = NSRect(x: b.midX - side / 2, y: b.midY - side / 2, width: side, height: side)
+        image.draw(in: rect, from: .zero, operation: .sourceOver, fraction: 0.05)
     }
 }

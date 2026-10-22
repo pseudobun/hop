@@ -18,6 +18,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var launcher: LauncherController!
     private var hotkey: GlobalHotkey!
     private var statusItem: StatusItem?
+    #if DEBUG
+    private var debugBackdrop: NSWindow?
+    #endif
     private let hyper = HyperKeyController()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -75,16 +78,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         #if DEBUG
         let defaults = UserDefaults.standard
+        if let backdrop = defaults.string(forKey: "DebugBackdrop") { debugBackdrop = DebugSnapshot.showBackdrop(backdrop) }
         if defaults.bool(forKey: "DebugShowOnLaunch") {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
                 guard let self else { return }
                 launcher.show(query: defaults.string(forKey: "DebugQuery"))
-                if defaults.bool(forKey: "DebugActions") { launcher.debugOpenActionPanel() }
+                if defaults.bool(forKey: "DebugActions") {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in self?.launcher.debugOpenActionPanel() }
+                }
                 if defaults.string(forKey: "DebugPush") == "permissions" { launcher.push(makePermissions()) }
+                if defaults.string(forKey: "DebugPush") == "kill" { launcher.push(KillProcessMode(sensitivity: settings.data.general.sensitivity)) }
                 if let path = defaults.string(forKey: "DebugSnapshotPath") {
                     Task {
                         try? await Task.sleep(for: .milliseconds(700))
-                        await DebugSnapshot.capture(self.launcher.panel, to: path)
+                        if self.debugBackdrop != nil {
+                            await DebugSnapshot.captureRegion(around: self.launcher.panel, padding: 60, to: path)
+                        } else {
+                            await DebugSnapshot.capture(self.launcher.panel, to: path)
+                        }
                     }
                 }
             }

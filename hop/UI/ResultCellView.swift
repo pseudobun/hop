@@ -135,3 +135,65 @@ final class SectionHeaderView: NSTableCellView {
 
     func configure(_ title: String) { label.attributedStringValue = Theme.labelString(title) }
 }
+
+/// Calculator card: the parsed expression on the left, the result on the right.
+final class CalculationCellView: NSTableCellView {
+    static let identifier = NSUserInterfaceItemIdentifier("CalculationCell")
+
+    private let expression = NSTextField(labelWithString: "")
+    private let result = NSTextField(labelWithString: "")
+    private let arrow = NSImageView()
+
+    override init(frame: NSRect) {
+        super.init(frame: frame)
+        identifier = Self.identifier
+        for f in [expression, result] {
+            f.alignment = .center
+            f.lineBreakMode = .byTruncatingMiddle
+            f.textColor = Theme.foreground
+            f.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        }
+        expression.font = Theme.mono(22)
+        expression.textColor = Theme.foreground.withAlphaComponent(0.85)
+        result.font = Theme.mono(28, 500)
+        arrow.image = NSImage(systemSymbolName: "arrow.right", accessibilityDescription: nil)?
+            .withSymbolConfiguration(.init(pointSize: 16, weight: .medium))
+        arrow.contentTintColor = Theme.mutedForeground
+
+        let left = Self.column(expression, label: "Expression")
+        let right = Self.column(result, label: "Result")
+        for v in [left, arrow, right] {
+            v.translatesAutoresizingMaskIntoConstraints = false
+            addSubview(v)
+        }
+        NSLayoutConstraint.activate([
+            arrow.centerXAnchor.constraint(equalTo: centerXAnchor),
+            arrow.centerYAnchor.constraint(equalTo: centerYAnchor, constant: -8),
+            left.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 24),
+            left.trailingAnchor.constraint(equalTo: arrow.leadingAnchor, constant: -16),
+            left.centerYAnchor.constraint(equalTo: centerYAnchor),
+            right.leadingAnchor.constraint(equalTo: arrow.trailingAnchor, constant: 16),
+            right.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -24),
+            right.bottomAnchor.constraint(equalTo: left.bottomAnchor),
+        ])
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError() }
+
+    private static func column(_ value: NSTextField, label text: String) -> NSStackView {
+        let label = NSTextField(labelWithString: "")
+        label.attributedStringValue = Theme.labelString(text)
+        label.alignment = .center
+        let stack = NSStackView(views: [value, label])
+        stack.orientation = .vertical
+        stack.alignment = .centerX
+        stack.spacing = 8
+        return stack
+    }
+
+    func configure(_ expression: String, _ result: String) {
+        self.expression.stringValue = expression
+        self.result.stringValue = result
+    }
+}

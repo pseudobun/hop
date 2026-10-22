@@ -22,6 +22,42 @@ nonisolated enum Calculator {
         return try node.eval()
     }
 
+    /// The input as hop understood it, typeset: `1280*1,2+15%` → `1280 × 1,2 + 15%`.
+    static func pretty(_ input: String, locale: Locale = .current) -> String {
+        guard let tokens = try? tokenize(input) else { return input }
+        var out = ""
+        var previous: Token?
+        for t in tokens {
+            switch t {
+            case .number(let d):
+                out += format(d, locale: locale)
+            case .ident(let name):
+                if case .number? = previous { out += " " }
+                out += name == "pi" ? "π" : name
+            case .op(let c):
+                let unary: Bool = switch previous {
+                case nil, .op?, .lparen?: c != "%"
+                default: false
+                }
+                if c == "%" { out += "%" }
+                else if unary { out += c == "-" ? "−" : String(c) }
+                else {
+                    let glyph = switch c {
+                    case "*": "×"
+                    case "/": "÷"
+                    case "-": "−"
+                    default: String(c)
+                    }
+                    out += c == "^" ? "^" : " \(glyph) "
+                }
+            case .lparen: out += "("
+            case .rparen: out += ")"
+            }
+            previous = t
+        }
+        return out
+    }
+
     /// Plain string for the clipboard and the result row.
     static func format(_ value: Decimal, locale: Locale = .current) -> String {
         var v = value, rounded = Decimal()

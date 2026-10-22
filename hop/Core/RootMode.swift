@@ -119,14 +119,25 @@ final class RootMode: Mode {
 
     private func calculatorItem(_ query: String, _ value: Decimal) -> Item {
         let text = Calculator.format(value)
-        return Item(id: "calc", title: text, subtitle: query.trimmingCharacters(in: .whitespaces),
-                    icon: .tile("equal", Theme.chart2), accessory: "Calculator",
+        let expression = Calculator.pretty(query)
+        return Item(id: "calc", title: text, subtitle: expression,
                     actions: [
                         Action(title: "Copy Answer") {
                             Pasteboard.copy(text)
                             return .dismissWithHUD("Copied \(text)")
                         },
-                    ], tracksFrecency: false, monoTitle: true)
+                        Action(title: "Copy Expression", shortcut: .cmd("c", .shift)) {
+                            Pasteboard.copy("\(expression) = \(text)")
+                            return .dismissWithHUD("Copied \(expression) = \(text)")
+                        },
+                        Action(title: "Paste Answer", shortcut: .ret(.command)) { [weak self] in
+                            self?.context?.dismiss()
+                            if !(await Pasteboard.paste(text, concealed: false)) {
+                                HUD.shared.show("Copied. Allow hop in Accessibility to paste")
+                            }
+                            return .stay
+                        },
+                    ], tracksFrecency: false, calculation: (expression, text))
     }
 
     private func item(for entry: AppEntry) -> Item {

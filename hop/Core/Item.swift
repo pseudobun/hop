@@ -119,6 +119,8 @@ struct Item {
     var chip: Chip?
     /// Title is a value (a number), set in mono.
     var monoTitle = false
+    /// Large two-sided calculator card instead of a normal row.
+    var calculation: (expression: String, result: String)?
 }
 
 struct ResultSection {

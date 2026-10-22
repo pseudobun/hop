@@ -34,4 +34,12 @@ struct CalculatorTests {
         #expect(Calculator.evaluateIfExpression("2+2*3") == 8)
         #expect(Calculator.evaluateIfExpression("sqrt(2)") != nil)
     }
+
+    @Test(arguments: [
+        ("1280*1,2+15%", "1280 × 1.2 + 15%"), ("-2^2", "−2^2"), ("(1+2)*3", "(1 + 2) × 3"),
+        ("10/4", "10 ÷ 4"), ("sqrt(16)", "sqrt(16)"), ("2 pi", "2 π"), ("3-1", "3 − 1"),
+    ])
+    func pretty(_ input: String, _ expected: String) {
+        #expect(Calculator.pretty(input, locale: Self.posix) == expected)
+    }
 }
