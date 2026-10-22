@@ -1,4 +1,5 @@
 import AppKit
+import Carbon.HIToolbox
 
 /// `hop <command>`: the app binary doubles as a CLI for scripts and agents.
 /// Destructive commands only describe what they would do unless `--yes` is given.
@@ -14,6 +15,8 @@ enum CLI {
         "downloads": downloads,
         "trash": trash,
         "config": config,
+        "hyper": hyper,
+        "wg": wireguard,
     ]
 
     /// Runs a CLI command and exits if argv names one; otherwise returns.
@@ -41,6 +44,8 @@ enum CLI {
           downloads clear [--yes] [--json]    Move everything in Downloads to the Trash
           trash count | empty [--yes]         Count or empty the Trash
           config path | check | show          Inspect ~/.config/hop/config.json5
+          hyper status | map | unmap          Caps Lock → F20 key mapping (unmap after a crash)
+          wg list | up <name> | down <name> | down-all   WireGuard tunnels (WireGuard.app)
 
         <app> is a name, a bundle identifier or a path to a .app.
         Without --yes, destructive commands only print what they would do (exit 3).
@@ -166,6 +171,55 @@ enum CLI {
             return settings.error == nil ? 0 : 1
         default:
             return Output.fail("usage: hop config path | check | show")
+        }
+    }
+
+    static func wireguard(_ a: Args) async -> Int32 {
+        let tunnels = await WireGuard.list()
+        let sub = a.positional.first ?? "list"
+        let name = a.positional.dropFirst().joined(separator: " ")
+        func find() -> WireGuardTunnel? {
+            tunnels.first { $0.name == name } ?? tunnels.first { $0.name.lowercased().hasPrefix(name.lowercased()) }
+        }
+        switch sub {
+        case "list":
+            if a.json {
+                Output.json(tunnels.map { ["name": $0.name, "serviceID": $0.serviceID, "status": $0.status, "connected": $0.isConnected] })
+            } else if tunnels.isEmpty {
+                print("no WireGuard tunnels")
+            } else {
+                for t in tunnels { print("\(t.isConnected ? "●" : "○") \(t.name)\t\(t.status)") }
+            }
+            return 0
+        case "up", "down":
+            guard !name.isEmpty, let t = find() else { return Output.fail("no tunnel named \(name)") }
+            guard await WireGuard.setConnected(t, sub == "up") else { return Output.fail("scutil failed for \(t.name)") }
+            print("\(t.name): \(sub == "up" ? "connecting" : "disconnecting")")
+            return 0
+        case "down-all":
+            print("disconnected \(await WireGuard.disconnectAll())")
+            return 0
+        default:
+            return Output.fail("usage: hop wg list | up <name> | down <name> | down-all")
+        }
+    }
+
+    static func hyper(_ a: Args) async -> Int32 {
+        switch a.positional.first ?? "status" {
+        case "status":
+            let mapped = await HyperKeyMapping.current().contains {
+                $0["HIDKeyboardModifierMappingSrc"] == HyperKeyMapping.capsLock && $0["HIDKeyboardModifierMappingDst"] == HyperKeyMapping.f20
+            }
+            let info: [String: Any] = ["enabledInConfig": AppSettings().data.hyperKey.enabled, "capsMappedToF20": mapped,
+                                       "accessibility": AXIsProcessTrusted(), "secureInput": IsSecureEventInputEnabled()]
+            if a.json { Output.json(info) } else { for (k, v) in info.sorted(by: { $0.key < $1.key }) { print("\(k): \(v)") } }
+            return 0
+        case "map":
+            return await HyperKeyMapping.apply() ? 0 : Output.fail("hidutil failed")
+        case "unmap":
+            return await HyperKeyMapping.restore() ? 0 : Output.fail("hidutil failed")
+        default:
+            return Output.fail("usage: hop hyper status | map | unmap")
         }
     }
 

@@ -18,6 +18,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var launcher: LauncherController!
     private var hotkey: GlobalHotkey!
     private var statusItem: StatusItem?
+    private let hyper = HyperKeyController()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         guard !AppPaths.isRunningTests else { return }
@@ -26,10 +27,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let frecency = FrecencyStore(store: JSONStore(url: AppPaths.file("frecency.json")))
         let apps = AppIndex()
         services = Services(settings: settings, frecency: frecency, apps: apps)
+        services.hyper = hyper
 
         root = RootMode(apps: apps, frecency: frecency, settings: settings) { [unowned self] in
             Registry.commands(services)
         }
+        root.hyperError = { [weak self] in self?.hyper.lastError }
         launcher = LauncherController(root: root)
         launcher.popToRootSeconds = { settings.data.general.popToRootSeconds }
         launcher.onItemPerformed = { item, index in
@@ -69,6 +72,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Applies config changes: hotkey, login item, menu bar icon, feature commands.
     private func apply(_ config: HopConfig, previous: HopConfig?) {
+        if previous?.hyperKey != config.hyperKey {
+            hyper.update(enabled: config.hyperKey.enabled, quickPressEscape: config.hyperKey.quickPressEscape)
+        }
+
         if previous?.general.hotkey != config.general.hotkey {
             let spec = HotkeySpec.parse(config.general.hotkey) ?? HotkeySpec.parse("cmd+space")!
             if HotkeySpec.parse(config.general.hotkey) == nil {
@@ -100,6 +107,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             root.rebuild()
             if launcher.isVisible { launcher.reload() }
         }
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        hyper.stop()
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {

@@ -5,6 +5,7 @@ final class Services {
     let settings: AppSettings
     let frecency: FrecencyStore
     let apps: AppIndex
+    var hyper: HyperKeyController?
     /// Opens the config file in the user's editor.
     func openConfig() {
         let url = settings.url
@@ -27,6 +28,7 @@ enum Registry {
     static func commands(_ services: Services) -> [Item] {
         var items: [Item] = []
         items += SystemCommands.items(services)
+        items += WireGuardCommands.items(services)
         items += [
             Item(id: "hop.config", title: "Open hop Config", subtitle: "~/.config/hop/config.json5",
                  icon: .symbol("gearshape"), accessory: "Command",

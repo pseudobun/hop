@@ -13,6 +13,7 @@ final class RootMode: Mode {
     /// Query prefixes that jump straight into a sub-mode, e.g. "kp ".
     var prefixModes: [(prefix: String, make: () -> Mode)] = []
     weak var context: LauncherContext?
+    var hyperError: (() -> String?)?
 
     private var items: [Item] = []
     private var candidates: [RankCandidate] = []
@@ -77,6 +78,15 @@ final class RootMode: Mode {
         var sections: [ResultSection] = []
         var setup: [Item] = []
         if let error = settings.error { setup.append(configErrorItem(error)) }
+        if settings.data.hyperKey.enabled, let err = hyperError?(), err.contains("Accessibility") {
+            setup.append(Item(id: "setup.accessibility", title: "Allow hop in Accessibility",
+                              subtitle: "Hyper Key and paste need it: Privacy & Security → Accessibility",
+                              icon: .symbol("hand.raised.fill", tint: .systemOrange), accessory: "Setup",
+                              actions: [Action(title: "Open Accessibility Settings") {
+                                  NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
+                                  return .dismiss
+                              }], tracksFrecency: false))
+        }
         if settings.data.general.hotkey.lowercased().replacingOccurrences(of: " ", with: "") == "cmd+space",
            let hint = SpotlightHotkey.hintItem() {
             setup.append(hint)
