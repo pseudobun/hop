@@ -54,6 +54,14 @@ final class LauncherController: NSObject, LauncherContext, NSTableViewDataSource
 
     func reload() { refresh(keepSelection: true) }
 
+    func refreshChrome() {
+        // Keep the typed query unless the field switches between plain and secure.
+        let keep = searchField.isHidden == current.isSecureInput ? query : ""
+        enterCurrentMode(query: keep)
+        refresh()
+        activeField.currentEditor()?.moveToEndOfDocument(nil)
+    }
+
     func setQuery(_ query: String) {
         activeField.stringValue = query
         refresh()
@@ -128,7 +136,7 @@ final class LauncherController: NSObject, LauncherContext, NSTableViewDataSource
         secureField.isHidden = !secure
         activeField.stringValue = query
         activeField.placeholderString = current.placeholder
-        modePill.stringValue = current.title ?? ""
+        modePill.stringValue = current.title.map { "\u{2002}\($0)\u{2002}" } ?? ""
         modePill.isHidden = current.title == nil
         accessoryHolder.arrangedSubviews.forEach { $0.removeFromSuperview() }
         if let accessory = current.accessoryView { accessoryHolder.addArrangedSubview(accessory) }

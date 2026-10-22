@@ -7,6 +7,8 @@ protocol LauncherContext: AnyObject {
     func reload()
     /// Replace the search text and re-run the query.
     func setQuery(_ query: String)
+    /// Re-read the mode's title, placeholder, secure input and accessory view.
+    func refreshChrome()
     func push(_ mode: Mode)
     func pop()
     func dismiss()

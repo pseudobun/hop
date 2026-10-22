@@ -28,11 +28,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let apps = AppIndex()
         services = Services(settings: settings, frecency: frecency, apps: apps)
         services.hyper = hyper
+        let session = KeePassSession(settings: settings)
+        let pins = KeePassPins()
+        let makeKeePass: () -> Mode = { [unowned self] in
+            KeePassMode(session: session, pins: pins, sensitivity: settings.data.general.sensitivity,
+                        openConfig: { [weak self] in self?.services.openConfig() })
+        }
+        services.keepassMode = makeKeePass
 
         root = RootMode(apps: apps, frecency: frecency, settings: settings) { [unowned self] in
             Registry.commands(services)
         }
         root.hyperError = { [weak self] in self?.hyper.lastError }
+        root.prefixModes = [(prefix: "kp ", make: makeKeePass)]
         launcher = LauncherController(root: root)
         launcher.popToRootSeconds = { settings.data.general.popToRootSeconds }
         launcher.onItemPerformed = { item, index in

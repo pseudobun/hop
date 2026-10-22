@@ -4,8 +4,8 @@ import os
 
 /// Contents of `~/.config/hop/config.json5`. Every key is optional; missing keys
 /// fall back to the defaults below.
-struct HopConfig: Decodable, Equatable {
-    struct General: Decodable, Equatable {
+nonisolated struct HopConfig: Decodable, Equatable, Sendable {
+    nonisolated struct General: Decodable, Equatable, Sendable {
         var hotkey = "cmd+space"
         var sensitivity: Sensitivity = .high
         var popToRootSeconds = 90
@@ -13,19 +13,19 @@ struct HopConfig: Decodable, Equatable {
         var menuBarIcon = true
     }
 
-    struct HyperKey: Decodable, Equatable {
+    nonisolated struct HyperKey: Decodable, Equatable, Sendable {
         var enabled = false
         /// Caps Lock pressed and released alone sends Escape.
         var quickPressEscape = false
     }
 
-    struct WireGuard: Decodable, Equatable {
+    nonisolated struct WireGuard: Decodable, Equatable, Sendable {
         var enabled = true
         var showFlags = true
     }
 
-    struct KeePass: Decodable, Equatable {
-        enum PasswordSource: String, Decodable, Equatable {
+    nonisolated struct KeePass: Decodable, Equatable, Sendable {
+        nonisolated enum PasswordSource: String, Decodable, Equatable, Sendable {
             /// Ask in hop once, remember it behind Touch ID / login password.
             case keychain
             /// Ask in hop every time the database is unlocked.
@@ -45,9 +45,11 @@ struct HopConfig: Decodable, Equatable {
         var lockAfterMinutes = 10
         /// Override the keepassxc-cli path.
         var cli = ""
+        /// Let `hop kp get` print passwords, TOTP codes and notes (for agents).
+        var cliAccess = false
     }
 
-    struct System: Decodable, Equatable {
+    nonisolated struct System: Decodable, Equatable, Sendable {
         var downloadsFolder = "~/Downloads"
     }
 
@@ -62,13 +64,13 @@ struct HopConfig: Decodable, Equatable {
 
 // MARK: - Lenient decoding (missing keys keep their defaults)
 
-private extension KeyedDecodingContainer {
+nonisolated private extension KeyedDecodingContainer {
     func value<T: Decodable>(_ key: Key, _ fallback: T) throws -> T {
         try decodeIfPresent(T.self, forKey: key) ?? fallback
     }
 }
 
-extension HopConfig {
+nonisolated extension HopConfig {
     private enum Keys: String, CodingKey { case general, hyperKey, wireguard, keepass, system }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: Keys.self)
@@ -80,7 +82,7 @@ extension HopConfig {
     }
 }
 
-extension HopConfig.General {
+nonisolated extension HopConfig.General {
     private enum Keys: String, CodingKey { case hotkey, sensitivity, popToRootSeconds, openAtLogin, menuBarIcon }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: Keys.self), d = Self()
@@ -92,7 +94,7 @@ extension HopConfig.General {
     }
 }
 
-extension HopConfig.HyperKey {
+nonisolated extension HopConfig.HyperKey {
     private enum Keys: String, CodingKey { case enabled, quickPressEscape }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: Keys.self), d = Self()
@@ -101,7 +103,7 @@ extension HopConfig.HyperKey {
     }
 }
 
-extension HopConfig.WireGuard {
+nonisolated extension HopConfig.WireGuard {
     private enum Keys: String, CodingKey { case enabled, showFlags }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: Keys.self), d = Self()
@@ -110,8 +112,8 @@ extension HopConfig.WireGuard {
     }
 }
 
-extension HopConfig.KeePass {
-    private enum Keys: String, CodingKey { case enabled, database, keyFile, password, passwordCommand, lockAfterMinutes, cli }
+nonisolated extension HopConfig.KeePass {
+    private enum Keys: String, CodingKey { case enabled, database, keyFile, password, passwordCommand, lockAfterMinutes, cli, cliAccess }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: Keys.self), d = Self()
         enabled = try c.value(.enabled, d.enabled)
@@ -121,10 +123,11 @@ extension HopConfig.KeePass {
         passwordCommand = try c.value(.passwordCommand, d.passwordCommand)
         lockAfterMinutes = try c.value(.lockAfterMinutes, d.lockAfterMinutes)
         cli = try c.value(.cli, d.cli)
+        cliAccess = try c.value(.cliAccess, d.cliAccess)
     }
 }
 
-extension HopConfig.System {
+nonisolated extension HopConfig.System {
     private enum Keys: String, CodingKey { case downloadsFolder }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: Keys.self), d = Self()
@@ -132,7 +135,7 @@ extension HopConfig.System {
     }
 }
 
-extension String {
+nonisolated extension String {
     /// `~/x` → `/Users/me/x`; empty stays empty.
     var expandingTilde: String { (self as NSString).expandingTildeInPath }
 }
@@ -280,6 +283,8 @@ final class AppSettings {
         lockAfterMinutes: 10,
         // Path to keepassxc-cli if it is not in KeePassXC.app or Homebrew
         cli: "",
+        // Allow `hop kp get` to print passwords, TOTP codes and notes (e.g. for agents)
+        cliAccess: false,
       },
 
       system: {
