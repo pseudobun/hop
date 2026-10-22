@@ -1,9 +1,11 @@
 import AppKit
 import os
+import ServiceManagement
 
 @main
 final class AppDelegate: NSObject, NSApplicationDelegate {
     static func main() {
+        CLI.runIfRequested(CommandLine.arguments)
         let app = NSApplication.shared
         let delegate = AppDelegate()
         app.delegate = delegate
@@ -16,7 +18,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var launcher: LauncherController!
     private var hotkey: GlobalHotkey!
     private var statusItem: StatusItem?
-    private var settingsWindow: SettingsWindowController!
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         guard !AppPaths.isRunningTests else { return }
@@ -25,14 +26,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let frecency = FrecencyStore(store: JSONStore(url: AppPaths.file("frecency.json")))
         let apps = AppIndex()
         services = Services(settings: settings, frecency: frecency, apps: apps)
-        settingsWindow = SettingsWindowController(settings: settings)
-        services.openSettings = { [weak self] in self?.settingsWindow.show() }
 
         root = RootMode(apps: apps, frecency: frecency, settings: settings) { [unowned self] in
             Registry.commands(services)
         }
         launcher = LauncherController(root: root)
-        launcher.popToRootSeconds = { settings.data.popToRootSeconds }
+        launcher.popToRootSeconds = { settings.data.general.popToRootSeconds }
         launcher.onItemPerformed = { item, index in
             if index == 0 && item.tracksFrecency { frecency.recordVisit(item.id) }
         }
@@ -42,14 +41,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.root.rebuild()
             if self?.launcher.isVisible == true { self?.launcher.reload() }
         }
+        hotkey = GlobalHotkey { [weak self] in self?.launcher.toggle() }
+
+        settings.onChange = { [weak self] old, new in self?.apply(new, previous: old) }
+        settings.start()
+        apply(settings.data, previous: nil)
+
         root.rebuild()
         apps.start()
-
-        hotkey = GlobalHotkey { [weak self] in self?.launcher.toggle() }
-        if !hotkey.register() { Log.app.error("Could not register ⌘Space") }
-
-        statusItem = StatusItem(onOpen: { [weak self] in self?.launcher.show() },
-                                onSettings: { [weak self] in self?.settingsWindow.show() })
 
         #if DEBUG
         let defaults = UserDefaults.standard
@@ -66,6 +65,41 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
         #endif
+    }
+
+    /// Applies config changes: hotkey, login item, menu bar icon, feature commands.
+    private func apply(_ config: HopConfig, previous: HopConfig?) {
+        if previous?.general.hotkey != config.general.hotkey {
+            let spec = HotkeySpec.parse(config.general.hotkey) ?? HotkeySpec.parse("cmd+space")!
+            if HotkeySpec.parse(config.general.hotkey) == nil {
+                Log.app.error("Invalid hotkey \(config.general.hotkey, privacy: .public), using cmd+space")
+            }
+            if !hotkey.register(keyCode: spec.keyCode, modifiers: spec.modifiers) {
+                Log.app.error("Could not register hotkey \(config.general.hotkey, privacy: .public)")
+            }
+        }
+
+        let loginEnabled = SMAppService.mainApp.status == .enabled
+        if config.general.openAtLogin != loginEnabled {
+            do {
+                if config.general.openAtLogin { try SMAppService.mainApp.register() } else { try SMAppService.mainApp.unregister() }
+            } catch {
+                Log.app.error("Login item: \(error.localizedDescription, privacy: .public)")
+            }
+        }
+
+        if config.general.menuBarIcon && statusItem == nil {
+            statusItem = StatusItem(onOpen: { [weak self] in self?.launcher.show() },
+                                    onConfig: { [weak self] in self?.services.openConfig() })
+        } else if !config.general.menuBarIcon, let item = statusItem {
+            item.remove()
+            statusItem = nil
+        }
+
+        if previous != nil {
+            root.rebuild()
+            if launcher.isVisible { launcher.reload() }
+        }
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {

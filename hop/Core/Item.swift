@@ -9,7 +9,7 @@ enum ItemIcon {
 
 /// A keyboard shortcut bound to an action: `↵` or a character, plus modifiers.
 struct KeyCombo: Equatable {
-    enum Key: Equatable { case returnKey, character(String) }
+    enum Key: Equatable { case returnKey, delete, character(String) }
 
     let key: Key
     let modifiers: NSEvent.ModifierFlags
@@ -27,6 +27,8 @@ struct KeyCombo: Equatable {
         switch key {
         case .returnKey:
             return event.keyCode == 36 || event.keyCode == 76
+        case .delete:
+            return event.keyCode == 51
         case .character(let c):
             return event.charactersIgnoringModifiers?.lowercased() == c.lowercased()
         }
@@ -40,6 +42,7 @@ struct KeyCombo: Equatable {
         if modifiers.contains(.command) { s += "⌘" }
         switch key {
         case .returnKey: s += "↵"
+        case .delete: s += "⌫"
         case .character(let c): s += c.uppercased()
         }
         return s

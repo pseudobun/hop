@@ -61,7 +61,7 @@ final class RootMode: Mode {
 
         if query.isEmpty { return emptySections() }
 
-        let order = RootRanker.rank(candidates, query: SearchQuery(query), sensitivity: settings.data.sensitivity)
+        let order = RootRanker.rank(candidates, query: SearchQuery(query), sensitivity: settings.data.general.sensitivity)
         let results = order.map { items[$0] }
         var sections: [ResultSection] = []
         let lower = query.lowercased()
@@ -75,7 +75,13 @@ final class RootMode: Mode {
 
     private func emptySections() -> [ResultSection] {
         var sections: [ResultSection] = []
-        if let hint = SpotlightHotkey.hintItem() { sections.append(ResultSection(title: "Setup", items: [hint])) }
+        var setup: [Item] = []
+        if let error = settings.error { setup.append(configErrorItem(error)) }
+        if settings.data.general.hotkey.lowercased().replacingOccurrences(of: " ", with: "") == "cmd+space",
+           let hint = SpotlightHotkey.hintItem() {
+            setup.append(hint)
+        }
+        sections.append(ResultSection(title: "Setup", items: setup))
 
         let suggested = candidates.indices
             .filter { candidates[$0].frecency > 1 }
@@ -89,6 +95,16 @@ final class RootMode: Mode {
         let appKinds = Set(apps.entries.filter { $0.kind == .application }.map(\.id))
         sections.append(ResultSection(title: "Applications", items: order.filter { appKinds.contains(candidates[$0].id) }.map { items[$0] }))
         return sections
+    }
+
+    private func configErrorItem(_ error: String) -> Item {
+        Item(id: "setup.configError", title: "Config has an error", subtitle: error,
+             icon: .symbol("exclamationmark.triangle.fill", tint: .systemYellow), accessory: "Setup",
+             actions: [Action(title: "Open Config") {
+                 let url = AppSettings.defaultURL
+                 NSWorkspace.shared.open(url)
+                 return .dismiss
+             }], tracksFrecency: false)
     }
 
     private func calculatorItem(_ query: String, _ value: Decimal) -> Item {
@@ -124,6 +140,11 @@ final class RootMode: Mode {
                 Pasteboard.copy(entry.path)
                 return .dismissWithHUD("Copied path")
             })
+            if UninstallMode.isRemovable(entry.path) {
+                actions.append(Action(title: "Uninstall…", shortcut: .init(key: .delete, modifiers: .command), style: .destructive) {
+                    .push(UninstallMode(app: entry))
+                })
+            }
             if let bundleID = entry.bundleID {
                 actions.append(Action(title: "Copy Bundle Identifier", shortcut: .cmd("c", .shift)) {
                     Pasteboard.copy(bundleID)
