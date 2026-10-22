@@ -53,7 +53,7 @@ struct ConfigTests {
 
     @Test func templateParsesToDefaults() throws {
         var expected = HopConfig()
-        expected.keepass.database = "~/Documents/Passwords.kdbx"
+        expected.keepass.databases = [.init(name: "Personal", path: "~/Documents/Passwords.kdbx")]
         #expect(try Self.decode(AppSettings.template) == expected)
     }
 
@@ -72,6 +72,14 @@ struct ConfigTests {
     @Test func invalidValuesThrow() {
         #expect(throws: (any Error).self) { try Self.decode(#"{ general: { sensitivity: "extreme" } }"#) }
         #expect(throws: (any Error).self) { try Self.decode(#"{ general: { "#) }
+    }
+
+    @Test func legacySingleDatabase() throws {
+        let c = try Self.decode(#"{ keepass: { database: "~/a.kdbx", password: "none" } }"#)
+        #expect(c.keepass.allDatabases == [.init(name: "", path: "~/a.kdbx", password: .none)])
+        #expect(c.keepass.allDatabases[0].label == "a")
+        let multi = try Self.decode(#"{ keepass: { database: "~/ignored.kdbx", databases: [{ name: "W", path: "~/w.kdbx" }, { path: "" }] } }"#)
+        #expect(multi.keepass.allDatabases.map(\.label) == ["W"])
     }
 
     @Test func emptyFileGivesDefaults() throws {
@@ -111,5 +119,44 @@ struct HyperKeyMappingTests {
         #expect(entries[0]["HIDKeyboardModifierMappingDst"] == HyperKeyMapping.f20)
         #expect(HyperKeyMapping.parse("(null)").isEmpty)
         #expect(HyperKeyMapping.json(entries).contains("\"HIDKeyboardModifierMappingSrc\":30064771129"))
+    }
+}
+
+struct ProcessesTests {
+    @Test func parsesPs() {
+        let out = """
+          0     0   0,0      0 kernel_task
+          1     0   0.1  12000 /sbin/launchd
+        512   501  12.5 204800 /Applications/Safari.app/Contents/MacOS/Safari
+        733   501   0.0   1024 /usr/libexec/some helper
+        999   501   3.0   4096 /bin/zsh
+        """
+        let p = Processes.parse(out, excluding: [999])
+        #expect(p.map(\.pid) == [512, 733])
+        #expect(p[0].name == "Safari" && p[0].memory == 204_800 * 1024 && p[0].cpu == 12.5)
+        #expect(p[1].path == "/usr/libexec/some helper")
+    }
+
+    @Test func paneNames() {
+        #expect(AppScanner.prettifyPaneName("KeyboardSettings") == "Keyboard")
+        #expect(AppScanner.prettifyPaneName("ControlCenterSettings") == "Control Center")
+        #expect(AppScanner.prettifyPaneName("Date & Time") == "Date & Time")
+        #expect(AppScanner.prettifyPaneName("Bluetooth") == "Bluetooth")
+    }
+}
+
+struct ConfigEditorTests {
+    @Test func flipsOnlyTheKey() throws {
+        let url = FileManager.default.temporaryDirectory.appending(path: "hop-config-\(UUID().uuidString).json5")
+        defer { try? FileManager.default.removeItem(at: url); unsetenv("HOP_CONFIG") }
+        try AppSettings.template.replacingOccurrences(of: "openAtLogin: true", with: "openAtLogin: false")
+            .write(to: url, atomically: true, encoding: .utf8)
+        setenv("HOP_CONFIG", url.path, 1)
+        #expect(ConfigEditor.setBool("openAtLogin", true))
+        let text = try String(contentsOf: url, encoding: .utf8)
+        #expect(text.contains("openAtLogin: true,"))
+        #expect(text.contains("// hop configuration"))
+        #expect(text.contains("menuBarIcon: true"))
+        #expect(!ConfigEditor.setBool("doesNotExist", true))
     }
 }

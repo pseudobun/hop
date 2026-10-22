@@ -113,6 +113,23 @@ nonisolated enum AppScanner {
                         kind: kind, isGame: category?.contains("games") == true)
     }
 
+    /// "KeyboardSettings" → "Keyboard", "DateAndTime" → "Date And Time".
+    static func prettifyPaneName(_ name: String) -> String {
+        guard !name.contains(" ") else { return name }
+        var n = name
+        for suffix in ["SettingsExtension", "Settings", "Extension", "Pref"] where n.hasSuffix(suffix) && n.count > suffix.count {
+            n.removeLast(suffix.count)
+            break
+        }
+        var out = ""
+        let chars = Array(n)
+        for (i, c) in chars.enumerated() {
+            if i > 0, c.isUppercase, chars[i - 1].isLowercase { out.append(" ") }
+            out.append(c)
+        }
+        return out
+    }
+
     static func settingsPanes() -> [AppEntry] {
         let dir = URL(fileURLWithPath: settingsExtensionsDir)
         guard let items = try? FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil) else { return [] }
@@ -127,6 +144,7 @@ nonisolated enum AppScanner {
             else { continue }
             var name = (FileManager.default.displayName(atPath: url.path) as NSString).deletingPathExtension
             if let renamed = renamedSettings[name] { name = renamed }
+            name = prettifyPaneName(name)
             if name.hasSuffix("Extension") || name.hasSuffix("SettingsExtension") { continue }
             out.append(AppEntry(path: url.path, name: name, bundleID: bundleID, alternateNames: [],
                                 kind: .settingsPane, isGame: false))

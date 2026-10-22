@@ -1,9 +1,10 @@
 import AppKit
 
 /// KeePassXC sub-mode: unlock, then search entries and paste or copy fields.
-/// Action shortcuts follow the Raycast KeePassXC extension.
+/// Works on one database or on all unlocked ones; ⌘D switches. Action shortcuts
+/// follow the Raycast KeePassXC extension.
 final class KeePassMode: NSObject, Mode {
-    private let session: KeePassSession
+    private let manager: KeePassManager
     private let pins: KeePassPins
     private let sensitivity: Sensitivity
     private let openConfig: () -> Void
@@ -17,34 +18,56 @@ final class KeePassMode: NSObject, Mode {
         return p
     }()
 
-    init(session: KeePassSession, pins: KeePassPins, sensitivity: Sensitivity, openConfig: @escaping () -> Void) {
-        self.session = session
+    init(manager: KeePassManager, pins: KeePassPins, sensitivity: Sensitivity, openConfig: @escaping () -> Void) {
+        self.manager = manager
         self.pins = pins
         self.sensitivity = sensitivity
         self.openConfig = openConfig
     }
 
-    var title: String? { "KeePassXC" }
+    // MARK: - Selection
 
-    private var needsPrompt: Bool {
-        guard session.state == .locked, session.cliPath != nil, !session.config.database.isEmpty else { return false }
-        switch session.config.password {
+    /// Session for a single selected database; nil when "All Databases" is selected.
+    private var session: KeePassSession? {
+        if case .database(let path) = manager.selection { return manager.session(path) }
+        return nil
+    }
+
+    private var allSessions: [KeePassSession] { manager.databases.map { manager.session($0.expandedPath) } }
+
+    var title: String? {
+        switch manager.selection {
+        case .all: "KeePassXC · All"
+        case .database: manager.databases.count > 1 ? "KeePassXC · \(session?.database.label ?? "")" : "KeePassXC"
+        }
+    }
+
+    var tint: NSColor? { Palette.keepass }
+
+    private func needsPrompt(_ s: KeePassSession) -> Bool {
+        guard s.state == .locked, s.cliPath != nil else { return false }
+        switch s.database.password {
         case .prompt: return true
-        case .keychain: return !CredentialVault.hasPassword(account: session.account)
+        case .keychain: return !CredentialVault.hasPassword(account: s.account)
         case .command, .none: return false
         }
     }
 
-    var isSecureInput: Bool { needsPrompt }
+    var isSecureInput: Bool { session.map(needsPrompt) ?? false }
 
     var placeholder: String {
-        if needsPrompt { return "Master password for \((session.config.database as NSString).lastPathComponent)" }
-        return session.state == .unlocked ? "Search entries…" : "KeePassXC"
+        if let s = session, needsPrompt(s) { return "Master password for \(s.database.label)" }
+        if manager.selection == .all { return "Search all unlocked databases…" }
+        return session?.state == .unlocked ? "Search entries…" : "KeePassXC"
+    }
+
+    private var unlockedEntries: [(entry: KeePassEntry, session: KeePassSession)] {
+        let sessions = session.map { [$0] } ?? allSessions
+        return sessions.filter { $0.state == .unlocked }.flatMap { s in s.entries.map { (entry: $0, session: s) } }
     }
 
     var accessoryView: NSView? {
-        guard session.state == .unlocked else { return nil }
-        let folders = KeePassCSV.folders(session.entries)
+        let folders = KeePassCSV.folders(unlockedEntries.map(\.entry))
         guard !folders.isEmpty else { return nil }
         folderPopup.removeAllItems()
         folderPopup.addItem(withTitle: "All Folders")
@@ -58,38 +81,58 @@ final class KeePassMode: NSObject, Mode {
         context?.reload()
     }
 
+    /// Called by the picker after the selection changed.
+    func selectionChanged() {
+        folder = ""
+        context?.refreshChrome()
+        startUnlocking()
+    }
+
+    // MARK: - Lifecycle
+
     func didEnter(_ context: LauncherContext) {
         self.context = context
-        session.onChange = { [weak self] in
-            self?.context?.refreshChrome()
-        }
-        if session.state == .unlocked {
-            Task { await session.refreshIfChanged() }
-        } else if !needsPrompt {
-            autoUnlock()
+        manager.onChange = { [weak self] in self?.context?.refreshChrome() }
+        FaviconCache.shared.onUpdate = { [weak self] in self?.context?.reload() }
+        startUnlocking()
+    }
+
+    func didExit() {
+        manager.onChange = nil
+        FaviconCache.shared.onUpdate = nil
+    }
+
+    private func startUnlocking() {
+        if let s = session {
+            if s.state == .unlocked { Task { await s.refreshIfChanged() } } else if !needsPrompt(s) { autoUnlock(s) }
+        } else {
+            // All: refresh unlocked ones and open the ones that need no typing or Touch ID.
+            for s in allSessions {
+                if s.state == .unlocked { Task { await s.refreshIfChanged() } }
+                else if s.database.password == .command || s.database.password == .none { autoUnlock(s) }
+            }
         }
     }
 
-    func didExit() { session.onChange = nil }
-
     /// Unlock without typing: password command, no password, or the Keychain behind Touch ID.
-    private func autoUnlock() {
-        guard session.state == .locked, session.cliPath != nil, !session.config.database.isEmpty else { return }
-        let config = session.config
+    private func autoUnlock(_ s: KeePassSession) {
+        guard s.state == .locked, s.cliPath != nil else { return }
+        let db = s.database
         Task {
             do {
-                switch config.password {
+                switch db.password {
                 case .none:
-                    try await session.unlock(password: nil)
+                    try await s.unlock(password: nil)
                 case .command:
-                    try await session.unlock(password: try await KeePassCLI.passwordFromCommand(config.passwordCommand))
+                    try await s.unlock(password: try await KeePassCLI.passwordFromCommand(db.passwordCommand))
                 case .keychain:
+                    guard CredentialVault.hasPassword(account: s.account) else { return }
                     context?.suppressAutoHide = true
-                    let ok = await CredentialVault.authenticate(reason: "unlock your KeePassXC database")
+                    let ok = await CredentialVault.authenticate(reason: "unlock \(db.label)")
                     context?.suppressAutoHide = false
-                    guard ok, let pw = CredentialVault.load(account: session.account) else { throw KeePassError.cancelled }
-                    do { try await session.unlock(password: pw) } catch KeePassError.invalidCredentials {
-                        CredentialVault.delete(account: session.account) // stale: ask again next time
+                    guard ok, let pw = CredentialVault.load(account: s.account) else { throw KeePassError.cancelled }
+                    do { try await s.unlock(password: pw) } catch KeePassError.invalidCredentials {
+                        CredentialVault.delete(account: s.account) // stale: ask again next time
                         throw KeePassError.invalidCredentials
                     }
                 case .prompt:
@@ -101,12 +144,24 @@ final class KeePassMode: NSObject, Mode {
         }
     }
 
-    private func unlock(with password: String) async -> ActionResult {
+    /// One Touch ID prompt for every database whose password is in the Keychain.
+    private func unlockAllFromKeychain(_ sessions: [KeePassSession]) async {
+        context?.suppressAutoHide = true
+        let ok = await CredentialVault.authenticate(reason: "unlock your KeePassXC databases")
+        context?.suppressAutoHide = false
+        guard ok else { return }
+        for s in sessions {
+            guard let pw = CredentialVault.load(account: s.account) else { continue }
+            try? await s.unlock(password: pw)
+        }
+    }
+
+    private func unlock(_ s: KeePassSession, with password: String) async -> ActionResult {
         guard !password.isEmpty else { return .stay }
         context?.setQuery("")
         do {
-            try await session.unlock(password: password)
-            if session.config.password == .keychain { _ = CredentialVault.save(password, account: session.account) }
+            try await s.unlock(password: password)
+            if s.database.password == .keychain { _ = CredentialVault.save(password, account: s.account) }
             return .stay
         } catch let e as KeePassError {
             return .stayWithHUD(e.message)
@@ -115,67 +170,126 @@ final class KeePassMode: NSObject, Mode {
         }
     }
 
-    func sections(for query: String) -> [ResultSection] {
-        let config = session.config
-        if !config.enabled || config.database.isEmpty {
-            return [info("Set up KeePassXC", "Set keepass.enabled and keepass.database in the hop config",
-                         symbol: "gearshape", action: Action(title: "Open Config") { [openConfig] in openConfig(); return .dismiss })]
-        }
-        if session.cliPath == nil { return [info("keepassxc-cli not found", KeePassError.cliNotFound.message, symbol: "exclamationmark.triangle")] }
-        switch session.state {
-        case .unlocking:
-            return [info("Unlocking…", (config.database as NSString).abbreviatingWithTildeInPath, symbol: "lock.open")]
-        case .locked:
-            let subtitle = session.lastError?.message ?? (config.database as NSString).abbreviatingWithTildeInPath
-            if needsPrompt {
-                return [info("Unlock Database", subtitle, symbol: "lock.fill", action: Action(title: "Unlock") { [weak self] in
-                    guard let self else { return .stay }
-                    return await unlock(with: context?.query ?? "")
-                })]
-            }
-            return [info("Unlock Database", subtitle, symbol: "lock.fill", action: Action(title: "Unlock") { [weak self] in
-                self?.autoUnlock()
-                return .stay
-            })]
-        case .unlocked:
-            return entrySections(query)
+    // MARK: - Sections
+
+    private var switchAction: Action {
+        Action(title: "Switch Database", shortcut: .cmd("d")) { [weak self] in
+            guard let self else { return .stay }
+            return .push(KeePassDatabasePicker(manager: manager, sensitivity: sensitivity) { [weak self] in self?.selectionChanged() })
         }
     }
 
-    private func info(_ title: String, _ subtitle: String, symbol: String, action: Action? = nil) -> ResultSection {
-        ResultSection(title: nil, items: [Item(id: "kp.info", title: title, subtitle: subtitle, icon: .symbol(symbol),
-                                               actions: action.map { [$0] } ?? [], tracksFrecency: false)])
+    func sections(for query: String) -> [ResultSection] {
+        let k = manager.databases
+        guard manager.databases.first != nil, !k.isEmpty else {
+            return [info("Set up KeePassXC", "Add your .kdbx files to keepass.databases in the hop config",
+                         symbol: "gearshape", actions: [Action(title: "Open Config") { [openConfig] in openConfig(); return .dismiss }])]
+        }
+        if manager.databases.first.map({ manager.session($0.expandedPath).cliPath }) == nil {
+            return [info("keepassxc-cli not found", KeePassError.cliNotFound.message, symbol: "exclamationmark.triangle")]
+        }
+        if let s = session {
+            switch s.state {
+            case .unlocking:
+                return [info("Unlocking \(s.database.label)…", (s.path as NSString).abbreviatingWithTildeInPath, symbol: "lock.open")]
+            case .locked:
+                return [lockedRow(s)]
+            case .unlocked:
+                return entrySections(query)
+            }
+        }
+        // All databases: unlock rows for locked ones, then entries from the unlocked ones.
+        let locked = allSessions.filter { $0.state != .unlocked }
+        var sections: [ResultSection] = []
+        if !locked.isEmpty {
+            var rows = locked.flatMap { lockedRow($0).items }
+            let viaKeychain = locked.filter { $0.state == .locked && $0.database.password == .keychain && CredentialVault.hasPassword(account: $0.account) }
+            if viaKeychain.count > 1 {
+                rows.insert(Item(id: "kp.unlockAll", title: "Unlock All", subtitle: viaKeychain.map(\.database.label).joined(separator: ", "),
+                                 icon: .tile("lock.open.fill", Palette.keepass),
+                                 actions: [Action(title: "Unlock with Touch ID") { [weak self] in
+                                     await self?.unlockAllFromKeychain(viaKeychain)
+                                     return .stay
+                                 }], tracksFrecency: false), at: 0)
+            }
+            sections.append(ResultSection(title: "Locked", items: rows))
+        }
+        return sections + entrySections(query)
+    }
+
+    private func lockedRow(_ s: KeePassSession) -> ResultSection {
+        let subtitle = s.lastError?.message ?? (s.path as NSString).abbreviatingWithTildeInPath
+        let title = s.state == .unlocking ? "Unlocking \(s.database.label)…" : "Unlock \(s.database.label)"
+        if needsPrompt(s) && session != nil {
+            return info(title, subtitle, symbol: "lock.fill", actions: [Action(title: "Unlock") { [weak self] in
+                guard let self else { return .stay }
+                return await unlock(s, with: context?.query ?? "")
+            }, switchAction])
+        }
+        if needsPrompt(s) {
+            // In "All", typing a password needs that database selected.
+            return info(title, "Select it to type the password", symbol: "lock.fill", actions: [Action(title: "Select Database") { [weak self] in
+                self?.manager.selection = .database(s.path)
+                self?.selectionChanged()
+                return .stay
+            }, switchAction])
+        }
+        return info(title, subtitle, symbol: "lock.fill", actions: [Action(title: "Unlock") { [weak self] in
+            self?.autoUnlock(s)
+            return .stay
+        }, switchAction])
+    }
+
+    private func info(_ title: String, _ subtitle: String, symbol: String, actions: [Action] = []) -> ResultSection {
+        ResultSection(title: nil, items: [Item(id: "kp.info.\(title)", title: title, subtitle: subtitle, icon: .tile(symbol, Palette.keepass),
+                                               actions: actions, tracksFrecency: false,
+                                               chip: symbol == "lock.fill" ? Chip(text: "Locked", tone: .warn) : nil)])
     }
 
     private func entrySections(_ query: String) -> [ResultSection] {
-        session.touch()
-        let pinned = pins.ids(for: session.account)
-        var list = session.entries.filter { folder.isEmpty || $0.group == folder || $0.group.hasPrefix(folder + "/") }
+        let showDatabase = session == nil && manager.databases.count > 1
+        var list = unlockedEntries.filter { folder.isEmpty || $0.entry.group == folder || $0.entry.group.hasPrefix(folder + "/") }
+        list.forEach { $0.session.touch() }
         if !query.isEmpty {
-            let cands = list.map { e in
-                RankCandidate(id: e.id, title: e.title, alternateTitles: [e.username, URL(string: e.url)?.host ?? ""].filter { !$0.isEmpty },
-                              keywords: [e.group, e.url].filter { !$0.isEmpty }, typeWeight: 1)
+            let cands = list.map { pair in
+                let e = pair.entry
+                return RankCandidate(id: e.id, title: e.title,
+                                     alternateTitles: [e.username, URL(string: e.url)?.host ?? ""].filter { !$0.isEmpty },
+                                     keywords: [e.group, e.url, pair.session.database.label].filter { !$0.isEmpty }, typeWeight: 1)
             }
             list = RootRanker.rank(cands, query: SearchQuery(query), sensitivity: sensitivity).map { list[$0] }
         }
-        let favorites = list.filter { pinned.contains($0.id) }
-        let others = list.filter { !pinned.contains($0.id) }
+        let pinnedIn: (KeePassSession) -> Set<String> = { [pins] in pins.ids(for: $0.account) }
+        let favorites = list.filter { pinnedIn($0.session).contains($0.entry.id) }
+        let others = list.filter { !pinnedIn($0.session).contains($0.entry.id) }
         var sections: [ResultSection] = []
-        if !favorites.isEmpty { sections.append(ResultSection(title: "Favorites", items: favorites.map { item($0, pinned: true) })) }
-        sections.append(ResultSection(title: favorites.isEmpty ? nil : "Entries", items: others.map { item($0, pinned: false) }))
+        if !favorites.isEmpty {
+            sections.append(ResultSection(title: "Favorites", items: favorites.map { item($0.entry, $0.session, pinned: true, showDatabase) }))
+        }
+        sections.append(ResultSection(title: favorites.isEmpty ? nil : "Entries",
+                                      items: others.map { item($0.entry, $0.session, pinned: false, showDatabase) }))
         return sections
     }
 
-    private func item(_ e: KeePassEntry, pinned: Bool) -> Item {
+    private func item(_ e: KeePassEntry, _ s: KeePassSession, pinned: Bool, _ showDatabase: Bool) -> Item {
         var badges: [String] = []
+        if pinned { badges.append("★") }
         if !e.totp.isEmpty { badges.append("TOTP") }
         if !e.group.isEmpty { badges.append(e.group) }
-        return Item(id: "kp." + e.id, title: e.title, subtitle: e.username,
-                    icon: .symbol(pinned ? "star.fill" : "key.fill", tint: pinned ? .systemYellow : .secondaryLabelColor),
-                    accessory: badges.joined(separator: " · "), actions: actions(e, pinned: pinned), tracksFrecency: false)
+        if showDatabase { badges.append(s.database.label) }
+        return Item(id: "kp.\(s.path).\(e.id)", title: e.title, subtitle: e.username, icon: icon(for: e),
+                    accessory: badges.joined(separator: " · "), actions: actions(e, s, pinned: pinned), tracksFrecency: false)
     }
 
-    private func actions(_ e: KeePassEntry, pinned: Bool) -> [Action] {
+    private func icon(for e: KeePassEntry) -> ItemIcon {
+        if manager.databases.isEmpty == false, (session?.keepass ?? allSessions.first?.keepass)?.favicons ?? true,
+           let host = FaviconCache.host(of: e.url), let img = FaviconCache.shared.icon(for: host) {
+            return .image(img)
+        }
+        return .tile("key.fill", Palette.keepass)
+    }
+
+    private func actions(_ e: KeePassEntry, _ s: KeePassSession, pinned: Bool) -> [Action] {
         let value: (String) -> String = { KeePassPlaceholders.resolve($0, e) }
         let totp: () -> String? = { e.totp.isEmpty ? nil : try? TOTP.code(e.totp) }
         return [
@@ -193,13 +307,13 @@ final class KeePassMode: NSObject, Mode {
                 return .dismiss
             },
             Action(title: pinned ? "Unpin Entry" : "Pin Entry", shortcut: .cmd("s")) { [weak self] in
-                guard let self else { return .stay }
-                pins.toggle(e.id, for: session.account)
+                self?.pins.toggle(e.id, for: s.account)
                 return .reload
             },
-            Action(title: "Lock Database", shortcut: .cmd("l")) { [weak self] in
-                self?.session.lock()
-                return .stayWithHUD("Database locked")
+            switchAction,
+            Action(title: "Lock \(s.database.label)", shortcut: .cmd("l")) {
+                s.lock()
+                return .stayWithHUD("\(s.database.label) locked")
             },
         ]
     }
@@ -230,6 +344,60 @@ final class KeePassMode: NSObject, Mode {
     }
 }
 
+/// ⌘D: pick a database, or "All Databases".
+final class KeePassDatabasePicker: Mode {
+    let title: String? = "KeePassXC · Databases"
+    let tint: NSColor? = Palette.keepass
+    let placeholder = "Switch database…"
+    private let manager: KeePassManager
+    private let sensitivity: Sensitivity
+    private let onPick: () -> Void
+
+    init(manager: KeePassManager, sensitivity: Sensitivity, onPick: @escaping () -> Void) {
+        self.manager = manager
+        self.sensitivity = sensitivity
+        self.onPick = onPick
+    }
+
+    func sections(for query: String) -> [ResultSection] {
+        var dbs = manager.databases
+        if !query.isEmpty {
+            let cands = dbs.map { RankCandidate(id: $0.expandedPath, title: $0.label, alternateTitles: [$0.path], typeWeight: 1) }
+            dbs = RootRanker.rank(cands, query: SearchQuery(query), sensitivity: sensitivity).map { dbs[$0] }
+        }
+        let current = manager.selection
+        var items = dbs.map { db -> Item in
+            let s = manager.session(db.expandedPath)
+            let state = switch s.state {
+            case .unlocked: "Unlocked · \(s.entries.count) entries"
+            case .unlocking: "Unlocking…"
+            case .locked: "Locked"
+            }
+            return Item(id: "db.\(db.expandedPath)", title: db.label, subtitle: (db.path as NSString).abbreviatingWithTildeInPath,
+                        icon: .tile(s.state == .unlocked ? "lock.open.fill" : "lock.fill", Palette.keepass),
+                        accessory: (current == .database(db.expandedPath) ? "✓ " : "") + state,
+                        actions: [
+                            Action(title: "Use Database") { [weak self] in
+                                self?.manager.selection = .database(db.expandedPath)
+                                self?.onPick()
+                                return .pop
+                            },
+                            Action(title: "Lock", shortcut: .cmd("l")) { s.lock(); return .reload },
+                        ], tracksFrecency: false)
+        }
+        if manager.databases.count > 1 && query.isEmpty {
+            items.insert(Item(id: "db.all", title: "All Databases", subtitle: "Search every unlocked database",
+                              icon: .tile("square.stack.3d.up.fill", Palette.keepass), accessory: current == .all ? "✓" : nil,
+                              actions: [Action(title: "Use All Databases") { [weak self] in
+                                  self?.manager.selection = .all
+                                  self?.onPick()
+                                  return .pop
+                              }], tracksFrecency: false), at: 0)
+        }
+        return [ResultSection(title: "Databases", items: items)]
+    }
+}
+
 /// Pinned entry ids per database, in `keepass-pins.json`.
 final class KeePassPins {
     private let store = JSONStore<[String: [String]]>(url: AppPaths.file("keepass-pins.json"))
@@ -249,9 +417,24 @@ final class KeePassPins {
 
 enum KeePassCommands {
     static func items(_ services: Services) -> [Item] {
-        guard services.settings.data.keepass.enabled, let make = services.keepassMode else { return [] }
-        return [Item(id: "keepass.search", title: "KeePassXC", subtitle: "Search passwords (or type “kp ”)",
-                     icon: .symbol("key.horizontal.fill"), accessory: "Command",
-                     actions: [Action(title: "Search Entries") { .push(make()) }], pushesMode: true)]
+        guard let make = services.keepassMode, let manager = services.keepass else { return [] }
+        let k = services.settings.data.keepass
+        let dbs = k.allDatabases
+        let ready = k.enabled && !dbs.isEmpty
+        var items = [Item(id: "keepass.search", title: "KeePassXC",
+                          subtitle: ready ? "Search passwords (or type “kp ”)" : "Set up keepass in ~/.config/hop/config.json5",
+                          icon: .tile("key.horizontal.fill", Palette.keepass), accessory: "Command",
+                          actions: [Action(title: "Search Entries") { .push(make()) }], pushesMode: true)]
+        guard ready, dbs.count > 1 else { return items }
+        // One root command per database for quick switching.
+        items += dbs.map { db in
+            Item(id: "keepass.db.\(db.expandedPath)", title: "\(db.label) Passwords", subtitle: "KeePassXC · \(db.label)",
+                 icon: .tile("key.horizontal.fill", Palette.keepass), accessory: "Command",
+                 actions: [Action(title: "Search \(db.label)") {
+                     manager.selection = .database(db.expandedPath)
+                     return .push(make())
+                 }], pushesMode: true)
+        }
+        return items
     }
 }

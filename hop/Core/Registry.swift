@@ -7,6 +7,8 @@ final class Services {
     let apps: AppIndex
     var hyper: HyperKeyController?
     var keepassMode: (() -> Mode)?
+    var keepass: KeePassManager?
+    var permissionsMode: (() -> Mode)?
     /// Opens the config file in the user's editor.
     func openConfig() {
         let url = settings.url
@@ -33,7 +35,7 @@ enum Registry {
         items += KeePassCommands.items(services)
         items += [
             Item(id: "hop.config", title: "Open hop Config", subtitle: "~/.config/hop/config.json5",
-                 icon: .symbol("gearshape"), accessory: "Command",
+                 icon: .tile("gearshape.fill", Palette.neutral), accessory: "Command",
                  actions: [
                      Action(title: "Open Config") {
                          services.openConfig()
@@ -44,7 +46,11 @@ enum Registry {
                          return .dismiss
                      },
                  ]),
-            Item(id: "hop.quit", title: "Quit hop", icon: .symbol("power"), accessory: "Command",
+            Item(id: "hop.permissions", title: "hop Permissions", subtitle: "Accessibility, Finder, Downloads, Open at Login",
+                 icon: .tile("checkmark.shield.fill", Theme.info), accessory: "Command",
+                 actions: [Action(title: "Show Permissions") { .push(services.permissionsMode?() ?? PermissionsMode { services.settings.data }) }],
+                 pushesMode: true),
+            Item(id: "hop.quit", title: "Quit hop", icon: .tile("power", Theme.chart5), accessory: "Command",
                  actions: [Action(title: "Quit hop") {
                      NSApp.terminate(nil)
                      return .dismiss

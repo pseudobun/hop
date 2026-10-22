@@ -1,7 +1,9 @@
 import AppKit
 
-/// Borderless, non-activating floating panel: the app never activates, so the
-/// previously focused app stays frontmost for paste actions.
+/// Non-activating floating panel: the app never activates, so the previously
+/// focused app stays frontmost for paste actions. Titled + full-size content (like
+/// Raycast) so the window server draws a rounded frame and shadow; a borderless
+/// window gets a rectangular one around the rounded glass.
 final class LauncherPanel: NSPanel {
     static let size = NSSize(width: 750, height: 475)
 
@@ -10,7 +12,11 @@ final class LauncherPanel: NSPanel {
 
     init() {
         super.init(contentRect: NSRect(origin: .zero, size: Self.size),
-                   styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+                   styleMask: [.titled, .nonactivatingPanel, .fullSizeContentView], backing: .buffered, defer: false)
+        titleVisibility = .hidden
+        titlebarAppearsTransparent = true
+        for b in [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton] { standardWindowButton(b)?.isHidden = true }
+        isMovable = false
         isFloatingPanel = true
         level = .modalPanel
         collectionBehavior = [.transient, .ignoresCycle, .moveToActiveSpace, .fullScreenAuxiliary]
@@ -21,6 +27,15 @@ final class LauncherPanel: NSPanel {
         animationBehavior = .none
         isMovableByWindowBackground = false
         isReleasedWhenClosed = false
+    }
+
+    /// The frame's corner radius (16 on macOS 26), so the glass matches it exactly.
+    var frameCornerRadius: CGFloat {
+        let sel = NSSelectorFromString("_effectiveCornerRadius")
+        guard responds(to: sel), let m = class_getInstanceMethod(type(of: self), sel) else { return 16 }
+        typealias Getter = @convention(c) (AnyObject, Selector) -> CGFloat
+        let r = unsafeBitCast(method_getImplementation(m), to: Getter.self)(self, sel)
+        return r > 0 ? r : 16
     }
 
     override var canBecomeKey: Bool { true }
@@ -57,6 +72,7 @@ final class HUD {
               let label = stack.arrangedSubviews.last as? NSTextField
         else { return }
         image.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)
+        image.contentTintColor = symbol.contains("checkmark") ? Theme.good : Theme.warn
         label.stringValue = text
         let size = stack.fittingSize
         let frame = NSRect(x: 0, y: 0, width: max(size.width + 32, 120), height: 40)
@@ -87,16 +103,19 @@ final class HUD {
         p.level = .popUpMenu
         p.isOpaque = false
         p.backgroundColor = .clear
-        p.hasShadow = true
+        p.hasShadow = false // a shadow adds a rectangular frame around borderless glass
         p.ignoresMouseEvents = true
         p.collectionBehavior = [.transient, .ignoresCycle, .canJoinAllSpaces, .fullScreenAuxiliary]
         p.isReleasedWhenClosed = false
+        p.appearance = Theme.darkAppearance
         let glass = NSGlassEffectView()
         glass.cornerRadius = 20
+        glass.tintColor = Theme.background.withAlphaComponent(0.78)
         let image = NSImageView()
         image.contentTintColor = .secondaryLabelColor
         let label = NSTextField(labelWithString: "")
-        label.font = .systemFont(ofSize: 13, weight: .medium)
+        label.font = Theme.sans(13, 500)
+        label.textColor = Theme.foreground
         let stack = NSStackView(views: [image, label])
         stack.spacing = 8
         stack.edgeInsets = NSEdgeInsets(top: 0, left: 16, bottom: 0, right: 16)

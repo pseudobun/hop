@@ -5,6 +5,15 @@ enum ItemIcon {
     case symbol(String, tint: NSColor? = nil)
     case image(NSImage)
     case emoji(String)
+    /// White SF Symbol on a coloured rounded tile, like System Settings icons.
+    case tile(String, NSColor)
+}
+
+/// Feature colours, all olympus design-system tokens.
+enum Palette {
+    static var wireguard: NSColor { Theme.chart4 }
+    static var keepass: NSColor { Theme.good }
+    static var neutral: NSColor { Theme.mutedForeground }
 }
 
 /// A keyboard shortcut bound to an action: `↵` or a character, plus modifiers.
@@ -74,6 +83,23 @@ struct Action {
     var shortcut: KeyCombo?
     var style: Style = .normal
     let perform: () async -> ActionResult
+
+    /// Explicit symbol, or one picked from the title.
+    var resolvedSymbol: String {
+        if let symbol { return symbol }
+        let t = title.lowercased()
+        let rules: [(String, String)] = [
+            ("show in finder", "folder"), ("bundle identifier", "number"), ("copy path", "link"), ("pid", "number"),
+            ("password", "key"), ("username", "person"), ("totp", "clock"), ("open url", "safari"), ("url", "link"),
+            ("uninstall", "trash"), ("trash", "trash"), ("force kill", "bolt.fill"), ("kill", "xmark.octagon"),
+            ("unpin", "star.slash"), ("pin", "star"), ("unlock", "lock.open"), ("lock", "lock"),
+            ("disconnect", "bolt.horizontal.circle"), ("connect", "bolt.horizontal.circle.fill"),
+            ("quit", "power"), ("config", "gearshape"), ("settings", "gearshape"), ("database", "cylinder.split.1x2"),
+            ("paste", "doc.on.clipboard"), ("copy", "doc.on.doc"), ("open", "arrow.up.forward.app"),
+            ("search", "magnifyingglass"), ("downloads", "arrow.down"), ("cancel", "xmark"),
+        ]
+        return rules.first { t.contains($0.0) }?.1 ?? "circle.dotted"
+    }
 }
 
 struct Item {
@@ -89,6 +115,10 @@ struct Item {
     var tracksFrecency = true
     /// Tab also runs the primary action (it enters a sub-mode).
     var pushesMode = false
+    /// One tinted status chip, e.g. "Connected"; facts go in `accessory`.
+    var chip: Chip?
+    /// Title is a value (a number), set in mono.
+    var monoTitle = false
 }
 
 struct ResultSection {

@@ -29,6 +29,12 @@ final class IconCache {
             return img
         case .image(let img):
             return img
+        case .tile(let name, let color):
+            let key = "tile:\(name):\(color.description)" as NSString
+            if let hit = cache.object(forKey: key) { return hit }
+            let img = Self.tile(name, color, size: size)
+            cache.setObject(img, forKey: key)
+            return img
         case .emoji(let e):
             let key = "emoji:\(e)" as NSString
             if let hit = cache.object(forKey: key) { return hit }
@@ -45,4 +51,22 @@ final class IconCache {
     }
 
     func purge() { cache.removeAllObjects() }
+
+    private static func tile(_ symbol: String, _ color: NSColor, size: CGFloat) -> NSImage {
+        NSImage(size: NSSize(width: size, height: size), flipped: false) { rect in
+            let path = NSBezierPath(roundedRect: rect.insetBy(dx: 0.5, dy: 0.5), xRadius: 6, yRadius: 6)
+            color.withAlphaComponent(0.16).setFill()
+            path.fill()
+            color.withAlphaComponent(0.22).setStroke()
+            path.lineWidth = 0.5
+            path.stroke()
+            let config = NSImage.SymbolConfiguration(pointSize: size * 0.5, weight: .semibold)
+                .applying(.init(paletteColors: [color]))
+            if let glyph = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)?.withSymbolConfiguration(config) {
+                let s = glyph.size
+                glyph.draw(in: NSRect(x: (rect.width - s.width) / 2, y: (rect.height - s.height) / 2, width: s.width, height: s.height))
+            }
+            return true
+        }
+    }
 }

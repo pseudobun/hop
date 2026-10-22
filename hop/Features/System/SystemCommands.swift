@@ -4,14 +4,19 @@ import AppKit
 enum SystemCommands {
     static func items(_ services: Services) -> [Item] {
         [
-            Item(id: "system.emptyTrash", title: "Empty Trash", icon: .symbol("trash"), accessory: "Command",
+            Item(id: "system.emptyTrash", title: "Empty Trash", icon: .tile("trash.fill", Palette.neutral), accessory: "Command",
                  actions: [Action(title: "Empty Trash") { .push(emptyTrashMode()) }], pushesMode: true),
             Item(id: "system.clearDownloads", title: "Clear Downloads", subtitle: "Move everything in Downloads to Trash",
-                 icon: .symbol("arrow.down.circle"), accessory: "Command",
+                 icon: .tile("arrow.down", Theme.info), accessory: "Command",
                  actions: [Action(title: "Clear Downloads") {
                      .push(clearDownloadsMode(URL(fileURLWithPath: services.settings.data.system.downloadsFolder.expandingTilde)))
                  }], pushesMode: true),
-            Item(id: "system.uninstall", title: "Uninstall Application", icon: .symbol("xmark.bin"), accessory: "Command",
+            Item(id: "system.killProcess", title: "Kill Process", subtitle: "Search running processes and quit or force-kill them",
+                 icon: .tile("xmark.octagon.fill", Theme.destructive), accessory: "Command",
+                 actions: [Action(title: "Show Processes") {
+                     .push(KillProcessMode(sensitivity: services.settings.data.general.sensitivity))
+                 }], pushesMode: true),
+            Item(id: "system.uninstall", title: "Uninstall Application", icon: .tile("xmark.bin.fill", Theme.warn), accessory: "Command",
                  actions: [Action(title: "Choose Application") { .push(UninstallPickerMode(services: services)) }],
                  pushesMode: true),
         ]
@@ -19,7 +24,7 @@ enum SystemCommands {
 
     static func emptyTrashMode() -> ConfirmMode {
         ConfirmMode(title: "Empty Trash", message: "Permanently erase the items in the Trash",
-                    confirmTitle: "Empty Trash", symbol: "trash.fill",
+                    confirmTitle: "Empty Trash", symbol: "trash.fill", tint: Palette.neutral,
                     prepare: { mode in
                         let r = try? await AppleScript.run(#"tell application "Finder" to count items of trash"#)
                         let n = Int(r?.out.trimmingCharacters(in: .whitespacesAndNewlines) ?? "") ?? -1
@@ -35,7 +40,7 @@ enum SystemCommands {
     static func clearDownloadsMode(_ dir: URL) -> ConfirmMode {
         var items: [URL] = []
         return ConfirmMode(title: "Clear Downloads", message: "Counting…", confirmTitle: "Move to Trash",
-                           symbol: "arrow.down.circle.fill",
+                           symbol: "arrow.down", tint: Theme.info,
                            prepare: { mode in
                                let (urls, bytes) = await DownloadsScanner.scan(dir)
                                items = urls

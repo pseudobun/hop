@@ -62,6 +62,7 @@ nonisolated enum WireGuard {
 /// Sub-mode listing tunnels; ↵ toggles one.
 final class WireGuardMode: Mode {
     let title: String? = "WireGuard"
+    let tint: NSColor? = Palette.wireguard
     let placeholder = "Search tunnels…"
     private let showFlags: Bool
     private let sensitivity: Sensitivity
@@ -104,14 +105,14 @@ final class WireGuardMode: Mode {
         }
         let items = list.map { t in
             Item(id: "wg." + t.serviceID, title: showFlags ? "\(t.flag) \(t.name)" : t.name, subtitle: t.status,
-                 icon: .symbol(t.isConnected ? "lock.shield.fill" : "shield", tint: t.isConnected ? .systemGreen : .secondaryLabelColor),
-                 accessory: t.isConnected ? "Connected" : nil,
+                 icon: .tile(t.isConnected ? "lock.shield.fill" : "shield.slash.fill", t.isConnected ? Theme.good : Palette.neutral),
+                 accessory: t.isConnected ? nil : "Disconnected",
                  actions: [Action(title: t.isConnected ? "Disconnect" : "Connect") { [weak self] in
                      let ok = await WireGuard.setConnected(t, !t.isConnected)
                      self?.refresh(after: .seconds(1))
                      guard ok else { return .stayWithHUD("scutil could not \(t.isConnected ? "stop" : "start") \(t.name)") }
                      return .dismissWithHUD("\(t.name) is \(t.isConnected ? "disconnected" : "connecting")")
-                 }], tracksFrecency: false)
+                 }], tracksFrecency: false, chip: t.isConnected ? Chip(text: "Connected", tone: .good) : nil)
         }
         return [ResultSection(title: "Tunnels", items: items)]
     }
@@ -123,12 +124,12 @@ enum WireGuardCommands {
         guard config.wireguard.enabled else { return [] }
         return [
             Item(id: "wireguard.tunnels", title: "WireGuard", subtitle: "Connect or disconnect tunnels",
-                 icon: .symbol("network.badge.shield.half.filled"), accessory: "Command",
+                 icon: .tile("network.badge.shield.half.filled", Palette.wireguard), accessory: "Command",
                  actions: [Action(title: "Show Tunnels") {
                      .push(WireGuardMode(showFlags: config.wireguard.showFlags, sensitivity: config.general.sensitivity))
                  }], pushesMode: true),
             Item(id: "wireguard.disconnectAll", title: "Disconnect All WireGuard Tunnels",
-                 icon: .symbol("network.slash"), accessory: "Command",
+                 icon: .tile("network.slash", Palette.wireguard), accessory: "Command",
                  actions: [Action(title: "Disconnect All") {
                      let n = await WireGuard.disconnectAll()
                      return .dismissWithHUD(n == 0 ? "No tunnel was connected" : "Disconnected \(n) tunnel\(n == 1 ? "" : "s")")

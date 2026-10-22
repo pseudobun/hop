@@ -1,10 +1,11 @@
 import AppKit
 
-/// The unlocked database lives here, in memory only, until it locks
+/// One unlocked database, in memory only, until it locks
 /// (inactivity, screen lock, sleep or an explicit lock).
 final class KeePassSession {
     enum State { case locked, unlocking, unlocked }
 
+    let path: String
     private(set) var state: State = .locked
     private(set) var entries: [KeePassEntry] = []
     private(set) var lastError: KeePassError?
@@ -12,36 +13,28 @@ final class KeePassSession {
     private var databaseStamp: (Date, Int)?
     private var lockTask: Task<Void, Never>?
     private let settings: AppSettings
-    private var observers: [NSObjectProtocol] = []
-
-    var config: HopConfig.KeePass { settings.data.keepass }
-    var account: String { config.database.expandingTilde }
     var onChange: (() -> Void)?
 
-    init(settings: AppSettings) {
+    init(path: String, settings: AppSettings) {
+        self.path = path
         self.settings = settings
-        let ws = NSWorkspace.shared.notificationCenter
-        for name in [NSWorkspace.willSleepNotification, NSWorkspace.sessionDidResignActiveNotification] {
-            observers.append(ws.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
-                MainActor.assumeIsolated { self?.lock() }
-            })
-        }
-        observers.append(DistributedNotificationCenter.default().addObserver(
-            forName: .init("com.apple.screenIsLocked"), object: nil, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.lock() }
-        })
     }
 
-    var cliPath: String? { KeePassCLI.locate(override: config.cli) }
+    var keepass: HopConfig.KeePass { settings.data.keepass }
+    /// This database's config (falls back to a bare entry if it was removed).
+    var database: HopConfig.KeePass.Database {
+        keepass.allDatabases.first { $0.expandedPath == path } ?? .init(path: path)
+    }
+    var account: String { path }
+    var cliPath: String? { KeePassCLI.locate(override: keepass.cli) }
 
     /// Unlock with an explicit password (nil when the database has none).
     func unlock(password: String?) async throws {
-        guard !config.database.isEmpty else { throw KeePassError.notConfigured }
         guard let cli = cliPath else { throw KeePassError.cliNotFound }
         state = .unlocking
         onChange?()
         do {
-            entries = try await KeePassCLI.export(cli: cli, config: config, password: password)
+            entries = try await KeePassCLI.export(cli: cli, database: database, password: password)
             self.password = password
             databaseStamp = stamp()
             state = .unlocked
@@ -65,7 +58,7 @@ final class KeePassSession {
     /// Resets the inactivity timer.
     func touch() {
         lockTask?.cancel()
-        let minutes = config.lockAfterMinutes
+        let minutes = keepass.lockAfterMinutes
         guard minutes >= 0 else { return }
         lockTask = Task { [weak self] in
             try? await Task.sleep(for: .seconds(max(minutes, 1) * 60))
@@ -85,8 +78,61 @@ final class KeePassSession {
     }
 
     private func stamp() -> (Date, Int)? {
-        guard let a = try? FileManager.default.attributesOfItem(atPath: account),
+        guard let a = try? FileManager.default.attributesOfItem(atPath: path),
               let m = a[.modificationDate] as? Date, let s = a[.size] as? Int else { return nil }
         return (m, s)
     }
+}
+
+/// All configured databases' sessions, the current selection, and locking on
+/// sleep or screen lock.
+final class KeePassManager {
+    enum Selection: Equatable { case database(String), all }
+
+    private let settings: AppSettings
+    private var sessions: [String: KeePassSession] = [:]
+    private var observers: [NSObjectProtocol] = []
+    var onChange: (() -> Void)?
+
+    init(settings: AppSettings) {
+        self.settings = settings
+        let ws = NSWorkspace.shared.notificationCenter
+        for name in [NSWorkspace.willSleepNotification, NSWorkspace.sessionDidResignActiveNotification] {
+            observers.append(ws.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.lockAll() }
+            })
+        }
+        observers.append(DistributedNotificationCenter.default().addObserver(
+            forName: .init("com.apple.screenIsLocked"), object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.lockAll() }
+        })
+    }
+
+    var databases: [HopConfig.KeePass.Database] { settings.data.keepass.allDatabases }
+
+    func session(_ path: String) -> KeePassSession {
+        if let s = sessions[path] { return s }
+        let s = KeePassSession(path: path, settings: settings)
+        s.onChange = { [weak self] in self?.onChange?() }
+        sessions[path] = s
+        return s
+    }
+
+    var selection: Selection {
+        get {
+            let saved = UserDefaults.standard.string(forKey: "KeePassSelection") ?? ""
+            if saved == "*" && databases.count > 1 { return .all }
+            if let db = databases.first(where: { $0.expandedPath == saved }) { return .database(db.expandedPath) }
+            return databases.first.map { .database($0.expandedPath) } ?? .all
+        }
+        set {
+            let value = switch newValue {
+            case .all: "*"
+            case .database(let p): p
+            }
+            UserDefaults.standard.set(value, forKey: "KeePassSelection")
+        }
+    }
+
+    func lockAll() { sessions.values.forEach { $0.lock() } }
 }

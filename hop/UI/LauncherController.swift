@@ -86,6 +86,13 @@ final class LauncherController: NSObject, LauncherContext, NSTableViewDataSource
 
     func dismiss() { hide() }
 
+    func popToRoot() {
+        closeActionPanel()
+        while modes.count > 1 { modes.removeLast().didExit() }
+        enterCurrentMode(query: "")
+        refresh()
+    }
+
     func showHUD(_ text: String) { HUD.shared.show(text) }
 
     func setLoading(_ loading: Bool) {
@@ -103,6 +110,7 @@ final class LauncherController: NSObject, LauncherContext, NSTableViewDataSource
         if Date().timeIntervalSince(lastHidden) > Double(popToRootSeconds()) {
             while modes.count > 1 { modes.removeLast().didExit() }
             enterCurrentMode(query: "")
+            select(nil)
         }
         if let initial { activeField.stringValue = initial }
         refresh()
@@ -137,6 +145,9 @@ final class LauncherController: NSObject, LauncherContext, NSTableViewDataSource
         activeField.stringValue = query
         activeField.placeholderString = current.placeholder
         modePill.stringValue = current.title.map { "\u{2002}\($0)\u{2002}" } ?? ""
+        let tone = current.tint ?? Theme.info
+        modePill.layer?.backgroundColor = tone.withAlphaComponent(0.15).cgColor
+        modePill.textColor = tone
         modePill.isHidden = current.title == nil
         accessoryHolder.arrangedSubviews.forEach { $0.removeFromSuperview() }
         if let accessory = current.accessoryView { accessoryHolder.addArrangedSubview(accessory) }
@@ -195,7 +206,8 @@ final class LauncherController: NSObject, LauncherContext, NSTableViewDataSource
     }
 
     private func updateFooter() {
-        footerTitle.stringValue = selectedItem?.actions.first.map { "\($0.title)  ↵" } ?? ""
+        footerTitle.attributedStringValue = selectedItem?.actions.first.map { Keycap.label($0.title, keys: "↵") } ?? NSAttributedString()
+        footerActions.attributedStringValue = Keycap.label("Actions", keys: "⌘K")
         footerActions.isHidden = (selectedItem?.actions.count ?? 0) < 2
     }
 
@@ -210,6 +222,9 @@ final class LauncherController: NSObject, LauncherContext, NSTableViewDataSource
         switch event.keyCode {
         case 125: move(1); return true // ↓
         case 126: move(-1); return true // ↑
+        case 53 where mods == .command: // ⌘Esc: back to the root search
+            popToRoot()
+            return true
         case 53: // Esc
             if modes.count > 1 { pop() } else { hide() }
             return true
@@ -276,6 +291,10 @@ final class LauncherController: NSObject, LauncherContext, NSTableViewDataSource
         }
     }
 
+    #if DEBUG
+    func debugOpenActionPanel() { toggleActionPanel() }
+    #endif
+
     private func toggleActionPanel() {
         if !actionPanel.isHidden { closeActionPanel(); return }
         guard let item = selectedItem, !item.actions.isEmpty else { return }
@@ -311,7 +330,11 @@ final class LauncherController: NSObject, LauncherContext, NSTableViewDataSource
         return false
     }
 
-    func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? { ResultRowView() }
+    func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? {
+        let v = ResultRowView()
+        v.tint = current.tint
+        return v
+    }
 
     func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
         switch rows[row] {
@@ -333,8 +356,10 @@ final class LauncherController: NSObject, LauncherContext, NSTableViewDataSource
     // MARK: - Layout
 
     private func buildViews() {
+        panel.appearance = Theme.darkAppearance
         let glass = NSGlassEffectView()
-        glass.cornerRadius = 26
+        glass.cornerRadius = panel.frameCornerRadius
+        glass.tintColor = Theme.background.withAlphaComponent(0.78)
         let content = NSView()
         glass.contentView = content
         panel.contentView = glass
@@ -343,14 +368,15 @@ final class LauncherController: NSObject, LauncherContext, NSTableViewDataSource
             f.isBordered = false
             f.drawsBackground = false
             f.focusRingType = .none
-            f.font = .systemFont(ofSize: 20)
+            f.font = Theme.search
+            f.textColor = Theme.foreground
             f.delegate = self
             f.cell?.isScrollable = true
             f.cell?.wraps = false
         }
         secureField.isHidden = true
 
-        modePill.font = .systemFont(ofSize: 13, weight: .medium)
+        modePill.font = Theme.sans(12, 500)
         modePill.wantsLayer = true
         modePill.layer?.cornerRadius = 6
         modePill.layer?.backgroundColor = NSColor.labelColor.withAlphaComponent(0.1).cgColor
@@ -403,8 +429,8 @@ final class LauncherController: NSObject, LauncherContext, NSTableViewDataSource
         scroll.scrollerStyle = .overlay
         scroll.contentInsets = NSEdgeInsets(top: 4, left: 0, bottom: 4, right: 0)
 
-        emptyLabel.textColor = .tertiaryLabelColor
-        emptyLabel.font = .systemFont(ofSize: 14)
+        emptyLabel.textColor = Theme.mutedForeground
+        emptyLabel.font = Theme.body
         emptyLabel.isHidden = true
 
         let bunny = NSImageView(image: NSApp.applicationIconImage ?? NSImage())

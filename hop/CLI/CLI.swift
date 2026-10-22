@@ -18,6 +18,8 @@ enum CLI {
         "hyper": hyper,
         "wg": wireguard,
         "kp": keepass,
+        "ps": processes,
+        "kill": killProcess,
     ]
 
     /// Runs a CLI command and exits if argv names one; otherwise returns.
@@ -44,10 +46,12 @@ enum CLI {
           uninstall <app> [--yes] [--json]    Remove an app and its ~/Library leftovers
           downloads clear [--yes] [--json]    Move everything in Downloads to the Trash
           trash count | empty [--yes]         Count or empty the Trash
+          ps [query] [--json]                 Running processes, busiest first
+          kill <pid|name> [--force] [--yes]   SIGTERM (or SIGKILL with --force) one process
           config path | check | show          Inspect ~/.config/hop/config.json5
           hyper status | map | unmap          Caps Lock → F20 key mapping (unmap after a crash)
           wg list | up <name> | down <name> | down-all   WireGuard tunnels (WireGuard.app)
-          kp status | search [query] | get <entry> [--field F]   KeePassXC (unlocks per call)
+          kp dbs | search [query] | get <entry> [--field F] [--db NAME]   KeePassXC (unlocks per call)
               --field: username (default), url, title, password, totp, notes
               password, totp and notes need keepass.cliAccess: true; --password-stdin reads the
               master password from stdin, otherwise keepass.password decides (keychain asks Touch ID)
@@ -130,6 +134,39 @@ enum CLI {
         return failed == 0 ? 0 : 1
     }
 
+    static func processes(_ a: Args) async -> Int32 {
+        let all = await Processes.list()
+        let q = a.positional.joined(separator: " ")
+        let list = q.isEmpty ? all : all.filter { $0.name.localizedCaseInsensitiveContains(q) || String($0.pid) == q }
+        if a.json {
+            Output.json(list.map { ["pid": $0.pid, "name": $0.name, "path": $0.path, "cpu": $0.cpu, "memoryBytes": $0.memory, "uid": $0.uid] })
+        } else {
+            for p in list { print(String(format: "%6d  %5.1f%%  %8@  %@", p.pid, p.cpu, ByteCountFormatter.string(fromByteCount: p.memory, countStyle: .memory), p.name)) }
+        }
+        return 0
+    }
+
+    static func killProcess(_ a: Args) async -> Int32 {
+        let target = a.positional.joined(separator: " ")
+        guard !target.isEmpty else { return Output.fail("usage: hop kill <pid|name> [--force] [--yes]") }
+        let all = await Processes.list()
+        let matches = Int32(target).map { pid in all.filter { $0.pid == pid } } ?? all.filter { $0.name == target }
+        guard let p = matches.first else { return Output.fail("no process \(target)") }
+        guard matches.count == 1 else {
+            for m in matches { print("\(m.pid)\t\(m.name)") }
+            return Output.fail("\(matches.count) processes named \(target), pass a PID")
+        }
+        let force = a.flags.contains("force")
+        print("\(force ? "SIGKILL" : "SIGTERM") \(p.pid) \(p.name)")
+        guard a.yes else { return Output.dryRun() }
+        switch Processes.kill(p.pid, force: force) {
+        case .ok: print("sent"); return 0
+        case .gone: return Output.fail("process already exited")
+        case .notPermitted: return Output.fail("not permitted (owned by another user)")
+        case .failed: return Output.fail("kill failed")
+        }
+    }
+
     static func trash(_ a: Args) async -> Int32 {
         switch a.positional.first {
         case "count":
@@ -169,8 +206,8 @@ enum CLI {
                             "menuBarIcon": c.general.menuBarIcon],
                 "hyperKey": ["enabled": c.hyperKey.enabled, "quickPressEscape": c.hyperKey.quickPressEscape],
                 "wireguard": ["enabled": c.wireguard.enabled, "showFlags": c.wireguard.showFlags],
-                "keepass": ["enabled": c.keepass.enabled, "database": c.keepass.database, "keyFile": c.keepass.keyFile,
-                            "password": c.keepass.password.rawValue, "lockAfterMinutes": c.keepass.lockAfterMinutes],
+                "keepass": ["enabled": c.keepass.enabled, "databases": c.keepass.allDatabases.map { ["name": $0.label, "path": $0.path, "password": $0.password.rawValue] },
+                            "lockAfterMinutes": c.keepass.lockAfterMinutes, "cliAccess": c.keepass.cliAccess, "favicons": c.keepass.favicons],
                 "system": ["downloadsFolder": c.system.downloadsFolder],
             ])
             return settings.error == nil ? 0 : 1
@@ -181,23 +218,35 @@ enum CLI {
 
     static func keepass(_ a: Args) async -> Int32 {
         let config = AppSettings().data.keepass
+        let dbs = config.allDatabases
         let cli = KeePassCLI.locate(override: config.cli)
         let sub = a.positional.first ?? "status"
-        if sub == "status" {
-            let info: [String: Any] = [
-                "enabled": config.enabled, "database": config.database, "databaseExists": FileManager.default.fileExists(atPath: config.database.expandingTilde),
-                "cli": cli ?? "", "password": config.password.rawValue, "cliAccess": config.cliAccess,
-                "passwordInKeychain": CredentialVault.hasPassword(account: config.database.expandingTilde),
-            ]
-            if a.json { Output.json(info) } else { for (k, v) in info.sorted(by: { $0.key < $1.key }) { print("\(k): \(v)") } }
+        let wanted = a.option("db")
+        let db = wanted.flatMap { w in dbs.first { $0.label.lowercased() == w.lowercased() || $0.expandedPath == w.expandingTilde } }
+            ?? (wanted == nil ? dbs.first : nil)
+
+        switch sub {
+        case "status", "dbs":
+            let rows: [[String: Any]] = dbs.map { d in
+                ["name": d.label, "path": d.path, "exists": FileManager.default.fileExists(atPath: d.expandedPath),
+                 "password": d.password.rawValue, "passwordInKeychain": CredentialVault.hasPassword(account: d.expandedPath)]
+            }
+            if a.json {
+                Output.json(["enabled": config.enabled, "cli": cli ?? "", "cliAccess": config.cliAccess, "databases": rows])
+            } else {
+                print("enabled: \(config.enabled)\ncli: \(cli ?? "not found")\ncliAccess: \(config.cliAccess)")
+                for d in dbs { print("  \(d.label)\t\(d.path)\t\(d.password.rawValue)") }
+            }
             return 0
+        default: break
         }
-        guard config.enabled, !config.database.isEmpty else { return Output.fail(KeePassError.notConfigured.message) }
+        guard config.enabled, !dbs.isEmpty else { return Output.fail(KeePassError.notConfigured.message) }
+        guard let db else { return Output.fail("no database named \(wanted ?? "") (see hop kp dbs)") }
         guard let cli else { return Output.fail(KeePassError.cliNotFound.message) }
 
         let entries: [KeePassEntry]
         do {
-            entries = try await KeePassCLI.export(cli: cli, config: config, password: try await masterPassword(config, a))
+            entries = try await KeePassCLI.export(cli: cli, database: db, password: try await masterPassword(db, a))
         } catch let e as KeePassError {
             return Output.fail(e.message)
         } catch {
@@ -211,7 +260,8 @@ enum CLI {
         switch sub {
         case "search":
             if a.json {
-                Output.json(ranked.map { ["title": $0.title, "username": $0.username, "url": $0.url, "group": $0.group, "hasTOTP": !$0.totp.isEmpty] })
+                Output.json(ranked.map { ["title": $0.title, "username": $0.username, "url": $0.url, "group": $0.group,
+                                          "hasTOTP": !$0.totp.isEmpty, "database": db.label] })
             } else {
                 for e in ranked { print("\(e.title)\t\(e.username)\t\(e.url)\t\(e.group)") }
             }
@@ -234,29 +284,29 @@ enum CLI {
             print(value)
             return 0
         default:
-            return Output.fail("usage: hop kp status | search [query] | get <entry> [--field F]")
+            return Output.fail("usage: hop kp dbs | search [query] | get <entry> [--field F] [--db NAME]")
         }
     }
 
-    private static func masterPassword(_ config: HopConfig.KeePass, _ a: Args) async throws -> String? {
+    private static func masterPassword(_ db: HopConfig.KeePass.Database, _ a: Args) async throws -> String? {
         if a.flags.contains("password-stdin") {
             var pw = String(decoding: FileHandle.standardInput.readDataToEndOfFile(), as: UTF8.self)
             while pw.hasSuffix("\n") || pw.hasSuffix("\r") { pw.removeLast() }
             return pw
         }
-        switch config.password {
+        switch db.password {
         case .none: return nil
-        case .command: return try await KeePassCLI.passwordFromCommand(config.passwordCommand)
+        case .command: return try await KeePassCLI.passwordFromCommand(db.passwordCommand)
         case .keychain:
-            let account = config.database.expandingTilde
+            let account = db.expandedPath
             guard CredentialVault.hasPassword(account: account) else {
-                throw KeePassError.failed("no password in the Keychain yet: unlock once in hop, or use --password-stdin")
+                throw KeePassError.failed("no password in the Keychain yet: unlock \(db.label) once in hop, or use --password-stdin")
             }
-            guard await CredentialVault.authenticate(reason: "let hop kp read your KeePassXC database") else { throw KeePassError.cancelled }
+            guard await CredentialVault.authenticate(reason: "let hop kp read \(db.label)") else { throw KeePassError.cancelled }
             guard let pw = CredentialVault.load(account: account) else { throw KeePassError.cancelled }
             return pw
         case .prompt:
-            throw KeePassError.failed("keepass.password is \"prompt\": pass --password-stdin")
+            throw KeePassError.failed("\(db.label) uses password \"prompt\": pass --password-stdin")
         }
     }
 
@@ -333,8 +383,8 @@ enum CLI {
                 let r = raw[i]
                 if r.hasPrefix("--"), let eq = r.firstIndex(of: "=") {
                     options[String(r[r.index(r.startIndex, offsetBy: 2)..<eq])] = String(r[r.index(after: eq)...])
-                } else if r == "--field", i + 1 < raw.count {
-                    options["field"] = raw[i + 1]
+                } else if ["--field", "--db"].contains(r), i + 1 < raw.count {
+                    options[String(r.dropFirst(2))] = raw[i + 1]
                     i += 1
                 } else if r.hasPrefix("--") {
                     flags.insert(String(r.dropFirst(2)))

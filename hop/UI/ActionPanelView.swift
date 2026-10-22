@@ -11,8 +11,8 @@ final class ActionPanelView: NSView, NSTableViewDataSource, NSTableViewDelegate 
         super.init(frame: frame)
         wantsLayer = true
         layer?.cornerRadius = 14
-        layer?.backgroundColor = NSColor.windowBackgroundColor.withAlphaComponent(0.92).cgColor
-        layer?.borderColor = NSColor.separatorColor.cgColor
+        layer?.backgroundColor = Theme.card.cgColor
+        layer?.borderColor = Theme.border.cgColor
         layer?.borderWidth = 0.5
         shadow = NSShadow()
 
@@ -85,18 +85,24 @@ final class ActionPanelView: NSView, NSTableViewDataSource, NSTableViewDelegate 
     func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
         let a = actions[row]
         let cell = NSTableCellView()
+        let icon = NSImageView(image: NSImage(systemSymbolName: a.resolvedSymbol, accessibilityDescription: nil)
+            .flatMap { $0.withSymbolConfiguration(.init(pointSize: 13, weight: .medium)) } ?? NSImage())
+        icon.contentTintColor = a.style == .destructive ? Theme.destructive : Theme.mutedForeground
         let title = NSTextField(labelWithString: a.title)
-        title.font = .systemFont(ofSize: 13)
-        if a.style == .destructive { title.textColor = .systemRed }
+        title.font = Theme.sans(13)
+        title.textColor = a.style == .destructive ? Theme.destructive : Theme.foreground
         let key = NSTextField(labelWithString: row == 0 ? "↵" : (a.shortcut?.display ?? ""))
-        key.font = .systemFont(ofSize: 12)
-        key.textColor = .secondaryLabelColor
-        for v in [title, key] {
+        key.font = Theme.mono(11, 500)
+        key.textColor = Theme.mutedForeground
+        for v in [icon, title, key] {
             v.translatesAutoresizingMaskIntoConstraints = false
             cell.addSubview(v)
         }
         NSLayoutConstraint.activate([
-            title.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 18),
+            icon.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 18),
+            icon.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
+            icon.widthAnchor.constraint(equalToConstant: 18),
+            title.leadingAnchor.constraint(equalTo: icon.trailingAnchor, constant: 10),
             title.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
             key.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -18),
             key.centerYAnchor.constraint(equalTo: cell.centerYAnchor),

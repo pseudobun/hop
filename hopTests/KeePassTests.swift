@@ -85,32 +85,28 @@ struct KeePassCSVTests {
 struct KeePassCLITests {
     static let fake = Fixtures.directory.appending(path: "fake-keepassxc-cli.sh").path
 
-    static func config() throws -> HopConfig.KeePass {
+    static func config() throws -> HopConfig.KeePass.Database {
         let db = FileManager.default.temporaryDirectory.appending(path: "hop-test.kdbx")
         try Data("not really".utf8).write(to: db)
-        var c = HopConfig.KeePass()
-        c.enabled = true
-        c.database = db.path
-        return c
+        return HopConfig.KeePass.Database(name: "Test", path: db.path)
     }
 
     @Test func exportWithPasswordOnStdin() async throws {
-        let entries = try await KeePassCLI.export(cli: Self.fake, config: try Self.config(), password: "secret")
+        let entries = try await KeePassCLI.export(cli: Self.fake, database: try Self.config(), password: "secret")
         #expect(entries.map(\.title) == ["GitHub"])
         #expect(entries[0].password == "hunter2")
     }
 
     @Test func wrongPassword() async throws {
         await #expect(throws: KeePassError.invalidCredentials) {
-            try await KeePassCLI.export(cli: Self.fake, config: try Self.config(), password: "nope")
+            try await KeePassCLI.export(cli: Self.fake, database: try Self.config(), password: "nope")
         }
     }
 
     @Test func missingDatabase() async {
-        var c = HopConfig.KeePass()
-        c.database = "/nonexistent/x.kdbx"
+        let c = HopConfig.KeePass.Database(path: "/nonexistent/x.kdbx")
         await #expect(throws: KeePassError.databaseMissing) {
-            try await KeePassCLI.export(cli: Self.fake, config: c, password: "secret")
+            try await KeePassCLI.export(cli: Self.fake, database: c, password: "secret")
         }
     }
 

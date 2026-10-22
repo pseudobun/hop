@@ -8,7 +8,7 @@ nonisolated enum KeePassError: Error, Equatable {
 
     var message: String {
         switch self {
-        case .notConfigured: "Set keepass.database in the hop config"
+        case .notConfigured: "Add a database to keepass.databases in the hop config"
         case .cliNotFound: "keepassxc-cli not found. Install KeePassXC or set keepass.cli"
         case .databaseMissing: "Database file not found"
         case .invalidCredentials: "Wrong password or key file"
@@ -40,10 +40,10 @@ nonisolated enum KeePassCLI {
         return args + extra + [database.expandingTilde]
     }
 
-    static func export(cli: String, config: HopConfig.KeePass, password: String?) async throws -> [KeePassEntry] {
-        let db = config.database.expandingTilde
+    static func export(cli: String, database: HopConfig.KeePass.Database, password: String?) async throws -> [KeePassEntry] {
+        let db = database.expandedPath
         guard FileManager.default.fileExists(atPath: db) else { throw KeePassError.databaseMissing }
-        let args = arguments("export", database: db, keyFile: config.keyFile, noPassword: password == nil, extra: ["-f", "csv"])
+        let args = arguments("export", database: db, keyFile: database.keyFile, noPassword: password == nil, extra: ["-f", "csv"])
         let stdin = password.map { Data(($0 + "\n").utf8) }
         let r: ProcessResult
         do { r = try await ProcessRunner.run(cli, args, stdin: stdin ?? Data(), timeout: .seconds(60)) }

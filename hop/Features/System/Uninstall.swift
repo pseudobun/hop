@@ -86,6 +86,7 @@ nonisolated enum Trash {
 /// Pick an app to uninstall.
 final class UninstallPickerMode: Mode {
     let title: String? = "Uninstall"
+    let tint: NSColor? = Theme.warn
     let placeholder = "Search applications to uninstall…"
     private let services: Services
 
@@ -161,6 +162,7 @@ struct UninstallPlan {
 final class UninstallMode: Mode {
     let title: String?
     let placeholder = "Press ↵ to uninstall, Esc to cancel"
+    let tint: NSColor? = Theme.warn
     private let app: AppEntry
     private var plan: UninstallPlan?
     private weak var context: LauncherContext?
@@ -199,8 +201,6 @@ final class UninstallMode: Mode {
                                context?.setLoading(false)
                                return result.ok ? .dismissWithHUD(result.message) : .stayWithHUD(result.message)
                            }], tracksFrecency: false)
-        let cancel = Item(id: "uninstall.cancel", title: "Cancel", icon: .symbol("xmark.circle"),
-                          actions: [Action(title: "Cancel") { .pop }], tracksFrecency: false)
         var files = [Item(id: "f.bundle", title: (app.path as NSString).lastPathComponent,
                           subtitle: (app.path as NSString).deletingLastPathComponent, icon: .file(app.path),
                           accessory: plan.map { ByteCountFormatter.string(fromByteCount: $0.bundleSize, countStyle: .file) },
@@ -211,7 +211,7 @@ final class UninstallMode: Mode {
                  icon: .file(l.url.path), accessory: ByteCountFormatter.string(fromByteCount: l.size, countStyle: .file),
                  actions: revealActions(l.url), tracksFrecency: false)
         }
-        return [ResultSection(title: nil, items: [confirm, cancel]), ResultSection(title: "Will be removed", items: files)]
+        return [ResultSection(title: nil, items: [confirm]), ResultSection(title: "Will be removed", items: files)]
     }
 
     private func revealActions(_ url: URL) -> [Action] {

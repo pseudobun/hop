@@ -14,6 +14,7 @@ final class RootMode: Mode {
     var prefixModes: [(prefix: String, make: () -> Mode)] = []
     weak var context: LauncherContext?
     var hyperError: (() -> String?)?
+    var permissionsMode: (() -> Mode)?
 
     private var items: [Item] = []
     private var candidates: [RankCandidate] = []
@@ -78,14 +79,13 @@ final class RootMode: Mode {
         var sections: [ResultSection] = []
         var setup: [Item] = []
         if let error = settings.error { setup.append(configErrorItem(error)) }
-        if settings.data.hyperKey.enabled, let err = hyperError?(), err.contains("Accessibility") {
-            setup.append(Item(id: "setup.accessibility", title: "Allow hop in Accessibility",
-                              subtitle: "Hyper Key and paste need it: Privacy & Security → Accessibility",
-                              icon: .symbol("hand.raised.fill", tint: .systemOrange), accessory: "Setup",
-                              actions: [Action(title: "Open Accessibility Settings") {
-                                  NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
-                                  return .dismiss
-                              }], tracksFrecency: false))
+        let missing = Permission.missing(for: settings.data)
+        if !missing.isEmpty, let make = permissionsMode {
+            setup.append(Item(id: "setup.permissions", title: "Finish Setup",
+                              subtitle: "Allow \(missing.map(\.title).joined(separator: ", "))",
+                              icon: .tile("checkmark.shield.fill", Theme.info), accessory: "Setup",
+                              actions: [Action(title: "Show Permissions") { .push(make()) }],
+                              tracksFrecency: false, pushesMode: true))
         }
         if settings.data.general.hotkey.lowercased().replacingOccurrences(of: " ", with: "") == "cmd+space",
            let hint = SpotlightHotkey.hintItem() {
@@ -109,7 +109,7 @@ final class RootMode: Mode {
 
     private func configErrorItem(_ error: String) -> Item {
         Item(id: "setup.configError", title: "Config has an error", subtitle: error,
-             icon: .symbol("exclamationmark.triangle.fill", tint: .systemYellow), accessory: "Setup",
+             icon: .tile("exclamationmark.triangle.fill", Theme.warn), accessory: "Setup",
              actions: [Action(title: "Open Config") {
                  let url = AppSettings.defaultURL
                  NSWorkspace.shared.open(url)
@@ -120,13 +120,13 @@ final class RootMode: Mode {
     private func calculatorItem(_ query: String, _ value: Decimal) -> Item {
         let text = Calculator.format(value)
         return Item(id: "calc", title: text, subtitle: query.trimmingCharacters(in: .whitespaces),
-                    icon: .symbol("equal.square.fill"), accessory: "Calculator",
+                    icon: .tile("equal", Theme.chart2), accessory: "Calculator",
                     actions: [
                         Action(title: "Copy Answer") {
                             Pasteboard.copy(text)
                             return .dismissWithHUD("Copied \(text)")
                         },
-                    ], tracksFrecency: false)
+                    ], tracksFrecency: false, monoTitle: true)
     }
 
     private func item(for entry: AppEntry) -> Item {
@@ -151,7 +151,7 @@ final class RootMode: Mode {
                 return .dismissWithHUD("Copied path")
             })
             if UninstallMode.isRemovable(entry.path) {
-                actions.append(Action(title: "Uninstall…", shortcut: .init(key: .delete, modifiers: .command), style: .destructive) {
+                actions.append(Action(title: "Uninstall…", style: .destructive) {
                     .push(UninstallMode(app: entry))
                 })
             }
@@ -182,7 +182,7 @@ enum SpotlightHotkey {
         guard isEnabled else { return nil }
         return Item(id: "setup.spotlight", title: "Free ⌘Space for hop",
                     subtitle: "Turn off “Show Spotlight search” in Keyboard Shortcuts",
-                    icon: .symbol("keyboard", tint: .systemOrange), accessory: "Setup",
+                    icon: .tile("command", Theme.warn), accessory: "Setup",
                     actions: [
                         Action(title: "Open Keyboard Settings") {
                             NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.Keyboard-Settings.extension")!)

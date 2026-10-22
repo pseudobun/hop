@@ -23,6 +23,8 @@ protocol LauncherContext: AnyObject {
 protocol Mode: AnyObject {
     /// Shown as a pill left of the search field; `nil` for root.
     var title: String? { get }
+    /// Colour of the mode pill and the selection; nil uses the system accent.
+    var tint: NSColor? { get }
     var placeholder: String { get }
     /// Secure text entry (for a password prompt mode).
     var isSecureInput: Bool { get }
@@ -37,6 +39,7 @@ protocol Mode: AnyObject {
 }
 
 extension Mode {
+    var tint: NSColor? { nil }
     var isSecureInput: Bool { false }
     var accessoryView: NSView? { nil }
     func didEnter(_ context: LauncherContext) {}

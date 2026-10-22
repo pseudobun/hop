@@ -9,7 +9,7 @@ nonisolated struct HopConfig: Decodable, Equatable, Sendable {
         var hotkey = "cmd+space"
         var sensitivity: Sensitivity = .high
         var popToRootSeconds = 90
-        var openAtLogin = false
+        var openAtLogin = true
         var menuBarIcon = true
     }
 
@@ -36,7 +36,21 @@ nonisolated struct HopConfig: Decodable, Equatable, Sendable {
             case none
         }
 
+        nonisolated struct Database: Decodable, Equatable, Sendable {
+            var name = ""
+            var path = ""
+            var keyFile = ""
+            var password: PasswordSource = .keychain
+            var passwordCommand = ""
+
+            /// Label for pills and lists: `name`, or the file name without extension.
+            var label: String { name.isEmpty ? ((path as NSString).lastPathComponent as NSString).deletingPathExtension : name }
+            var expandedPath: String { path.expandingTilde }
+        }
+
         var enabled = false
+        /// Several databases; when empty, the single `database` keys below are used.
+        var databases: [Database] = []
         var database = ""
         var keyFile = ""
         var password: PasswordSource = .keychain
@@ -47,6 +61,15 @@ nonisolated struct HopConfig: Decodable, Equatable, Sendable {
         var cli = ""
         /// Let `hop kp get` print passwords, TOTP codes and notes (for agents).
         var cliAccess = false
+        /// Show site icons, fetched directly from each entry's site.
+        var favicons = true
+
+        /// Configured databases, including the legacy single-database keys.
+        var allDatabases: [Database] {
+            if !databases.isEmpty { return databases.filter { !$0.path.isEmpty } }
+            guard !database.isEmpty else { return [] }
+            return [Database(name: "", path: database, keyFile: keyFile, password: password, passwordCommand: passwordCommand)]
+        }
     }
 
     nonisolated struct System: Decodable, Equatable, Sendable {
@@ -113,10 +136,11 @@ nonisolated extension HopConfig.WireGuard {
 }
 
 nonisolated extension HopConfig.KeePass {
-    private enum Keys: String, CodingKey { case enabled, database, keyFile, password, passwordCommand, lockAfterMinutes, cli, cliAccess }
+    private enum Keys: String, CodingKey { case enabled, databases, database, keyFile, password, passwordCommand, lockAfterMinutes, cli, cliAccess, favicons }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: Keys.self), d = Self()
         enabled = try c.value(.enabled, d.enabled)
+        databases = try c.value(.databases, d.databases)
         database = try c.value(.database, d.database)
         keyFile = try c.value(.keyFile, d.keyFile)
         password = try c.value(.password, d.password)
@@ -124,6 +148,19 @@ nonisolated extension HopConfig.KeePass {
         lockAfterMinutes = try c.value(.lockAfterMinutes, d.lockAfterMinutes)
         cli = try c.value(.cli, d.cli)
         cliAccess = try c.value(.cliAccess, d.cliAccess)
+        favicons = try c.value(.favicons, d.favicons)
+    }
+}
+
+nonisolated extension HopConfig.KeePass.Database {
+    private enum Keys: String, CodingKey { case name, path, keyFile, password, passwordCommand }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: Keys.self), d = Self()
+        name = try c.value(.name, d.name)
+        path = try c.value(.path, d.path)
+        keyFile = try c.value(.keyFile, d.keyFile)
+        password = try c.value(.password, d.password)
+        passwordCommand = try c.value(.passwordCommand, d.passwordCommand)
     }
 }
 
@@ -249,7 +286,7 @@ final class AppSettings {
         sensitivity: "high",
         // Reopening after this many seconds starts back at the root search
         popToRootSeconds: 90,
-        openAtLogin: false,
+        openAtLogin: true,
         menuBarIcon: true,
       },
 
@@ -268,23 +305,34 @@ final class AppSettings {
 
       keepass: {
         enabled: false,
-        database: "~/Documents/Passwords.kdbx",
-        // Optional key file
-        keyFile: "",
-        // Where the master password comes from. Never write it in this file.
+        // One entry per database; switch between them with ⌘D in hop.
+        databases: [
+          {
+            name: "Personal",
+            path: "~/Documents/Passwords.kdbx",
+            // Optional key file
+            keyFile: "",
+            // Where the master password comes from (see below)
+            password: "keychain",
+            passwordCommand: "",
+          },
+          // { name: "Work", path: "~/Work/work.kdbx", password: "command",
+          //   passwordCommand: "security find-generic-password -w -s hop-work" },
+        ],
+        // password: where a database's master password comes from. Never write it in this file.
         //   "keychain" ask once in hop, keep it in the Keychain behind Touch ID
         //   "prompt"   ask every time the database is unlocked
         //   "command"  run passwordCommand and read the password from its output,
         //              e.g. "security find-generic-password -w -s hop-keepass"
         //   "none"     the database has no password (key file only)
-        password: "keychain",
-        passwordCommand: "",
         // Lock after this many minutes without use; -1 never
         lockAfterMinutes: 10,
         // Path to keepassxc-cli if it is not in KeePassXC.app or Homebrew
         cli: "",
         // Allow `hop kp get` to print passwords, TOTP codes and notes (e.g. for agents)
         cliAccess: false,
+        // Site icons, fetched straight from each entry's website and cached
+        favicons: true,
       },
 
       system: {

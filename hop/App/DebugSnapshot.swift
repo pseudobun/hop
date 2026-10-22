@@ -18,6 +18,7 @@ enum DebugSnapshot {
             config.width = Int(scWindow.frame.width * window.backingScaleFactor)
             config.height = Int(scWindow.frame.height * window.backingScaleFactor)
             config.showsCursor = false
+            config.ignoreShadowsSingleWindow = false
             let image = try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: config)
             let rep = NSBitmapImageRep(cgImage: image)
             try rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: path))

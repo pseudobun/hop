@@ -22,25 +22,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         guard !AppPaths.isRunningTests else { return }
+        Theme.registerFonts()
 
         let settings = AppSettings()
         let frecency = FrecencyStore(store: JSONStore(url: AppPaths.file("frecency.json")))
         let apps = AppIndex()
         services = Services(settings: settings, frecency: frecency, apps: apps)
         services.hyper = hyper
-        let session = KeePassSession(settings: settings)
+        let keepass = KeePassManager(settings: settings)
         let pins = KeePassPins()
         let makeKeePass: () -> Mode = { [unowned self] in
-            KeePassMode(session: session, pins: pins, sensitivity: settings.data.general.sensitivity,
+            KeePassMode(manager: keepass, pins: pins, sensitivity: settings.data.general.sensitivity,
                         openConfig: { [weak self] in self?.services.openConfig() })
         }
         services.keepassMode = makeKeePass
+        services.keepass = keepass
 
         root = RootMode(apps: apps, frecency: frecency, settings: settings) { [unowned self] in
             Registry.commands(services)
         }
         root.hyperError = { [weak self] in self?.hyper.lastError }
         root.prefixModes = [(prefix: "kp ", make: makeKeePass)]
+        let makePermissions: () -> Mode = { PermissionsMode { settings.data } }
+        root.permissionsMode = makePermissions
+        services.permissionsMode = makePermissions
         launcher = LauncherController(root: root)
         launcher.popToRootSeconds = { settings.data.general.popToRootSeconds }
         launcher.onItemPerformed = { item, index in
@@ -61,12 +66,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         root.rebuild()
         apps.start()
 
+        if !PermissionLog.onboarded && !ProcessInfo.processInfo.arguments.contains("-DebugShowOnLaunch") {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
+                self?.launcher.show()
+                self?.launcher.push(makePermissions())
+            }
+        }
+
         #if DEBUG
         let defaults = UserDefaults.standard
         if defaults.bool(forKey: "DebugShowOnLaunch") {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
                 guard let self else { return }
                 launcher.show(query: defaults.string(forKey: "DebugQuery"))
+                if defaults.bool(forKey: "DebugActions") { launcher.debugOpenActionPanel() }
+                if defaults.string(forKey: "DebugPush") == "permissions" { launcher.push(makePermissions()) }
                 if let path = defaults.string(forKey: "DebugSnapshotPath") {
                     Task {
                         try? await Task.sleep(for: .milliseconds(700))
