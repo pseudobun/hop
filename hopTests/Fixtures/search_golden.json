@@ -1,0 +1,2886 @@
+{
+ "source": "Raycast 2.8.2 backend/index.mjs (af @611769, rf @611575, iXi @6114112, sXi @6116856, B4 @6116423, cXi @6119703, hXi consts @6121162)",
+ "notes": [
+  "scores use literalQueryDots=true (V4) as root search does; `fuzzy` is the default-options variant used by menus",
+  "MAX/MIN = ±(2^53-1); thresholds use transliterated query length",
+  "ranking `now` fixes Date.now() for the 17-day search-term window"
+ ],
+ "constants": {
+  "separators": [
+   "\\t",
+   "\\n",
+   " ",
+   "-",
+   ".",
+   "/",
+   "(",
+   ")",
+   "[",
+   "]"
+  ],
+  "score": {
+   "first": 4,
+   "wordBeginning": 3,
+   "default": 2,
+   "limiter": 1
+  },
+  "gapPenalty": 1,
+  "precheckMinNonSepLen": 3,
+  "searchTermWindowMs": 1468800000,
+  "overboundsMaxGap": 3,
+  "maxStoredSearchTerms": 3,
+  "typeWeights": {
+   "application": 5,
+   "quicklink": 3,
+   "preference": 1,
+   "calendar-event": 1,
+   "contact": 0,
+   "file-result": 1,
+   "file-indexing": 1
+  },
+  "defaultCommandWeight": {
+   "view-command": 4,
+   "no-view-command": 4,
+   "ai-extension-command": 4,
+   "menu-bar-command": 3
+  }
+ },
+ "normalization": [
+  {
+   "input": "Časovnik",
+   "translit": "Casovnik",
+   "query": {
+    "lowercasedSearchTerm": "časovnik",
+    "transliteratedSearchTerm": "casovnik"
+   }
+  },
+  {
+   "input": "Žabe in Ščuke",
+   "translit": "Zabe in Scuke",
+   "query": {
+    "lowercasedSearchTerm": "žabe in ščuke",
+    "transliteratedSearchTerm": "zabe in scuke"
+   }
+  },
+  {
+   "input": "Ärger",
+   "translit": "Arger",
+   "query": {
+    "lowercasedSearchTerm": "ärger",
+    "transliteratedSearchTerm": "arger"
+   }
+  },
+  {
+   "input": "Straße",
+   "translit": "Strasse",
+   "query": {
+    "lowercasedSearchTerm": "straße",
+    "transliteratedSearchTerm": "strasse"
+   }
+  },
+  {
+   "input": "café",
+   "translit": "cafe",
+   "query": {
+    "lowercasedSearchTerm": "café",
+    "transliteratedSearchTerm": "cafe"
+   }
+  },
+  {
+   "input": "北京",
+   "translit": "Bei Jing",
+   "query": {
+    "lowercasedSearchTerm": "北京",
+    "transliteratedSearchTerm": "bei jing"
+   }
+  },
+  {
+   "input": "Привет",
+   "translit": "Privet",
+   "query": {
+    "lowercasedSearchTerm": "привет",
+    "transliteratedSearchTerm": "privet"
+   }
+  },
+  {
+   "input": "Ελλάδα",
+   "translit": "Ellada",
+   "query": {
+    "lowercasedSearchTerm": "ελλάδα",
+    "transliteratedSearchTerm": "ellada"
+   }
+  },
+  {
+   "input": "ﬁle",
+   "translit": "file",
+   "query": {
+    "lowercasedSearchTerm": "ﬁle",
+    "transliteratedSearchTerm": "file"
+   }
+  },
+  {
+   "input": "Å",
+   "translit": "A",
+   "query": {
+    "lowercasedSearchTerm": "å",
+    "transliteratedSearchTerm": "a"
+   }
+  },
+  {
+   "input": "é",
+   "translit": "e",
+   "query": {
+    "lowercasedSearchTerm": "é",
+    "transliteratedSearchTerm": "e"
+   }
+  },
+  {
+   "input": "  lead",
+   "translit": "  lead",
+   "query": {
+    "lowercasedSearchTerm": "lead",
+    "transliteratedSearchTerm": "lead"
+   }
+  },
+  {
+   "input": "TRAIL  ",
+   "translit": "TRAIL  ",
+   "query": {
+    "lowercasedSearchTerm": "trail  ",
+    "transliteratedSearchTerm": "trail  "
+   }
+  }
+ ],
+ "scorer": [
+  {
+   "query": "sl",
+   "text": "Slack",
+   "transliteratedQuery": "sl",
+   "normalizedText": "slack",
+   "wordBoundaries": [],
+   "fuzzy": {
+    "score": 6,
+    "skipped": 0
+   },
+   "fuzzyLiteralDots": {
+    "score": 6,
+    "skipped": 0
+   },
+   "scoreValue": 6,
+   "threshold": {
+    "low": true,
+    "medium": true,
+    "high": true
+   },
+   "titlePrefix": "prefix",
+   "wholeWord": false,
+   "wholeWordFloor": 6
+  },
+  {
+   "query": "slack",
+   "text": "Slack",
+   "transliteratedQuery": "slack",
+   "normalizedText": "slack",
+   "wordBoundaries": [],
+   "fuzzy": "exact",
+   "fuzzyLiteralDots": "exact",
+   "scoreValue": "MAX",
+   "threshold": {
+    "low": true,
+    "medium": true,
+    "high": true
+   },
+   "titlePrefix": "exact",
+   "wholeWord": true,
+   "wholeWordFloor": "MAX"
+  },
+  {
+   "query": "Slack",
+   "text": "Slack",
+   "transliteratedQuery": "slack",
+   "normalizedText": "slack",
+   "wordBoundaries": [],
+   "fuzzy": "exact",
+   "fuzzyLiteralDots": "exact",
+   "scoreValue": "MAX",
+   "threshold": {
+    "low": true,
+    "medium": true,
+    "high": true
+   },
+   "titlePrefix": "exact",
+   "wholeWord": true,
+   "wholeWordFloor": "MAX"
+  },
+  {
+   "query": "sla",
+   "text": "Slack",
+   "transliteratedQuery": "sla",
+   "normalizedText": "slack",
+   "wordBoundaries": [],
+   "fuzzy": {
+    "score": 8,
+    "skipped": 0
+   },
+   "fuzzyLiteralDots": {
+    "score": 8,
+    "skipped": 0
+   },
+   "scoreValue": 8,
+   "threshold": {
+    "low": true,
+    "medium": true,
+    "high": true
+   },
+   "titlePrefix": "prefix",
+   "wholeWord": false,
+   "wholeWordFloor": 8
+  },
+  {
+   "query": "slk",
+   "text": "Slack",
+   "transliteratedQuery": "slk",
+   "normalizedText": "slack",
+   "wordBoundaries": [],
+   "fuzzy": {
+    "score": 7,
+    "skipped": 0
+   },
+   "fuzzyLiteralDots": {
+    "score": 7,
+    "skipped": 0
+   },
+   "scoreValue": 7,
+   "threshold": {
+    "low": true,
+    "medium": true,
+    "high": true
+   },
+   "titlePrefix": "unmatched",
+   "wholeWord": false,
+   "wholeWordFloor": 7
+  },
+  {
+   "query": "sl ",
+   "text": "Slack",
+   "note": "trailing separator: stale DP row quirk",
+   "transliteratedQuery": "sl ",
+   "normalizedText": "slack",
+   "wordBoundaries": [],
+   "fuzzy": {
+    "score": 4,
+    "skipped": 1
+   },
+   "fuzzyLiteralDots": {
+    "score": 4,
+    "skipped": 1
+   },
+   "scoreValue": 4,
+   "threshold": {
+    "low": true,
+    "medium": true,
+    "high": false
+   },
+   "titlePrefix": "unmatched",
+   "wholeWord": false,
+   "wholeWordFloor": 4
+  },
+  {
+   "query": "vsc",
+   "text": "Visual Studio Code",
+   "transliteratedQuery": "vsc",
+   "normalizedText": "visual studio code",
+   "wordBoundaries": [],
+   "fuzzy": {
+    "score": 8,
+    "skipped": 0
+   },
+   "fuzzyLiteralDots": {
+    "score": 8,
+    "skipped": 0
+   },
+   "scoreValue": 8,
+   "threshold": {
+    "low": true,
+    "medium": true,
+    "high": true
+   },
+   "titlePrefix": "unmatched",
+   "wholeWord": false,
+   "wholeWordFloor": 8
+  },
+  {
+   "query": "vscode",
+   "text": "Visual Studio Code",
+   "transliteratedQuery": "vscode",
+   "normalizedText": "visual studio code",
+   "wordBoundaries": [],
+   "fuzzy": {
+    "score": 14,
+    "skipped": 0
+   },
+   "fuzzyLiteralDots": {
+    "score": 14,
+    "skipped": 0
+   },
+   "scoreValue": 14,
+   "threshold": {
+    "low": true,
+    "medium": true,
+    "high": true
+   },
+   "titlePrefix": "unmatched",
+   "wholeWord": false,
+   "wholeWordFloor": 14
+  },
+  {
+   "query": "vs code",
+   "text": "Visual Studio Code",
+   "transliteratedQuery": "vs code",
+   "normalizedText": "visual studio code",
+   "wordBoundaries": [],
+   "fuzzy": {
+    "score": 16,
+    "skipped": 0
+   },
+   "fuzzyLiteralDots": {
+    "score": 16,
+    "skipped": 0
+   },
+   "scoreValue": 16,
+   "threshold": {
+    "low": true,
+    "medium": true,
+    "high": true
+   },
+   "titlePrefix": "unmatched",
+   "wholeWord": false,
+   "wholeWordFloor": 16
+  },
+  {
+   "query": "code",
+   "text": "Visual Studio Code",
+   "transliteratedQuery": "code",
+   "normalizedText": "visual studio code",
+   "wordBoundaries": [],
+   "fuzzy": {
+    "score": 9,
+    "skipped": 0
+   },
+   "fuzzyLiteralDots": {
+    "score": 9,
+    "skipped": 0
+   },
+   "scoreValue": 9,
+   "threshold": {
+    "low": true,
+    "medium": true,
+    "high": true
+   },
+   "titlePrefix": "unmatched",
+   "wholeWord": true,
+   "wholeWordFloor": 10.5
+  },
+  {
+   "query": "studio",
+   "text": "Visual Studio Code",
+   "transliteratedQuery": "studio",
+   "normalizedText": "visual studio code",
+   "wordBoundaries": [],
+   "fuzzy": {
+    "score": 13,
+    "skipped": 0
+   },
+   "fuzzyLiteralDots": {
+    "score": 13,
+    "skipped": 0
+   },
+   "scoreValue": 13,
+   "threshold": {
+    "low": true,
+    "medium": true,
+    "high": true
+   },
+   "titlePrefix": "unmatched",
+   "wholeWord": true,
+   "wholeWordFloor": 14.5
+  },
+  {
+   "query": "chrome",
+   "text": "Google Chrome",
+   "transliteratedQuery": "chrome",
+   "normalizedText": "google chrome",
+   "wordBoundaries": [],
+   "fuzzy": {
+    "score": 13,
+    "skipped": 0
+   },
+   "fuzzyLiteralDots": {
+    "score": 13,
+    "skipped": 0
+   },
+   "scoreValue": 13,
+   "threshold": {
+    "low": true,
+    "medium": true,
+    "high": true
+   },
+   "titlePrefix": "unmatched",
+   "wholeWord": true,
+   "wholeWordFloor": 14.5
+  },
+  {
+   "query": "gc",
+   "text": "Google Chrome",
+   "transliteratedQuery": "gc",
+   "normalizedText": "google chrome",
+   "wordBoundaries": [],
+   "fuzzy": {
+    "score": 6,
+    "skipped": 0
+   },
+   "fuzzyLiteralDots": {
+    "score": 6,
+    "skipped": 0
+   },
+   "scoreValue": 6,
+   "threshold": {
+    "low": true,
+    "medium": true,
+    "high": true
+   },
+   "titlePrefix": "unmatched",
+   "wholeWord": false,
+   "wholeWordFloor": 6
+  },
+  {
+   "query": "goo",
+   "text": "Google Chrome",
+   "transliteratedQuery": "goo",
+   "normalizedText": "google chrome",
+   "wordBoundaries": [],
+   "fuzzy": {
+    "score": 8,
+    "skipped": 0
+   },
+   "fuzzyLiteralDots": {
+    "score": 8,
+    "skipped": 0
+   },
+   "scoreValue": 8,
+   "threshold": {
+    "low": true,
+    "medium": true,
+    "high": true
+   },
+   "titlePrefix": "prefix",
+   "wholeWord": false,
+   "wholeWordFloor": 8
+  },
+  {
+   "query": "ghr",
+   "text": "Google Chrome",
+   "transliteratedQuery": "ghr",
+   "normalizedText": "google chrome",
+   "wordBoundaries": [],
+   "fuzzy": {
+    "score": 7,
+    "skipped": 0
+   },
+   "fuzzyLiteralDots": {
+    "score": 7,
+    "skipped": 0
+   },
+   "scoreValue": 7,
+   "threshold": {
+    "low": true,
+    "medium": true,
+    "high": true
+   },
+   "titlePrefix": "unmatched",
+   "wholeWord": false,
+   "wholeWordFloor": 7
+  },
+  {
+   "query": "set",
+   "text": "System Settings",
+   "transliteratedQuery": "set",
+   "normalizedText": "system settings",
+   "wordBoundaries": [],
+   "fuzzy": {
+    "score": 7,
+    "skipped": 0
+   },
+   "fuzzyLiteralDots": {
+    "score": 7,
+    "skipped": 0
+   },
+   "scoreValue": 7,
+   "threshold": {
+    "low": true,
+    "medium": true,
+    "high": true
+   },
+   "titlePrefix": "unmatched",
+   "wholeWord": false,
+   "wholeWordFloor": 7
+  },
+  {
+   "query": "ss",
+   "text": "System Settings",
+   "transliteratedQuery": "ss",
+   "normalizedText": "system settings",
+   "wordBoundaries": [],
+   "fuzzy": {
+    "score": 6,
+    "skipped": 0
+   },
+   "fuzzyLiteralDots": {
+    "score": 6,
+    "skipped": 0
+   },
+   "scoreValue": 6,
+   "threshold": {
+    "low": true,
+    "medium": true,
+    "high": true
+   },
+   "titlePrefix": "unmatched",
+   "wholeWord": false,
+   "wholeWordFloor": 6
+  },
+  {
+   "query": "sys set",
+   "text": "System Settings",
+   "transliteratedQuery": "sys set",
+   "normalizedText": "system settings",
+   "wordBoundaries": [],
+   "fuzzy": {
+    "score": 16,
+    "skipped": 0
+   },
+   "fuzzyLiteralDots": {
+    "score": 16,
+    "skipped": 0
+   },
+   "scoreValue": 16,
+   "threshold": {
+    "low": true,
+    "medium": true,
+    "high": true
+   },
+   "titlePrefix": "unmatched",
+   "wholeWord": false,
+   "wholeWordFloor": 16
+  },
+  {
+   "query": "settings",
+   "text": "System Settings",
+   "transliteratedQuery": "settings",
+   "normalizedText": "system settings",
+   "wordBoundaries": [],
+   "fuzzy": {
+    "score": 17,
+    "skipped": 0
+   },
+   "fuzzyLiteralDots": {
+    "score": 17,
+    "skipped": 0
+   },
+   "scoreValue": 17,
+   "threshold": {
+    "low": true,
+    "medium": true,
+    "high": true
+   },
+   "titlePrefix": "unmatched",
+   "wholeWord": true,
+   "wholeWordFloor": 18.5
+  },
+  {
+   "query": "stn",
+   "text": "System Settings",
+   "transliteratedQuery": "stn",
+   "normalizedText": "system settings",
+   "wordBoundaries": [],
+   "fuzzy": {
+    "score": 6,
+    "skipped": 0
+   },
+   "fuzzyLiteralDots": {
+    "score": 6,
+    "skipped": 0
+   },
+   "scoreValue": 6,
+   "threshold": {
+    "low": true,
+    "medium": true,
+    "high": false
+   },
+   "titlePrefix": "unmatched",
+   "wholeWord": false,
+   "wholeWordFloor": 6
+  },
+  {
+   "query": "ff",
+   "text": "Firefox",
+   "transliteratedQuery": "ff",
+   "normalizedText": "firefox",
+   "wordBoundaries": [],
+   "fuzzy": {
+    "score": 5,
+    "skipped": 0
+   },
+   "fuzzyLiteralDots": {
+    "score": 5,
+    "skipped": 0
+   },
+   "scoreValue": 5,
+   "threshold": {
+    "low": true,
+    "medium": true,
+    "high": true
+   },
+   "titlePrefix": "unmatched",
+   "wholeWord": false,
+   "wholeWordFloor": 5
+  },
+  {
+   "query": "fire",
+   "text": "Firefox",
+   "transliteratedQuery": "fire",
+   "normalizedText": "firefox",
+   "wordBoundaries": [],
+   "fuzzy": {
+    "score": 10,
+    "skipped": 0
+   },
+   "fuzzyLiteralDots": {
+    "score": 10,
+    "skipped": 0
+   },
+   "scoreValue": 10,
+   "threshold": {
+    "low": true,
+    "medium": true,
+    "high": true
+   },
+   "titlePrefix": "prefix",
+   "wholeWord": false,
+   "wholeWordFloor": 10
+  },
+  {
+   "query": "fx",
+   "text": "Firefox",
+   "transliteratedQuery": "fx",
+   "normalizedText": "firefox",
+   "wordBoundaries": [],
+   "fuzzy": {
+    "score": 5,
+    "skipped": 0
+   },
+   "fuzzyLiteralDots": {
+    "score": 5,
+    "skipped": 0
+   },
+   "scoreValue": 5,
+   "threshold": {
+    "low": true,
+    "medium": true,
+    "high": true
+   },
+   "titlePrefix": "unmatched",
+   "wholeWord": false,
+   "wholeWordFloor": 5
+  },
+  {
+   "query": "fox",
+   "text": "Firefox",
+   "transliteratedQuery": "fox",
+   "normalizedText": "firefox",
+   "wordBoundaries": [],
+   "fuzzy": {
+    "score": 7,
+    "skipped": 0
+   },
+   "fuzzyLiteralDots": {
+    "score": 7,
+    "skipped": 0
+   },
+   "scoreValue": 7,
+   "threshold": {
+    "low": true,
+    "medium": true,
+    "high": true
+   },
+   "titlePrefix": "unmatched",
+   "wholeWord": false,
+   "wholeWordFloor": 7
+  },
+  {
+   "query": "čas",
+   "text": "Časovnik",
+   "transliteratedQuery": "cas",
+   "normalizedText": "casovnik",
+   "wordBoundaries": [],
+   "fuzzy": {
+    "score": 8,
+    "skipped": 0
+   },
+   "fuzzyLiteralDots": {
+    "score": 8,
+    "skipped": 0
+   },
+   "scoreValue": 8,
+   "threshold": {
+    "low": true,
+    "medium": true,
+    "high": true
+   },
+   "titlePrefix": "prefix",
+   "wholeWord": false,
+   "wholeWordFloor": 8
+  },
+  {
+   "query": "cas",
+   "text": "Časovnik",
+   "transliteratedQuery": "cas",
+   "normalizedText": "casovnik",
+   "wordBoundaries": [],
+   "fuzzy": {
+    "score": 8,
+    "skipped": 0
+   },
+   "fuzzyLiteralDots": {
+    "score": 8,
+    "skipped": 0
+   },
+   "scoreValue": 8,
+   "threshold": {
+    "low": true,
+    "medium": true,
+    "high": true
+   },
+   "titlePrefix": "prefix",
+   "wholeWord": false,
+   "wholeWordFloor": 8
+  },
+  {
+   "query": "časo",
+   "text": "Časovnik",
+   "transliteratedQuery": "caso",
+   "normalizedText": "casovnik",
+   "wordBoundaries": [],
+   "fuzzy": {
+    "score": 10,
+    "skipped": 0
+   },
+   "fuzzyLiteralDots": {
+    "score": 10,
+    "skipped": 0
+   },
+   "scoreValue": 10,
+   "threshold": {
+    "low": true,
+    "medium": true,
+    "high": true
+   },
+   "titlePrefix": "prefix",
+   "wholeWord": false,
+   "wholeWordFloor": 10
+  },
+  {
+   "query": "zab",
+   "text": "Žabe in Ščuke",
+   "transliteratedQuery": "zab",
+   "normalizedText": "zabe in scuke",
+   "wordBoundaries": [],
+   "fuzzy": {
+    "score": 8,
+    "skipped": 0
+   },
+   "fuzzyLiteralDots": {
+    "score": 8,
+    "skipped": 0
+   },
+   "scoreValue": 8,
+   "threshold": {
+    "low": true,
+    "medium": true,
+    "high": true
+   },
+   "titlePrefix": "prefix",
+   "wholeWord": false,
+   "wholeWordFloor": 8
+  },
+  {
+   "query": "scu",
+   "text": "Žabe in Ščuke",
+   "transliteratedQuery": "scu",
+   "normalizedText": "zabe in scuke",
+   "wordBoundaries": [],
+   "fuzzy": {
+    "score": 7,
+    "skipped": 0
+   },
+   "fuzzyLiteralDots": {
+    "score": 7,
+    "skipped": 0
+   },
+   "scoreValue": 7,
+   "threshold": {
+    "low": true,
+    "medium": true,
+    "high": true
+   },
+   "titlePrefix": "unmatched",
+   "wholeWord": false,
+   "wholeWordFloor": 7
+  },
+  {
+   "query": "a-b",
+   "text": "a-b",
+   "transliteratedQuery": "a-b",
+   "normalizedText": "a-b",
+   "wordBoundaries": [],
+   "fuzzy": "exact",
+   "fuzzyLiteralDots": "exact",
+   "scoreValue": "MAX",
+   "threshold": {
+    "low": true,
+    "medium": true,
+    "high": true
+   },
+   "titlePrefix": "exact",
+   "wholeWord": false,
+   "wholeWordFloor": "MAX"
+  },
+  {
+   "query": "a-b",
+   "text": "a b",
+   "transliteratedQuery": "a-b",
+   "normalizedText": "a b",
+   "wordBoundaries": [],
+   "fuzzy": {
+    "score": 8,
+    "skipped": 0
+   },
+   "fuzzyLiteralDots": {
+    "score": 8,
+    "skipped": 0
+   },
+   "scoreValue": 8,
+   "threshold": {
+    "low": true,
+    "medium": true,
+    "high": true
+   },
+   "titlePrefix": "unmatched",
+   "wholeWord": false,
+   "wholeWordFloor": 8
+  },
+  {
+   "query": "ab",
+   "text": "a-b",
+   "transliteratedQuery": "ab",
+   "normalizedText": "a-b",
+   "wordBoundaries": [],
+   "fuzzy": {
+    "score": 6,
+    "skipped": 0
+   },
+   "fuzzyLiteralDots": {
+    "score": 6,
+    "skipped": 0
+   },
+   "scoreValue": 6,
+   "threshold": {
+    "low": true,
+    "medium": true,
+    "high": true
+   },
+   "titlePrefix": "unmatched",
+   "wholeWord": false,
+   "wholeWordFloor": 6
+  },
+  {
+   "query": "a b",
+   "text": "a-b",
+   "transliteratedQuery": "a b",
+   "normalizedText": "a-b",
+   "wordBoundaries": [],
+   "fuzzy": {
+    "score": 8,
+    "skipped": 0
+   },
+   "fuzzyLiteralDots": {
+    "score": 8,
+    "skipped": 0
+   },
+   "scoreValue": 8,
+   "threshold": {
+    "low": true,
+    "medium": true,
+    "high": true
+   },
+   "titlePrefix": "unmatched",
+   "wholeWord": false,
+   "wholeWordFloor": 8
+  },
+  {
+   "query": "a.b",
+   "text": "a.b",
+   "transliteratedQuery": "a.b",
+   "normalizedText": "a.b",
+   "wordBoundaries": [],
+   "fuzzy": "exact",
+   "fuzzyLiteralDots": "exact",
+   "scoreValue": "MAX",
+   "threshold": {
+    "low": true,
+    "medium": true,
+    "high": true
+   },
+   "titlePrefix": "exact",
+   "wholeWord": false,
+   "wholeWordFloor": "MAX"
+  },
+  {
+   "query": "ab",
+   "text": "a.b",
+   "transliteratedQuery": "ab",
+   "normalizedText": "a.b",
+   "wordBoundaries": [],
+   "fuzzy": {
+    "score": 6,
+    "skipped": 0
+   },
+   "fuzzyLiteralDots": {
+    "score": 6,
+    "skipped": 0
+   },
+   "scoreValue": 6,
+   "threshold": {
+    "low": true,
+    "medium": true,
+    "high": true
+   },
+   "titlePrefix": "unmatched",
+   "wholeWord": false,
+   "wholeWordFloor": 6
+  },
+  {
+   "query": "a.b",
+   "text": "ab",
+   "transliteratedQuery": "a.b",
+   "normalizedText": "ab",
+   "wordBoundaries": [],
+   "fuzzy": {
+    "score": 6,
+    "skipped": 1
+   },
+   "fuzzyLiteralDots": "unmatched",
+   "scoreValue": "MIN",
+   "threshold": {
+    "low": false,
+    "medium": false,
+    "high": false
+   },
+   "titlePrefix": "unmatched",
+   "wholeWord": false,
+   "wholeWordFloor": "MIN"
+  },
+  {
+   "query": "a/b",
+   "text": "a/b",
+   "transliteratedQuery": "a/b",
+   "normalizedText": "a/b",
+   "wordBoundaries": [],
+   "fuzzy": "exact",
+   "fuzzyLiteralDots": "exact",
+   "scoreValue": "MAX",
+   "threshold": {
+    "low": true,
+    "medium": true,
+    "high": true
+   },
+   "titlePrefix": "exact",
+   "wholeWord": false,
+   "wholeWordFloor": "MAX"
+  },
+  {
+   "query": "(x)",
+   "text": "[x]",
+   "transliteratedQuery": "(x)",
+   "normalizedText": "[x]",
+   "wordBoundaries": [],
+   "fuzzy": {
+    "score": 5,
+    "skipped": 0
+   },
+   "fuzzyLiteralDots": {
+    "score": 5,
+    "skipped": 0
+   },
+   "scoreValue": 5,
+   "threshold": {
+    "low": true,
+    "medium": false,
+    "high": false
+   },
+   "titlePrefix": "unmatched",
+   "wholeWord": false,
+   "wholeWordFloor": 5
+  },
+  {
+   "query": "gh",
+   "text": "GitHub",
+   "transliteratedQuery": "gh",
+   "normalizedText": "github",
+   "wordBoundaries": [
+    3
+   ],
+   "fuzzy": {
+    "score": 6,
+    "skipped": 0
+   },
+   "fuzzyLiteralDots": {
+    "score": 6,
+    "skipped": 0
+   },
+   "scoreValue": 6,
+   "threshold": {
+    "low": true,
+    "medium": true,
+    "high": true
+   },
+   "titlePrefix": "unmatched",
+   "wholeWord": false,
+   "wholeWordFloor": 6
+  },
+  {
+   "query": "gh",
+   "text": "gitHub",
+   "transliteratedQuery": "gh",
+   "normalizedText": "github",
+   "wordBoundaries": [
+    3
+   ],
+   "fuzzy": {
+    "score": 6,
+    "skipped": 0
+   },
+   "fuzzyLiteralDots": {
+    "score": 6,
+    "skipped": 0
+   },
+   "scoreValue": 6,
+   "threshold": {
+    "low": true,
+    "medium": true,
+    "high": true
+   },
+   "titlePrefix": "unmatched",
+   "wholeWord": false,
+   "wholeWordFloor": 6
+  },
+  {
+   "query": "hub",
+   "text": "GitHub",
+   "transliteratedQuery": "hub",
+   "normalizedText": "github",
+   "wordBoundaries": [
+    3
+   ],
+   "fuzzy": {
+    "score": 7,
+    "skipped": 0
+   },
+   "fuzzyLiteralDots": {
+    "score": 7,
+    "skipped": 0
+   },
+   "scoreValue": 7,
+   "threshold": {
+    "low": true,
+    "medium": true,
+    "high": true
+   },
+   "titlePrefix": "unmatched",
+   "wholeWord": true,
+   "wholeWordFloor": 8.5
+  },
+  {
+   "query": "tp",
+   "text": "TablePlus",
+   "transliteratedQuery": "tp",
+   "normalizedText": "tableplus",
+   "wordBoundaries": [
+    5
+   ],
+   "fuzzy": {
+    "score": 6,
+    "skipped": 0
+   },
+   "fuzzyLiteralDots": {
+    "score": 6,
+    "skipped": 0
+   },
+   "scoreValue": 6,
+   "threshold": {
+    "low": true,
+    "medium": true,
+    "high": true
+   },
+   "titlePrefix": "unmatched",
+   "wholeWord": false,
+   "wholeWordFloor": 6
+  },
+  {
+   "query": "ios",
+   "text": "iOSSimulator",
+   "transliteratedQuery": "ios",
+   "normalizedText": "iossimulator",
+   "wordBoundaries": [
+    1
+   ],
+   "fuzzy": {
+    "score": 9,
+    "skipped": 0
+   },
+   "fuzzyLiteralDots": {
+    "score": 9,
+    "skipped": 0
+   },
+   "scoreValue": 9,
+   "threshold": {
+    "low": true,
+    "medium": true,
+    "high": true
+   },
+   "titlePrefix": "prefix",
+   "wholeWord": false,
+   "wholeWordFloor": 9
+  },
+  {
+   "query": "xc",
+   "text": "Xcode",
+   "transliteratedQuery": "xc",
+   "normalizedText": "xcode",
+   "wordBoundaries": [],
+   "fuzzy": {
+    "score": 6,
+    "skipped": 0
+   },
+   "fuzzyLiteralDots": {
+    "score": 6,
+    "skipped": 0
+   },
+   "scoreValue": 6,
+   "threshold": {
+    "low": true,
+    "medium": true,
+    "high": true
+   },
+   "titlePrefix": "prefix",
+   "wholeWord": false,
+   "wholeWordFloor": 6
+  },
+  {
+   "query": "s",
+   "text": "Safari",
+   "transliteratedQuery": "s",
+   "normalizedText": "safari",
+   "wordBoundaries": [],
+   "fuzzy": {
+    "score": 4,
+    "skipped": 0
+   },
+   "fuzzyLiteralDots": {
+    "score": 4,
+    "skipped": 0
+   },
+   "scoreValue": 4,
+   "threshold": {
+    "low": true,
+    "medium": true,
+    "high": true
+   },
+   "titlePrefix": "prefix",
+   "wholeWord": false,
+   "wholeWordFloor": 4
+  },
+  {
+   "query": "s",
+   "text": "System Settings",
+   "transliteratedQuery": "s",
+   "normalizedText": "system settings",
+   "wordBoundaries": [],
+   "fuzzy": {
+    "score": 4,
+    "skipped": 0
+   },
+   "fuzzyLiteralDots": {
+    "score": 4,
+    "skipped": 0
+   },
+   "scoreValue": 4,
+   "threshold": {
+    "low": true,
+    "medium": true,
+    "high": true
+   },
+   "titlePrefix": "prefix",
+   "wholeWord": false,
+   "wholeWordFloor": 4
+  },
+  {
+   "query": "x",
+   "text": "Safari",
+   "transliteratedQuery": "x",
+   "normalizedText": "safari",
+   "wordBoundaries": [],
+   "fuzzy": "unmatched",
+   "fuzzyLiteralDots": "unmatched",
+   "scoreValue": "MIN",
+   "threshold": {
+    "low": false,
+    "medium": false,
+    "high": false
+   },
+   "titlePrefix": "unmatched",
+   "wholeWord": false,
+   "wholeWordFloor": "MIN"
+  },
+  {
+   "query": "",
+   "text": "Safari",
+   "transliteratedQuery": "",
+   "normalizedText": "safari",
+   "wordBoundaries": [],
+   "fuzzy": {
+    "score": -9007199254740991,
+    "skipped": 0
+   },
+   "fuzzyLiteralDots": {
+    "score": -9007199254740991,
+    "skipped": 0
+   },
+   "scoreValue": "MIN",
+   "threshold": {
+    "low": true,
+    "medium": false,
+    "high": false
+   },
+   "titlePrefix": "prefix",
+   "wholeWord": false,
+   "wholeWordFloor": "MIN"
+  },
+  {
+   "query": "term",
+   "text": "Terminal",
+   "transliteratedQuery": "term",
+   "normalizedText": "terminal",
+   "wordBoundaries": [],
+   "fuzzy": {
+    "score": 10,
+    "skipped": 0
+   },
+   "fuzzyLiteralDots": {
+    "score": 10,
+    "skipped": 0
+   },
+   "scoreValue": 10,
+   "threshold": {
+    "low": true,
+    "medium": true,
+    "high": true
+   },
+   "titlePrefix": "prefix",
+   "wholeWord": false,
+   "wholeWordFloor": 10
+  },
+  {
+   "query": "trm",
+   "text": "Terminal",
+   "transliteratedQuery": "trm",
+   "normalizedText": "terminal",
+   "wordBoundaries": [],
+   "fuzzy": {
+    "score": 7,
+    "skipped": 0
+   },
+   "fuzzyLiteralDots": {
+    "score": 7,
+    "skipped": 0
+   },
+   "scoreValue": 7,
+   "threshold": {
+    "low": true,
+    "medium": true,
+    "high": true
+   },
+   "titlePrefix": "unmatched",
+   "wholeWord": false,
+   "wholeWordFloor": 7
+  },
+  {
+   "query": "tmnl",
+   "text": "Terminal",
+   "transliteratedQuery": "tmnl",
+   "normalizedText": "terminal",
+   "wordBoundaries": [],
+   "fuzzy": {
+    "score": 7,
+    "skipped": 0
+   },
+   "fuzzyLiteralDots": {
+    "score": 7,
+    "skipped": 0
+   },
+   "scoreValue": 7,
+   "threshold": {
+    "low": true,
+    "medium": true,
+    "high": false
+   },
+   "titlePrefix": "unmatched",
+   "wholeWord": false,
+   "wholeWordFloor": 7
+  },
+  {
+   "query": "ter",
+   "text": "Activity Monitor",
+   "transliteratedQuery": "ter",
+   "normalizedText": "activity monitor",
+   "wordBoundaries": [],
+   "fuzzy": "unmatched",
+   "fuzzyLiteralDots": "unmatched",
+   "scoreValue": "MIN",
+   "threshold": {
+    "low": false,
+    "medium": false,
+    "high": false
+   },
+   "titlePrefix": "unmatched",
+   "wholeWord": false,
+   "wholeWordFloor": "MIN"
+  },
+  {
+   "query": "clip",
+   "text": "Clipboard History",
+   "transliteratedQuery": "clip",
+   "normalizedText": "clipboard history",
+   "wordBoundaries": [],
+   "fuzzy": {
+    "score": 10,
+    "skipped": 0
+   },
+   "fuzzyLiteralDots": {
+    "score": 10,
+    "skipped": 0
+   },
+   "scoreValue": 10,
+   "threshold": {
+    "low": true,
+    "medium": true,
+    "high": true
+   },
+   "titlePrefix": "prefix",
+   "wholeWord": false,
+   "wholeWordFloor": 10
+  },
+  {
+   "query": "ch",
+   "text": "Clipboard History",
+   "transliteratedQuery": "ch",
+   "normalizedText": "clipboard history",
+   "wordBoundaries": [],
+   "fuzzy": {
+    "score": 6,
+    "skipped": 0
+   },
+   "fuzzyLiteralDots": {
+    "score": 6,
+    "skipped": 0
+   },
+   "scoreValue": 6,
+   "threshold": {
+    "low": true,
+    "medium": true,
+    "high": true
+   },
+   "titlePrefix": "unmatched",
+   "wholeWord": false,
+   "wholeWordFloor": 6
+  },
+  {
+   "query": "cbh",
+   "text": "Clipboard History",
+   "transliteratedQuery": "cbh",
+   "normalizedText": "clipboard history",
+   "wordBoundaries": [],
+   "fuzzy": {
+    "score": 7,
+    "skipped": 0
+   },
+   "fuzzyLiteralDots": {
+    "score": 7,
+    "skipped": 0
+   },
+   "scoreValue": 7,
+   "threshold": {
+    "low": true,
+    "medium": true,
+    "high": true
+   },
+   "titlePrefix": "unmatched",
+   "wholeWord": false,
+   "wholeWordFloor": 7
+  },
+  {
+   "query": "history",
+   "text": "Clipboard History",
+   "transliteratedQuery": "history",
+   "normalizedText": "clipboard history",
+   "wordBoundaries": [],
+   "fuzzy": {
+    "score": 15,
+    "skipped": 0
+   },
+   "fuzzyLiteralDots": {
+    "score": 15,
+    "skipped": 0
+   },
+   "scoreValue": 15,
+   "threshold": {
+    "low": true,
+    "medium": true,
+    "high": true
+   },
+   "titlePrefix": "unmatched",
+   "wholeWord": true,
+   "wholeWordFloor": 16.5
+  },
+  {
+   "query": "北京",
+   "text": "北京",
+   "transliteratedQuery": "bei jing",
+   "normalizedText": "bei jing",
+   "wordBoundaries": [],
+   "fuzzy": "exact",
+   "fuzzyLiteralDots": "exact",
+   "scoreValue": "MAX",
+   "threshold": {
+    "low": true,
+    "medium": true,
+    "high": true
+   },
+   "titlePrefix": "exact",
+   "wholeWord": false,
+   "wholeWordFloor": "MAX"
+  },
+  {
+   "query": "bei",
+   "text": "北京",
+   "transliteratedQuery": "bei",
+   "normalizedText": "bei jing",
+   "wordBoundaries": [],
+   "fuzzy": {
+    "score": 8,
+    "skipped": 0
+   },
+   "fuzzyLiteralDots": {
+    "score": 8,
+    "skipped": 0
+   },
+   "scoreValue": 8,
+   "threshold": {
+    "low": true,
+    "medium": true,
+    "high": true
+   },
+   "titlePrefix": "prefix",
+   "wholeWord": true,
+   "wholeWordFloor": 8.5
+  },
+  {
+   "query": "priv",
+   "text": "Привет",
+   "transliteratedQuery": "priv",
+   "normalizedText": "privet",
+   "wordBoundaries": [],
+   "fuzzy": {
+    "score": 10,
+    "skipped": 0
+   },
+   "fuzzyLiteralDots": {
+    "score": 10,
+    "skipped": 0
+   },
+   "scoreValue": 10,
+   "threshold": {
+    "low": true,
+    "medium": true,
+    "high": true
+   },
+   "titlePrefix": "prefix",
+   "wholeWord": false,
+   "wholeWordFloor": 10
+  },
+  {
+   "query": "strasse",
+   "text": "Straße",
+   "transliteratedQuery": "strasse",
+   "normalizedText": "strasse",
+   "wordBoundaries": [],
+   "fuzzy": "exact",
+   "fuzzyLiteralDots": "exact",
+   "scoreValue": "MAX",
+   "threshold": {
+    "low": true,
+    "medium": true,
+    "high": true
+   },
+   "titlePrefix": "exact",
+   "wholeWord": true,
+   "wholeWordFloor": "MAX"
+  },
+  {
+   "query": "aaa",
+   "text": "aXaYaa",
+   "note": "repeated letters",
+   "transliteratedQuery": "aaa",
+   "normalizedText": "axayaa",
+   "wordBoundaries": [
+    1,
+    3
+   ],
+   "fuzzy": {
+    "score": 7,
+    "skipped": 0
+   },
+   "fuzzyLiteralDots": {
+    "score": 7,
+    "skipped": 0
+   },
+   "scoreValue": 7,
+   "threshold": {
+    "low": true,
+    "medium": true,
+    "high": true
+   },
+   "titlePrefix": "unmatched",
+   "wholeWord": false,
+   "wholeWordFloor": 7
+  },
+  {
+   "query": "s ",
+   "text": "Safari",
+   "note": "trailing unmatched separator after 1 row: final row slot is fresh -> MIN",
+   "transliteratedQuery": "s ",
+   "normalizedText": "safari",
+   "wordBoundaries": [],
+   "fuzzy": {
+    "score": -9007199254740991,
+    "skipped": 1
+   },
+   "fuzzyLiteralDots": {
+    "score": -9007199254740991,
+    "skipped": 1
+   },
+   "scoreValue": "MIN",
+   "threshold": {
+    "low": true,
+    "medium": false,
+    "high": false
+   },
+   "titlePrefix": "unmatched",
+   "wholeWord": false,
+   "wholeWordFloor": "MIN"
+  },
+  {
+   "query": "vs ",
+   "text": "Visual Studio Code",
+   "note": "trailing space matches a text space",
+   "transliteratedQuery": "vs ",
+   "normalizedText": "visual studio code",
+   "wordBoundaries": [],
+   "fuzzy": {
+    "score": 7,
+    "skipped": 0
+   },
+   "fuzzyLiteralDots": {
+    "score": 7,
+    "skipped": 0
+   },
+   "scoreValue": 7,
+   "threshold": {
+    "low": true,
+    "medium": true,
+    "high": true
+   },
+   "titlePrefix": "unmatched",
+   "wholeWord": false,
+   "wholeWordFloor": 7
+  },
+  {
+   "query": "sys ",
+   "text": "System Settings",
+   "transliteratedQuery": "sys ",
+   "normalizedText": "system settings",
+   "wordBoundaries": [],
+   "fuzzy": {
+    "score": 9,
+    "skipped": 0
+   },
+   "fuzzyLiteralDots": {
+    "score": 9,
+    "skipped": 0
+   },
+   "scoreValue": 9,
+   "threshold": {
+    "low": true,
+    "medium": true,
+    "high": true
+   },
+   "titlePrefix": "unmatched",
+   "wholeWord": false,
+   "wholeWordFloor": 9
+  },
+  {
+   "query": "ab",
+   "text": "abc",
+   "note": "title prefix",
+   "transliteratedQuery": "ab",
+   "normalizedText": "abc",
+   "wordBoundaries": [],
+   "fuzzy": {
+    "score": 6,
+    "skipped": 0
+   },
+   "fuzzyLiteralDots": {
+    "score": 6,
+    "skipped": 0
+   },
+   "scoreValue": 6,
+   "threshold": {
+    "low": true,
+    "medium": true,
+    "high": true
+   },
+   "titlePrefix": "prefix",
+   "wholeWord": false,
+   "wholeWordFloor": 6
+  },
+  {
+   "query": " ",
+   "text": "Safari",
+   "note": "whitespace-only query (trimStart -> empty)",
+   "transliteratedQuery": "",
+   "normalizedText": "safari",
+   "wordBoundaries": [],
+   "fuzzy": {
+    "score": -9007199254740991,
+    "skipped": 0
+   },
+   "fuzzyLiteralDots": {
+    "score": -9007199254740991,
+    "skipped": 0
+   },
+   "scoreValue": "MIN",
+   "threshold": {
+    "low": true,
+    "medium": false,
+    "high": false
+   },
+   "titlePrefix": "prefix",
+   "wholeWord": false,
+   "wholeWordFloor": "MIN"
+  },
+  {
+   "query": "slack.",
+   "text": "Slack",
+   "note": "literal dot must match",
+   "transliteratedQuery": "slack.",
+   "normalizedText": "slack",
+   "wordBoundaries": [],
+   "fuzzy": {
+    "score": 10,
+    "skipped": 1
+   },
+   "fuzzyLiteralDots": "unmatched",
+   "scoreValue": "MIN",
+   "threshold": {
+    "low": false,
+    "medium": false,
+    "high": false
+   },
+   "titlePrefix": "unmatched",
+   "wholeWord": false,
+   "wholeWordFloor": "MIN"
+  },
+  {
+   "query": "s.l",
+   "text": "s l",
+   "note": "dot vs space",
+   "transliteratedQuery": "s.l",
+   "normalizedText": "s l",
+   "wordBoundaries": [],
+   "fuzzy": {
+    "score": 8,
+    "skipped": 0
+   },
+   "fuzzyLiteralDots": "unmatched",
+   "scoreValue": "MIN",
+   "threshold": {
+    "low": false,
+    "medium": false,
+    "high": false
+   },
+   "titlePrefix": "unmatched",
+   "wholeWord": false,
+   "wholeWordFloor": "MIN"
+  },
+  {
+   "query": "aba",
+   "text": "abXba",
+   "note": "stale row quirk probe",
+   "transliteratedQuery": "aba",
+   "normalizedText": "abxba",
+   "wordBoundaries": [
+    2
+   ],
+   "fuzzy": {
+    "score": 7,
+    "skipped": 0
+   },
+   "fuzzyLiteralDots": {
+    "score": 7,
+    "skipped": 0
+   },
+   "scoreValue": 7,
+   "threshold": {
+    "low": true,
+    "medium": true,
+    "high": true
+   },
+   "titlePrefix": "unmatched",
+   "wholeWord": false,
+   "wholeWordFloor": 7
+  }
+ ],
+ "ranking": [
+  {
+   "name": "single-char s, no frecency",
+   "term": "s",
+   "sensitivity": "medium",
+   "now": "2026-10-22T12:00:00.000Z",
+   "candidates": [
+    {
+     "id": "slack",
+     "title": "Slack",
+     "kind": "application"
+    },
+    {
+     "id": "safari",
+     "title": "Safari",
+     "kind": "application"
+    },
+    {
+     "id": "sysset",
+     "title": "System Settings",
+     "kind": "application"
+    },
+    {
+     "id": "spotify",
+     "title": "Spotify",
+     "kind": "application"
+    },
+    {
+     "id": "shot",
+     "title": "Screenshot",
+     "kind": "application"
+    },
+    {
+     "id": "snip",
+     "title": "Search Snippets",
+     "extensionTitle": "Snippets",
+     "commandType": "view-command"
+    }
+   ],
+   "expectedOrder": [
+    "safari",
+    "shot",
+    "slack",
+    "spotify",
+    "sysset",
+    "snip"
+   ],
+   "rankings": {
+    "slack": {
+     "alias": "unmatched",
+     "titleMatch": "prefix",
+     "title": 4,
+     "subtitle": "unmatched",
+     "searchTerms": "unmatched",
+     "boosted": false
+    },
+    "safari": {
+     "alias": "unmatched",
+     "titleMatch": "prefix",
+     "title": 4,
+     "subtitle": "unmatched",
+     "searchTerms": "unmatched",
+     "boosted": false
+    },
+    "sysset": {
+     "alias": "unmatched",
+     "titleMatch": "prefix",
+     "title": 4,
+     "subtitle": "unmatched",
+     "searchTerms": "unmatched",
+     "boosted": false
+    },
+    "spotify": {
+     "alias": "unmatched",
+     "titleMatch": "prefix",
+     "title": 4,
+     "subtitle": "unmatched",
+     "searchTerms": "unmatched",
+     "boosted": false
+    },
+    "shot": {
+     "alias": "unmatched",
+     "titleMatch": "prefix",
+     "title": 4,
+     "subtitle": "unmatched",
+     "searchTerms": "unmatched",
+     "boosted": false
+    },
+    "snip": {
+     "alias": "unmatched",
+     "titleMatch": "prefix",
+     "title": 4,
+     "subtitle": "unmatched",
+     "searchTerms": "unmatched",
+     "boosted": false
+    }
+   }
+  },
+  {
+   "name": "single-char s, frecency",
+   "term": "s",
+   "sensitivity": "medium",
+   "now": "2026-10-22T12:00:00.000Z",
+   "candidates": [
+    {
+     "id": "slack",
+     "title": "Slack",
+     "kind": "application"
+    },
+    {
+     "id": "safari",
+     "title": "Safari",
+     "kind": "application"
+    },
+    {
+     "id": "sysset",
+     "title": "System Settings",
+     "kind": "application"
+    },
+    {
+     "id": "spotify",
+     "title": "Spotify",
+     "kind": "application",
+     "score": 3.2
+    },
+    {
+     "id": "shot",
+     "title": "Screenshot",
+     "kind": "application"
+    },
+    {
+     "id": "snip",
+     "title": "Search Snippets",
+     "extensionTitle": "Snippets",
+     "commandType": "view-command",
+     "score": 7
+    }
+   ],
+   "expectedOrder": [
+    "snip",
+    "spotify",
+    "safari",
+    "shot",
+    "slack",
+    "sysset"
+   ],
+   "rankings": {
+    "slack": {
+     "alias": "unmatched",
+     "titleMatch": "prefix",
+     "title": 4,
+     "subtitle": "unmatched",
+     "searchTerms": "unmatched",
+     "boosted": false
+    },
+    "safari": {
+     "alias": "unmatched",
+     "titleMatch": "prefix",
+     "title": 4,
+     "subtitle": "unmatched",
+     "searchTerms": "unmatched",
+     "boosted": false
+    },
+    "sysset": {
+     "alias": "unmatched",
+     "titleMatch": "prefix",
+     "title": 4,
+     "subtitle": "unmatched",
+     "searchTerms": "unmatched",
+     "boosted": false
+    },
+    "spotify": {
+     "alias": "unmatched",
+     "titleMatch": "prefix",
+     "title": 4,
+     "subtitle": "unmatched",
+     "searchTerms": "unmatched",
+     "boosted": false
+    },
+    "shot": {
+     "alias": "unmatched",
+     "titleMatch": "prefix",
+     "title": 4,
+     "subtitle": "unmatched",
+     "searchTerms": "unmatched",
+     "boosted": false
+    },
+    "snip": {
+     "alias": "unmatched",
+     "titleMatch": "prefix",
+     "title": 4,
+     "subtitle": "unmatched",
+     "searchTerms": "unmatched",
+     "boosted": false
+    }
+   }
+  },
+  {
+   "name": "alias exact beats everything",
+   "term": "sl",
+   "sensitivity": "medium",
+   "now": "2026-10-22T12:00:00.000Z",
+   "candidates": [
+    {
+     "id": "slack",
+     "title": "Slack",
+     "kind": "application",
+     "score": 9
+    },
+    {
+     "id": "sleep",
+     "title": "Sleep",
+     "commandType": "no-view-command",
+     "alias": "sl"
+    }
+   ],
+   "expectedOrder": [
+    "sleep",
+    "slack"
+   ],
+   "rankings": {
+    "slack": {
+     "alias": "unmatched",
+     "titleMatch": "prefix",
+     "title": 6,
+     "subtitle": "unmatched",
+     "searchTerms": "unmatched",
+     "boosted": false
+    },
+    "sleep": {
+     "alias": "exact",
+     "titleMatch": "prefix",
+     "title": 6,
+     "subtitle": "unmatched",
+     "searchTerms": "unmatched",
+     "boosted": false
+    }
+   }
+  },
+  {
+   "name": "alias prefix",
+   "term": "sl",
+   "sensitivity": "medium",
+   "now": "2026-10-22T12:00:00.000Z",
+   "candidates": [
+    {
+     "id": "slack",
+     "title": "Slack",
+     "kind": "application"
+    },
+    {
+     "id": "sleep",
+     "title": "Sleep",
+     "commandType": "no-view-command",
+     "alias": "sle"
+    },
+    {
+     "id": "slide",
+     "title": "Slides",
+     "kind": "application"
+    }
+   ],
+   "expectedOrder": [
+    "sleep",
+    "slack",
+    "slide"
+   ],
+   "rankings": {
+    "slack": {
+     "alias": "unmatched",
+     "titleMatch": "prefix",
+     "title": 6,
+     "subtitle": "unmatched",
+     "searchTerms": "unmatched",
+     "boosted": false
+    },
+    "sleep": {
+     "alias": "prefix",
+     "titleMatch": "prefix",
+     "title": 6,
+     "subtitle": "unmatched",
+     "searchTerms": "unmatched",
+     "boosted": false
+    },
+    "slide": {
+     "alias": "unmatched",
+     "titleMatch": "prefix",
+     "title": 6,
+     "subtitle": "unmatched",
+     "searchTerms": "unmatched",
+     "boosted": false
+    }
+   }
+  },
+  {
+   "name": "exact title outranks fuzzy with frecency",
+   "term": "code",
+   "sensitivity": "medium",
+   "now": "2026-10-22T12:00:00.000Z",
+   "candidates": [
+    {
+     "id": "vsc",
+     "title": "Visual Studio Code",
+     "kind": "application",
+     "score": 20
+    },
+    {
+     "id": "code",
+     "title": "Code",
+     "kind": "application"
+    }
+   ],
+   "expectedOrder": [
+    "code",
+    "vsc"
+   ],
+   "rankings": {
+    "vsc": {
+     "alias": "unmatched",
+     "titleMatch": "unmatched",
+     "title": 10.5,
+     "subtitle": "unmatched",
+     "searchTerms": "unmatched",
+     "boosted": false
+    },
+    "code": {
+     "alias": "unmatched",
+     "titleMatch": "exact",
+     "title": "MAX",
+     "subtitle": "unmatched",
+     "searchTerms": "unmatched",
+     "boosted": false
+    }
+   }
+  },
+  {
+   "name": "search-term exact (recent, frecency>1)",
+   "term": "chr",
+   "sensitivity": "medium",
+   "now": "2026-10-22T12:00:00.000Z",
+   "candidates": [
+    {
+     "id": "chrome",
+     "title": "Google Chrome",
+     "kind": "application"
+    },
+    {
+     "id": "chromium",
+     "title": "Chromium",
+     "kind": "application"
+    },
+    {
+     "id": "charcoal",
+     "title": "Charcoal",
+     "kind": "application",
+     "score": 2.5,
+     "openedAt": "2026-10-20T12:00:00.000Z",
+     "searchTerms": [
+      "chr"
+     ]
+    }
+   ],
+   "expectedOrder": [
+    "charcoal",
+    "chromium",
+    "chrome"
+   ],
+   "rankings": {
+    "chrome": {
+     "alias": "unmatched",
+     "titleMatch": "unmatched",
+     "title": 7,
+     "subtitle": "unmatched",
+     "searchTerms": "unmatched",
+     "boosted": false
+    },
+    "chromium": {
+     "alias": "unmatched",
+     "titleMatch": "prefix",
+     "title": 8,
+     "subtitle": "unmatched",
+     "searchTerms": "unmatched",
+     "boosted": false
+    },
+    "charcoal": {
+     "alias": "unmatched",
+     "titleMatch": "unmatched",
+     "title": 7,
+     "subtitle": "unmatched",
+     "searchTerms": {
+      "type": "exact",
+      "count": 3
+     },
+     "boosted": false
+    }
+   }
+  },
+  {
+   "name": "search-term ignored when opened >17d ago",
+   "term": "chr",
+   "sensitivity": "medium",
+   "now": "2026-10-22T12:00:00.000Z",
+   "candidates": [
+    {
+     "id": "chrome",
+     "title": "Google Chrome",
+     "kind": "application"
+    },
+    {
+     "id": "chromium",
+     "title": "Chromium",
+     "kind": "application"
+    },
+    {
+     "id": "charcoal",
+     "title": "Charcoal",
+     "kind": "application",
+     "score": 2.5,
+     "openedAt": "2026-10-04T12:00:00.000Z",
+     "searchTerms": [
+      "chr"
+     ]
+    }
+   ],
+   "expectedOrder": [
+    "chromium",
+    "charcoal",
+    "chrome"
+   ],
+   "rankings": {
+    "chrome": {
+     "alias": "unmatched",
+     "titleMatch": "unmatched",
+     "title": 7,
+     "subtitle": "unmatched",
+     "searchTerms": "unmatched",
+     "boosted": false
+    },
+    "chromium": {
+     "alias": "unmatched",
+     "titleMatch": "prefix",
+     "title": 8,
+     "subtitle": "unmatched",
+     "searchTerms": "unmatched",
+     "boosted": false
+    },
+    "charcoal": {
+     "alias": "unmatched",
+     "titleMatch": "unmatched",
+     "title": 7,
+     "subtitle": "unmatched",
+     "searchTerms": "unmatched",
+     "boosted": false
+    }
+   }
+  },
+  {
+   "name": "search-term prefix + overbounds",
+   "note": "vsc has stored term prefix (visual⊃vi); vbox has overbounds term v (gap 1)",
+   "term": "vi",
+   "sensitivity": "medium",
+   "now": "2026-10-22T12:00:00.000Z",
+   "candidates": [
+    {
+     "id": "vsc",
+     "title": "Visual Studio Code",
+     "kind": "application",
+     "score": 2,
+     "openedAt": "2026-10-21T12:00:00.000Z",
+     "searchTerms": [
+      "visual"
+     ]
+    },
+    {
+     "id": "vivaldi",
+     "title": "Vivaldi",
+     "kind": "application"
+    },
+    {
+     "id": "vbox",
+     "title": "VirtualBox",
+     "kind": "application",
+     "score": 2,
+     "openedAt": "2026-10-21T12:00:00.000Z",
+     "searchTerms": [
+      "v"
+     ]
+    }
+   ],
+   "expectedOrder": [
+    "vsc",
+    "vbox",
+    "vivaldi"
+   ],
+   "rankings": {
+    "vsc": {
+     "alias": "unmatched",
+     "titleMatch": "prefix",
+     "title": 6,
+     "subtitle": "unmatched",
+     "searchTerms": {
+      "type": "prefix",
+      "count": 6
+     },
+     "boosted": false
+    },
+    "vivaldi": {
+     "alias": "unmatched",
+     "titleMatch": "prefix",
+     "title": 6,
+     "subtitle": "unmatched",
+     "searchTerms": "unmatched",
+     "boosted": false
+    },
+    "vbox": {
+     "alias": "unmatched",
+     "titleMatch": "prefix",
+     "title": 6,
+     "subtitle": "unmatched",
+     "searchTerms": {
+      "type": "overbounds",
+      "count": 1
+     },
+     "boosted": false
+    }
+   }
+  },
+  {
+   "name": "search-term overbounds count>=3",
+   "note": "vbox title does not match visua → filtered (search terms never make a candidate match)",
+   "term": "visua",
+   "sensitivity": "medium",
+   "now": "2026-10-22T12:00:00.000Z",
+   "candidates": [
+    {
+     "id": "vsc",
+     "title": "Visual Studio Code",
+     "kind": "application"
+    },
+    {
+     "id": "vbox",
+     "title": "VirtualBox",
+     "kind": "application",
+     "score": 1.5,
+     "openedAt": "2026-10-21T12:00:00.000Z",
+     "searchTerms": [
+      "vis"
+     ]
+    }
+   ],
+   "expectedOrder": [
+    "vsc"
+   ],
+   "rankings": {
+    "vsc": {
+     "alias": "unmatched",
+     "titleMatch": "prefix",
+     "title": 12,
+     "subtitle": "unmatched",
+     "searchTerms": "unmatched",
+     "boosted": false
+    }
+   }
+  },
+  {
+   "name": "type weights tie-break (equal score)",
+   "term": "ter",
+   "sensitivity": "medium",
+   "now": "2026-10-22T12:00:00.000Z",
+   "candidates": [
+    {
+     "id": "terminal-app",
+     "title": "Terminal",
+     "kind": "application"
+    },
+    {
+     "id": "terminal-ql",
+     "title": "Terminal",
+     "kind": "quicklink"
+    },
+    {
+     "id": "terminal-cmd",
+     "title": "Terminal",
+     "commandType": "view-command"
+    },
+    {
+     "id": "terminal-pref",
+     "title": "Terminal",
+     "kind": "preference"
+    },
+    {
+     "id": "terminal-menubar",
+     "title": "Terminal",
+     "commandType": "menu-bar-command"
+    }
+   ],
+   "expectedOrder": [
+    "terminal-app",
+    "terminal-cmd",
+    "terminal-ql",
+    "terminal-menubar",
+    "terminal-pref"
+   ],
+   "rankings": {
+    "terminal-app": {
+     "alias": "unmatched",
+     "titleMatch": "prefix",
+     "title": 8,
+     "subtitle": "unmatched",
+     "searchTerms": "unmatched",
+     "boosted": false
+    },
+    "terminal-ql": {
+     "alias": "unmatched",
+     "titleMatch": "prefix",
+     "title": 8,
+     "subtitle": "unmatched",
+     "searchTerms": "unmatched",
+     "boosted": false
+    },
+    "terminal-cmd": {
+     "alias": "unmatched",
+     "titleMatch": "prefix",
+     "title": 8,
+     "subtitle": "unmatched",
+     "searchTerms": "unmatched",
+     "boosted": false
+    },
+    "terminal-pref": {
+     "alias": "unmatched",
+     "titleMatch": "prefix",
+     "title": 8,
+     "subtitle": "unmatched",
+     "searchTerms": "unmatched",
+     "boosted": false
+    },
+    "terminal-menubar": {
+     "alias": "unmatched",
+     "titleMatch": "prefix",
+     "title": 8,
+     "subtitle": "unmatched",
+     "searchTerms": "unmatched",
+     "boosted": false
+    }
+   }
+  },
+  {
+   "name": "contacts demoted unless strong",
+   "term": "ann",
+   "sensitivity": "medium",
+   "now": "2026-10-22T12:00:00.000Z",
+   "candidates": [
+    {
+     "id": "anna",
+     "title": "Anna Novak",
+     "kind": "contact"
+    },
+    {
+     "id": "annot",
+     "title": "Annotate",
+     "commandType": "view-command"
+    },
+    {
+     "id": "banner",
+     "title": "Banner Maker",
+     "kind": "application"
+    }
+   ],
+   "expectedOrder": [
+    "annot",
+    "anna",
+    "banner"
+   ],
+   "rankings": {
+    "anna": {
+     "alias": "unmatched",
+     "titleMatch": "prefix",
+     "title": 8,
+     "subtitle": "unmatched",
+     "searchTerms": "unmatched",
+     "boosted": false
+    },
+    "annot": {
+     "alias": "unmatched",
+     "titleMatch": "prefix",
+     "title": 8,
+     "subtitle": "unmatched",
+     "searchTerms": "unmatched",
+     "boosted": false
+    },
+    "banner": {
+     "alias": "unmatched",
+     "titleMatch": "unmatched",
+     "title": 6,
+     "subtitle": "unmatched",
+     "searchTerms": "unmatched",
+     "boosted": false
+    }
+   }
+  },
+  {
+   "name": "boosted search term (notes)",
+   "term": "notes",
+   "sensitivity": "medium",
+   "now": "2026-10-22T12:00:00.000Z",
+   "candidates": [
+    {
+     "id": "notes:open",
+     "title": "Raycast Notes",
+     "commandType": "view-command"
+    },
+    {
+     "id": "apple-notes",
+     "title": "Notes",
+     "kind": "application"
+    }
+   ],
+   "expectedOrder": [
+    "notes:open",
+    "apple-notes"
+   ],
+   "rankings": {
+    "notes:open": {
+     "alias": "unmatched",
+     "titleMatch": "unmatched",
+     "title": 12.5,
+     "subtitle": "unmatched",
+     "searchTerms": "unmatched",
+     "boosted": true
+    },
+    "apple-notes": {
+     "alias": "unmatched",
+     "titleMatch": "exact",
+     "title": "MAX",
+     "subtitle": "unmatched",
+     "searchTerms": "unmatched",
+     "boosted": false
+    }
+   }
+  },
+  {
+   "name": "subtitle exact",
+   "term": "figma",
+   "sensitivity": "medium",
+   "now": "2026-10-22T12:00:00.000Z",
+   "candidates": [
+    {
+     "id": "figma-app",
+     "title": "Figma",
+     "kind": "application"
+    },
+    {
+     "id": "figma-search",
+     "title": "Search Files",
+     "subtitle": "Figma",
+     "extensionTitle": "Figma",
+     "commandType": "view-command"
+    }
+   ],
+   "expectedOrder": [
+    "figma-app",
+    "figma-search"
+   ],
+   "rankings": {
+    "figma-app": {
+     "alias": "unmatched",
+     "titleMatch": "exact",
+     "title": "MAX",
+     "subtitle": "unmatched",
+     "searchTerms": "unmatched",
+     "boosted": false
+    },
+    "figma-search": {
+     "alias": "unmatched",
+     "titleMatch": "unmatched",
+     "title": "MIN",
+     "subtitle": "exact",
+     "searchTerms": "unmatched",
+     "boosted": false
+    }
+   }
+  },
+  {
+   "name": "diacritics",
+   "term": "cas",
+   "sensitivity": "medium",
+   "now": "2026-10-22T12:00:00.000Z",
+   "candidates": [
+    {
+     "id": "casovnik",
+     "title": "Časovnik",
+     "kind": "application"
+    },
+    {
+     "id": "cast",
+     "title": "Cast",
+     "kind": "application"
+    },
+    {
+     "id": "calc",
+     "title": "Calculator",
+     "commandType": "view-command"
+    }
+   ],
+   "expectedOrder": [
+    "casovnik",
+    "cast"
+   ],
+   "rankings": {
+    "casovnik": {
+     "alias": "unmatched",
+     "titleMatch": "prefix",
+     "title": 8,
+     "subtitle": "unmatched",
+     "searchTerms": "unmatched",
+     "boosted": false
+    },
+    "cast": {
+     "alias": "unmatched",
+     "titleMatch": "prefix",
+     "title": 8,
+     "subtitle": "unmatched",
+     "searchTerms": "unmatched",
+     "boosted": false
+    }
+   }
+  },
+  {
+   "name": "whole-word floor (len>=3)",
+   "term": "code",
+   "sensitivity": "medium",
+   "now": "2026-10-22T12:00:00.000Z",
+   "candidates": [
+    {
+     "id": "vsc",
+     "title": "Visual Studio Code",
+     "kind": "application"
+    },
+    {
+     "id": "cod",
+     "title": "Cool Old Drive Editor",
+     "kind": "application"
+    },
+    {
+     "id": "xcode",
+     "title": "Xcode",
+     "kind": "application"
+    }
+   ],
+   "expectedOrder": [
+    "vsc",
+    "cod",
+    "xcode"
+   ],
+   "rankings": {
+    "vsc": {
+     "alias": "unmatched",
+     "titleMatch": "unmatched",
+     "title": 10.5,
+     "subtitle": "unmatched",
+     "searchTerms": "unmatched",
+     "boosted": false
+    },
+    "cod": {
+     "alias": "unmatched",
+     "titleMatch": "unmatched",
+     "title": 10,
+     "subtitle": "unmatched",
+     "searchTerms": "unmatched",
+     "boosted": false
+    },
+    "xcode": {
+     "alias": "unmatched",
+     "titleMatch": "unmatched",
+     "title": 8,
+     "subtitle": "unmatched",
+     "searchTerms": "unmatched",
+     "boosted": false
+    }
+   }
+  },
+  {
+   "name": "sensitivity low on stn",
+   "note": "scores: System Settings 6, Station 7, Instant 5; medium needs >=5.5, high needs >6",
+   "term": "stn",
+   "sensitivity": "low",
+   "now": "2026-10-22T12:00:00.000Z",
+   "candidates": [
+    {
+     "id": "sysset",
+     "title": "System Settings",
+     "kind": "application"
+    },
+    {
+     "id": "station",
+     "title": "Station",
+     "kind": "application"
+    },
+    {
+     "id": "instant",
+     "title": "Instant",
+     "kind": "application"
+    }
+   ],
+   "expectedOrder": [
+    "station",
+    "sysset",
+    "instant"
+   ],
+   "rankings": {
+    "sysset": {
+     "alias": "unmatched",
+     "titleMatch": "unmatched",
+     "title": 6,
+     "subtitle": "unmatched",
+     "searchTerms": "unmatched",
+     "boosted": false
+    },
+    "station": {
+     "alias": "unmatched",
+     "titleMatch": "unmatched",
+     "title": 7,
+     "subtitle": "unmatched",
+     "searchTerms": "unmatched",
+     "boosted": false
+    },
+    "instant": {
+     "alias": "unmatched",
+     "titleMatch": "unmatched",
+     "title": 5,
+     "subtitle": "unmatched",
+     "searchTerms": "unmatched",
+     "boosted": false
+    }
+   }
+  },
+  {
+   "name": "sensitivity medium on stn",
+   "note": "scores: System Settings 6, Station 7, Instant 5; medium needs >=5.5, high needs >6",
+   "term": "stn",
+   "sensitivity": "medium",
+   "now": "2026-10-22T12:00:00.000Z",
+   "candidates": [
+    {
+     "id": "sysset",
+     "title": "System Settings",
+     "kind": "application"
+    },
+    {
+     "id": "station",
+     "title": "Station",
+     "kind": "application"
+    },
+    {
+     "id": "instant",
+     "title": "Instant",
+     "kind": "application"
+    }
+   ],
+   "expectedOrder": [
+    "station",
+    "sysset"
+   ],
+   "rankings": {
+    "sysset": {
+     "alias": "unmatched",
+     "titleMatch": "unmatched",
+     "title": 6,
+     "subtitle": "unmatched",
+     "searchTerms": "unmatched",
+     "boosted": false
+    },
+    "station": {
+     "alias": "unmatched",
+     "titleMatch": "unmatched",
+     "title": 7,
+     "subtitle": "unmatched",
+     "searchTerms": "unmatched",
+     "boosted": false
+    }
+   }
+  },
+  {
+   "name": "sensitivity high on stn",
+   "note": "scores: System Settings 6, Station 7, Instant 5; medium needs >=5.5, high needs >6",
+   "term": "stn",
+   "sensitivity": "high",
+   "now": "2026-10-22T12:00:00.000Z",
+   "candidates": [
+    {
+     "id": "sysset",
+     "title": "System Settings",
+     "kind": "application"
+    },
+    {
+     "id": "station",
+     "title": "Station",
+     "kind": "application"
+    },
+    {
+     "id": "instant",
+     "title": "Instant",
+     "kind": "application"
+    }
+   ],
+   "expectedOrder": [
+    "station"
+   ],
+   "rankings": {
+    "station": {
+     "alias": "unmatched",
+     "titleMatch": "unmatched",
+     "title": 7,
+     "subtitle": "unmatched",
+     "searchTerms": "unmatched",
+     "boosted": false
+    }
+   }
+  },
+  {
+   "name": "keywords gate inclusion only",
+   "note": "keyword match admits sysset but its rank title score stays MIN",
+   "term": "prefs",
+   "sensitivity": "medium",
+   "now": "2026-10-22T12:00:00.000Z",
+   "candidates": [
+    {
+     "id": "sysset",
+     "title": "System Settings",
+     "kind": "application",
+     "keywords": [
+      "prefs",
+      "preferences"
+     ]
+    },
+    {
+     "id": "prefsx",
+     "title": "Prefs Editor",
+     "kind": "application"
+    }
+   ],
+   "expectedOrder": [
+    "prefsx",
+    "sysset"
+   ],
+   "rankings": {
+    "sysset": {
+     "alias": "unmatched",
+     "titleMatch": "unmatched",
+     "title": "MIN",
+     "subtitle": "unmatched",
+     "searchTerms": "unmatched",
+     "boosted": false
+    },
+    "prefsx": {
+     "alias": "unmatched",
+     "titleMatch": "prefix",
+     "title": 12.5,
+     "subtitle": "unmatched",
+     "searchTerms": "unmatched",
+     "boosted": false
+    }
+   }
+  },
+  {
+   "name": "empty query: frecency, alias, type, title",
+   "term": "",
+   "sensitivity": "medium",
+   "now": "2026-10-22T12:00:00.000Z",
+   "candidates": [
+    {
+     "id": "a",
+     "title": "Zeta",
+     "kind": "application",
+     "score": 1
+    },
+    {
+     "id": "b",
+     "title": "Alpha",
+     "commandType": "view-command",
+     "score": 1
+    },
+    {
+     "id": "c",
+     "title": "Beta",
+     "kind": "quicklink",
+     "score": 4
+    },
+    {
+     "id": "d",
+     "title": "Gamma",
+     "commandType": "view-command",
+     "alias": "g"
+    },
+    {
+     "id": "e",
+     "title": "Pinned",
+     "commandType": "view-command",
+     "rootSearch": {
+      "pinned": 0
+     }
+    }
+   ],
+   "expectedOrder": [
+    "e",
+    "c",
+    "d",
+    "a",
+    "b"
+   ],
+   "rankings": {}
+  }
+ ]
+}

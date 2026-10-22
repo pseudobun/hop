@@ -1,0 +1,579 @@
+{
+  "source": "PJi.decayedScore @6093402 (OBSERVED); anchor model INFERRED (Rust data addon, frecency/repository.rs, not disassembled)",
+  "constants": {
+    "halfLifeMs": 864000000,
+    "floor": 1,
+    "lambdaPerMs": 8.022536812036404e-10,
+    "defaultScoreWhenMissing": 1
+  },
+  "observed_js_decay": [
+    {
+      "score": 1,
+      "sampledAtMs": 1790812800000,
+      "nowMs": 1790726400000,
+      "deltaDays": -1,
+      "expected": 1
+    },
+    {
+      "score": 1,
+      "sampledAtMs": 1790812800000,
+      "nowMs": 1790812800000,
+      "deltaDays": 0,
+      "expected": 1
+    },
+    {
+      "score": 1,
+      "sampledAtMs": 1790812800000,
+      "nowMs": 1790856000000,
+      "deltaDays": 0.5,
+      "expected": 1
+    },
+    {
+      "score": 1,
+      "sampledAtMs": 1790812800000,
+      "nowMs": 1790899200000,
+      "deltaDays": 1,
+      "expected": 1
+    },
+    {
+      "score": 1,
+      "sampledAtMs": 1790812800000,
+      "nowMs": 1791244800000,
+      "deltaDays": 5,
+      "expected": 1
+    },
+    {
+      "score": 1,
+      "sampledAtMs": 1790812800000,
+      "nowMs": 1791676800000,
+      "deltaDays": 10,
+      "expected": 1
+    },
+    {
+      "score": 1,
+      "sampledAtMs": 1790812800000,
+      "nowMs": 1792540800000,
+      "deltaDays": 20,
+      "expected": 1
+    },
+    {
+      "score": 1,
+      "sampledAtMs": 1790812800000,
+      "nowMs": 1793404800000,
+      "deltaDays": 30,
+      "expected": 1
+    },
+    {
+      "score": 1,
+      "sampledAtMs": 1790812800000,
+      "nowMs": 1799452800000,
+      "deltaDays": 100,
+      "expected": 1
+    },
+    {
+      "score": 1.5,
+      "sampledAtMs": 1790812800000,
+      "nowMs": 1790726400000,
+      "deltaDays": -1,
+      "expected": 1.5
+    },
+    {
+      "score": 1.5,
+      "sampledAtMs": 1790812800000,
+      "nowMs": 1790812800000,
+      "deltaDays": 0,
+      "expected": 1.5
+    },
+    {
+      "score": 1.5,
+      "sampledAtMs": 1790812800000,
+      "nowMs": 1790856000000,
+      "deltaDays": 0.5,
+      "expected": 1.4489044933872683
+    },
+    {
+      "score": 1.5,
+      "sampledAtMs": 1790812800000,
+      "nowMs": 1790899200000,
+      "deltaDays": 1,
+      "expected": 1.3995494873052112
+    },
+    {
+      "score": 1.5,
+      "sampledAtMs": 1790812800000,
+      "nowMs": 1791244800000,
+      "deltaDays": 5,
+      "expected": 1.0606601717798214
+    },
+    {
+      "score": 1.5,
+      "sampledAtMs": 1790812800000,
+      "nowMs": 1791676800000,
+      "deltaDays": 10,
+      "expected": 1
+    },
+    {
+      "score": 1.5,
+      "sampledAtMs": 1790812800000,
+      "nowMs": 1792540800000,
+      "deltaDays": 20,
+      "expected": 1
+    },
+    {
+      "score": 1.5,
+      "sampledAtMs": 1790812800000,
+      "nowMs": 1793404800000,
+      "deltaDays": 30,
+      "expected": 1
+    },
+    {
+      "score": 1.5,
+      "sampledAtMs": 1790812800000,
+      "nowMs": 1799452800000,
+      "deltaDays": 100,
+      "expected": 1
+    },
+    {
+      "score": 2,
+      "sampledAtMs": 1790812800000,
+      "nowMs": 1790726400000,
+      "deltaDays": -1,
+      "expected": 2
+    },
+    {
+      "score": 2,
+      "sampledAtMs": 1790812800000,
+      "nowMs": 1790812800000,
+      "deltaDays": 0,
+      "expected": 2
+    },
+    {
+      "score": 2,
+      "sampledAtMs": 1790812800000,
+      "nowMs": 1790856000000,
+      "deltaDays": 0.5,
+      "expected": 1.9318726578496912
+    },
+    {
+      "score": 2,
+      "sampledAtMs": 1790812800000,
+      "nowMs": 1790899200000,
+      "deltaDays": 1,
+      "expected": 1.8660659830736148
+    },
+    {
+      "score": 2,
+      "sampledAtMs": 1790812800000,
+      "nowMs": 1791244800000,
+      "deltaDays": 5,
+      "expected": 1.4142135623730951
+    },
+    {
+      "score": 2,
+      "sampledAtMs": 1790812800000,
+      "nowMs": 1791676800000,
+      "deltaDays": 10,
+      "expected": 1
+    },
+    {
+      "score": 2,
+      "sampledAtMs": 1790812800000,
+      "nowMs": 1792540800000,
+      "deltaDays": 20,
+      "expected": 1
+    },
+    {
+      "score": 2,
+      "sampledAtMs": 1790812800000,
+      "nowMs": 1793404800000,
+      "deltaDays": 30,
+      "expected": 1
+    },
+    {
+      "score": 2,
+      "sampledAtMs": 1790812800000,
+      "nowMs": 1799452800000,
+      "deltaDays": 100,
+      "expected": 1
+    },
+    {
+      "score": 5,
+      "sampledAtMs": 1790812800000,
+      "nowMs": 1790726400000,
+      "deltaDays": -1,
+      "expected": 5
+    },
+    {
+      "score": 5,
+      "sampledAtMs": 1790812800000,
+      "nowMs": 1790812800000,
+      "deltaDays": 0,
+      "expected": 5
+    },
+    {
+      "score": 5,
+      "sampledAtMs": 1790812800000,
+      "nowMs": 1790856000000,
+      "deltaDays": 0.5,
+      "expected": 4.829681644624228
+    },
+    {
+      "score": 5,
+      "sampledAtMs": 1790812800000,
+      "nowMs": 1790899200000,
+      "deltaDays": 1,
+      "expected": 4.665164957684037
+    },
+    {
+      "score": 5,
+      "sampledAtMs": 1790812800000,
+      "nowMs": 1791244800000,
+      "deltaDays": 5,
+      "expected": 3.5355339059327378
+    },
+    {
+      "score": 5,
+      "sampledAtMs": 1790812800000,
+      "nowMs": 1791676800000,
+      "deltaDays": 10,
+      "expected": 2.5
+    },
+    {
+      "score": 5,
+      "sampledAtMs": 1790812800000,
+      "nowMs": 1792540800000,
+      "deltaDays": 20,
+      "expected": 1.25
+    },
+    {
+      "score": 5,
+      "sampledAtMs": 1790812800000,
+      "nowMs": 1793404800000,
+      "deltaDays": 30,
+      "expected": 1
+    },
+    {
+      "score": 5,
+      "sampledAtMs": 1790812800000,
+      "nowMs": 1799452800000,
+      "deltaDays": 100,
+      "expected": 1
+    },
+    {
+      "score": 37.25,
+      "sampledAtMs": 1790812800000,
+      "nowMs": 1790726400000,
+      "deltaDays": -1,
+      "expected": 37.25
+    },
+    {
+      "score": 37.25,
+      "sampledAtMs": 1790812800000,
+      "nowMs": 1790812800000,
+      "deltaDays": 0,
+      "expected": 37.25
+    },
+    {
+      "score": 37.25,
+      "sampledAtMs": 1790812800000,
+      "nowMs": 1790856000000,
+      "deltaDays": 0.5,
+      "expected": 35.981128252450496
+    },
+    {
+      "score": 37.25,
+      "sampledAtMs": 1790812800000,
+      "nowMs": 1790899200000,
+      "deltaDays": 1,
+      "expected": 34.75547893474607
+    },
+    {
+      "score": 37.25,
+      "sampledAtMs": 1790812800000,
+      "nowMs": 1791244800000,
+      "deltaDays": 5,
+      "expected": 26.3397275991989
+    },
+    {
+      "score": 37.25,
+      "sampledAtMs": 1790812800000,
+      "nowMs": 1791676800000,
+      "deltaDays": 10,
+      "expected": 18.625
+    },
+    {
+      "score": 37.25,
+      "sampledAtMs": 1790812800000,
+      "nowMs": 1792540800000,
+      "deltaDays": 20,
+      "expected": 9.3125
+    },
+    {
+      "score": 37.25,
+      "sampledAtMs": 1790812800000,
+      "nowMs": 1793404800000,
+      "deltaDays": 30,
+      "expected": 4.65625
+    },
+    {
+      "score": 37.25,
+      "sampledAtMs": 1790812800000,
+      "nowMs": 1799452800000,
+      "deltaDays": 100,
+      "expected": 1
+    }
+  ],
+  "observed_rust_visit_model": {
+    "tag": "OBSERVED (disassembly data.darwin-arm64.node @0x49d644, @0x50ac18); time unit INFERRED seconds",
+    "constants": {
+      "lambda_per_day": 0.06878274660137416,
+      "seconds_per_day": 86400,
+      "ln_dbl_max_clamp": 709.782712893384,
+      "visit_points": 100,
+      "half_life_days": 10.077340827592037
+    },
+    "formula": {
+      "score": "S(t) = max(1, exp(min(lambda*(a - t)/86400, ln(DBL_MAX))))",
+      "visit": "a' = t + 86400*ln(max(1, S(max(a,t))) + 100)/lambda"
+    },
+    "sequences": [
+      {
+        "name": "single_visit",
+        "steps": [
+          {
+            "t": 1792656000,
+            "score_before": 1,
+            "anchor_after": 1798453186.538159,
+            "score_after": 100.99999999999518
+          }
+        ],
+        "probes": [
+          {
+            "days_after_last": 0,
+            "score": 100.99999999999518
+          },
+          {
+            "days_after_last": 1,
+            "score": 94.28647652040799
+          },
+          {
+            "days_after_last": 10,
+            "score": 50.76936141226297
+          },
+          {
+            "days_after_last": 30,
+            "score": 12.828100533033274
+          },
+          {
+            "days_after_last": 90,
+            "score": 1
+          }
+        ]
+      },
+      {
+        "name": "three_same_day",
+        "steps": [
+          {
+            "t": 1792656000,
+            "score_before": 1,
+            "anchor_after": 1798453186.538159,
+            "score_after": 100.99999999999518
+          },
+          {
+            "t": 1792656060,
+            "score_before": 100.99517576979136,
+            "anchor_after": 1799317664.733349,
+            "score_after": 200.99517576979588
+          },
+          {
+            "t": 1792656120,
+            "score_before": 200.98557530447164,
+            "anchor_after": 1799824926.2868752,
+            "score_after": 300.98557530447374
+          }
+        ],
+        "probes": [
+          {
+            "days_after_last": 0,
+            "score": 300.98557530447374
+          },
+          {
+            "days_after_last": 1,
+            "score": 280.97890474186244
+          },
+          {
+            "days_after_last": 10,
+            "score": 151.2954995298163
+          },
+          {
+            "days_after_last": 30,
+            "score": 38.228447712859705
+          },
+          {
+            "days_after_last": 90,
+            "score": 1
+          }
+        ]
+      },
+      {
+        "name": "daily_for_5_days",
+        "steps": [
+          {
+            "t": 1792656000,
+            "score_before": 1,
+            "anchor_after": 1798453186.538159,
+            "score_after": 100.99999999999518
+          },
+          {
+            "t": 1792742400,
+            "score_before": 94.28647652040799,
+            "anchor_after": 1799361362.7304647,
+            "score_after": 194.28647652041803
+          },
+          {
+            "t": 1792828800,
+            "score_before": 181.37215155124818,
+            "anchor_after": 1799912963.0855188,
+            "score_after": 281.3721515512339
+          },
+          {
+            "t": 1792915200,
+            "score_before": 262.6691956508254,
+            "anchor_after": 1800318184.865231,
+            "score_after": 362.6691956508347
+          },
+          {
+            "t": 1793001600,
+            "score_before": 338.56238218227065,
+            "anchor_after": 1800643263.125311,
+            "score_after": 438.5623821822495
+          }
+        ],
+        "probes": [
+          {
+            "days_after_last": 0,
+            "score": 438.5623821822495
+          },
+          {
+            "days_after_last": 1,
+            "score": 409.410908419434
+          },
+          {
+            "days_after_last": 10,
+            "score": 220.4508127013337
+          },
+          {
+            "days_after_last": 30,
+            "score": 55.702201273670575
+          },
+          {
+            "days_after_last": 90,
+            "score": 1
+          }
+        ]
+      },
+      {
+        "name": "weekly_for_4_weeks",
+        "steps": [
+          {
+            "t": 1792656000,
+            "score_before": 1,
+            "anchor_after": 1798453186.538159,
+            "score_after": 100.99999999999518
+          },
+          {
+            "t": 1793260800,
+            "score_before": 62.40474353227566,
+            "anchor_after": 1799654611.5167193,
+            "score_after": 162.40474353229106
+          },
+          {
+            "t": 1793865600,
+            "score_before": 100.34481553027834,
+            "anchor_after": 1800523133.6860352,
+            "score_after": 200.34481553029337
+          },
+          {
+            "t": 1794470400,
+            "score_before": 123.78680030880825,
+            "anchor_after": 1801266929.1974092,
+            "score_after": 223.78680030882657
+          }
+        ],
+        "probes": [
+          {
+            "days_after_last": 0,
+            "score": 223.78680030882657
+          },
+          {
+            "days_after_last": 1,
+            "score": 208.9115731969944
+          },
+          {
+            "days_after_last": 10,
+            "score": 112.49022717003258
+          },
+          {
+            "days_after_last": 30,
+            "score": 28.423362102253535
+          },
+          {
+            "days_after_last": 90,
+            "score": 1
+          }
+        ]
+      },
+      {
+        "name": "burst_then_idle_30d",
+        "steps": [
+          {
+            "t": 1792656000,
+            "score_before": 1,
+            "anchor_after": 1798453186.538159,
+            "score_after": 100.99999999999518
+          },
+          {
+            "t": 1792656010,
+            "score_before": 100.99919594562547,
+            "anchor_after": 1799317639.857379,
+            "score_after": 200.999195945638
+          },
+          {
+            "t": 1792656020,
+            "score_before": 200.99759580423398,
+            "anchor_after": 1799824876.4520578,
+            "score_after": 300.9975958042141
+          },
+          {
+            "t": 1795248000,
+            "score_before": 38.23058314720903,
+            "anchor_after": 1801439363.1552312,
+            "score_after": 138.23058314721172
+          }
+        ],
+        "probes": [
+          {
+            "days_after_last": 0,
+            "score": 138.23058314721172
+          },
+          {
+            "days_after_last": 1,
+            "score": 129.04232309220313
+          },
+          {
+            "days_after_last": 10,
+            "score": 69.48394489137617
+          },
+          {
+            "days_after_last": 30,
+            "score": 17.55679027081517
+          },
+          {
+            "days_after_last": 90,
+            "score": 1
+          }
+        ]
+      }
+    ]
+  }
+}
