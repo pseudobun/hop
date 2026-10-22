@@ -12,18 +12,21 @@ nonisolated struct ProcessResult: Sendable {
 
 nonisolated enum ProcessRunnerError: Error { case launch(String) }
 
-/// Runs a subprocess off the main actor, draining stdout and stderr concurrently
-/// (large outputs would otherwise fill the 64 KB pipe buffer and deadlock).
+/// Runs a subprocess without blocking Swift concurrency threads: pipes are drained
+/// on GCD threads (large outputs would otherwise fill the 64 KB pipe buffer) and
+/// completion comes from `terminationHandler`, not `waitUntilExit`.
 nonisolated enum ProcessRunner {
-    private final class Box: @unchecked Sendable {
+    private final class State: @unchecked Sendable {
         let process = Process()
+        let lock = NSLock()
+        var out = Data()
+        var err = Data()
     }
 
-    @concurrent
     static func run(_ executable: String, _ arguments: [String] = [], stdin: Data? = nil,
                     environment: [String: String]? = nil, timeout: Duration? = nil) async throws -> ProcessResult {
-        let box = Box()
-        let p = box.process
+        let state = State()
+        let p = state.process
         p.executableURL = URL(fileURLWithPath: executable)
         p.arguments = arguments
         if let environment { p.environment = environment }
@@ -33,36 +36,55 @@ nonisolated enum ProcessRunner {
         let inPipe = stdin.map { _ in Pipe() }
         p.standardInput = inPipe ?? FileHandle.nullDevice
 
-        do { try p.run() } catch { throw ProcessRunnerError.launch(error.localizedDescription) }
-
-        if let stdin, let inPipe {
-            let w = inPipe.fileHandleForWriting
-            try? w.write(contentsOf: stdin)
-            try? w.close()
-        }
-
-        let watchdog: Task<Void, Never>? = timeout.map { t in
-            Task {
-                try? await Task.sleep(for: t)
-                if !Task.isCancelled && box.process.isRunning { box.process.terminate() }
+        return try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { (cont: CheckedContinuation<ProcessResult, Error>) in
+                let group = DispatchGroup()
+                for (pipe, isOut) in [(outPipe, true), (errPipe, false)] {
+                    group.enter()
+                    DispatchQueue.global(qos: .userInitiated).async {
+                        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+                        state.lock.withLock { if isOut { state.out = data } else { state.err = data } }
+                        group.leave()
+                    }
+                }
+                group.enter()
+                p.terminationHandler = { _ in group.leave() }
+                do {
+                    try p.run()
+                } catch {
+                    p.terminationHandler = nil
+                    try? outPipe.fileHandleForWriting.close()
+                    try? errPipe.fileHandleForWriting.close()
+                    cont.resume(throwing: ProcessRunnerError.launch(error.localizedDescription))
+                    return
+                }
+                // The parent's copies of the write ends must close, or the reads never see EOF.
+                try? outPipe.fileHandleForWriting.close()
+                try? errPipe.fileHandleForWriting.close()
+                if let stdin, let inPipe {
+                    let w = inPipe.fileHandleForWriting
+                    DispatchQueue.global(qos: .userInitiated).async {
+                        try? w.write(contentsOf: stdin)
+                        try? w.close()
+                    }
+                }
+                if let timeout {
+                    let c = timeout.components
+                    let seconds = Double(c.seconds) + Double(c.attoseconds) / 1e18
+                    DispatchQueue.global().asyncAfter(deadline: .now() + seconds) {
+                        if state.process.isRunning { state.process.terminate() }
+                    }
+                }
+                group.notify(queue: .global()) {
+                    let result = state.lock.withLock {
+                        ProcessResult(status: state.process.terminationStatus, stdout: state.out, stderr: state.err)
+                    }
+                    cont.resume(returning: result)
+                }
             }
-        }
-        defer { watchdog?.cancel() }
-
-        return await withTaskCancellationHandler {
-            async let out = readAll(outPipe.fileHandleForReading)
-            async let err = readAll(errPipe.fileHandleForReading)
-            let (o, e) = await (out, err)
-            box.process.waitUntilExit()
-            return ProcessResult(status: box.process.terminationStatus, stdout: o, stderr: e)
         } onCancel: {
-            if box.process.isRunning { box.process.terminate() }
+            if state.process.isRunning { state.process.terminate() }
         }
-    }
-
-    @concurrent
-    private static func readAll(_ handle: FileHandle) async -> Data {
-        (try? handle.readToEnd()) ?? Data()
     }
 }
 
