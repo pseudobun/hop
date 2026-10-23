@@ -29,7 +29,9 @@ final class ResultCellView: NSTableCellView {
     private let title = NSTextField(labelWithString: "")
     private let subtitle = NSTextField(labelWithString: "")
     private let accessory = NSTextField(labelWithString: "")
-    private let chip = NSTextField(labelWithString: "")
+    /// Pill behind `chipLabel`; a bare NSTextField draws its text at the top of a taller frame.
+    private let chip = NSView()
+    private let chipLabel = NSTextField(labelWithString: "")
 
     override init(frame: NSRect) {
         super.init(frame: frame)
@@ -49,12 +51,14 @@ final class ResultCellView: NSTableCellView {
         accessory.setContentCompressionResistancePriority(.required, for: .horizontal)
         accessory.setContentHuggingPriority(.required, for: .horizontal)
 
-        chip.font = Theme.label
-        chip.alignment = .center
         chip.wantsLayer = true
         chip.layer?.cornerRadius = 5
-        chip.setContentCompressionResistancePriority(.required, for: .horizontal)
-        chip.setContentHuggingPriority(.required, for: .horizontal)
+        chipLabel.font = Theme.label
+        chipLabel.alignment = .center
+        chipLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
+        chipLabel.setContentHuggingPriority(.required, for: .horizontal)
+        chipLabel.translatesAutoresizingMaskIntoConstraints = false
+        chip.addSubview(chipLabel)
 
         for v in [icon, title, subtitle, accessory, chip] as [NSView] {
             v.translatesAutoresizingMaskIntoConstraints = false
@@ -73,6 +77,9 @@ final class ResultCellView: NSTableCellView {
             chip.trailingAnchor.constraint(equalTo: accessory.leadingAnchor, constant: -10),
             chip.centerYAnchor.constraint(equalTo: centerYAnchor),
             chip.heightAnchor.constraint(equalToConstant: 18),
+            chipLabel.leadingAnchor.constraint(equalTo: chip.leadingAnchor, constant: 6),
+            chipLabel.trailingAnchor.constraint(equalTo: chip.trailingAnchor, constant: -6),
+            chipLabel.centerYAnchor.constraint(equalTo: chip.centerYAnchor),
             accessory.leadingAnchor.constraint(greaterThanOrEqualTo: subtitle.trailingAnchor, constant: 12),
             accessory.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -20),
             accessory.firstBaselineAnchor.constraint(equalTo: title.firstBaselineAnchor),
@@ -95,8 +102,8 @@ final class ResultCellView: NSTableCellView {
         accessory.stringValue = item.accessory ?? ""
         if let c = item.chip {
             chip.isHidden = false
-            chip.stringValue = "\u{2009}\(c.text)\u{2009}"
-            chip.textColor = c.color
+            chipLabel.stringValue = c.text
+            chipLabel.textColor = c.color
             chip.layer?.backgroundColor = c.color.withAlphaComponent(0.15).cgColor
         } else {
             chip.isHidden = true
