@@ -38,22 +38,34 @@ enum Theme {
 
     private static let wghtAxis = 0x7767_6874 // 'wght'
 
+    private struct FontKey: Hashable {
+        let postScript: String
+        let size: CGFloat
+        let weight: CGFloat
+    }
+
+    /// Resolving a variable font instance is slow and cells ask for fonts on every configure.
+    private static var fonts: [FontKey: NSFont] = [:]
+
     static func registerFonts() {
         for name in ["Outfit", "GeistMono"] {
             let url = Bundle.main.url(forResource: name, withExtension: "ttf")
                 ?? Bundle.main.url(forResource: name, withExtension: "ttf", subdirectory: "Fonts")
             if let url { CTFontManagerRegisterFontsForURL(url as CFURL, .process, nil) }
         }
+        fonts.removeAll() // drop fallbacks resolved before registration
     }
 
-    private static func variable(_ postScript: String, _ size: CGFloat, _ weight: CGFloat, fallback: NSFont) -> NSFont {
+    private static func variable(_ postScript: String, _ size: CGFloat, _ weight: CGFloat, fallback: @autoclosure () -> NSFont) -> NSFont {
+        let key = FontKey(postScript: postScript, size: size, weight: weight)
+        if let cached = fonts[key] { return cached }
         let d = NSFontDescriptor(name: postScript, size: size).addingAttributes([
             NSFontDescriptor.AttributeName(rawValue: kCTFontVariationAttribute as String): [wghtAxis: weight],
         ])
-        guard let f = NSFont(descriptor: d, size: size), f.fontName.lowercased().contains(postScript.prefix(4).lowercased()) else {
-            return fallback
-        }
-        return f
+        let font = NSFont(descriptor: d, size: size)
+            .flatMap { $0.fontName.lowercased().contains(postScript.prefix(4).lowercased()) ? $0 : nil } ?? fallback()
+        fonts[key] = font
+        return font
     }
 
     /// Outfit: anything read as language. 400 regular, 500 medium, 600 semibold.

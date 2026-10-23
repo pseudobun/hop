@@ -19,6 +19,10 @@ final class RootMode: Mode {
     private var items: [Item] = []
     private var candidates: [RankCandidate] = []
     private var commandIDs: Set<String> = []
+    private var applicationIDs: Set<String> = []
+    /// Checked in the background: the checks are IPC round trips and the empty query is the show path.
+    private var missingPermissions: [Permission] = []
+    private var permissionsCheckedAt = Date.distantPast
 
     init(apps: AppIndex, frecency: FrecencyStore, settings: AppSettings, commands: @escaping () -> [Item]) {
         self.apps = apps
@@ -41,11 +45,30 @@ final class RootMode: Mode {
                 id: entry.id, title: entry.name, alternateTitles: entry.alternateNames,
                 typeWeight: entry.kind == .application ? TypeWeight.application : TypeWeight.preference))
         }
+        RootRanker.assignTitleOrder(&newCandidates)
         items = newItems
         candidates = newCandidates
+        applicationIDs = Set(apps.entries.filter { $0.kind == .application }.map(\.id))
+        // Empty-query order first: those are the icons the next show needs.
+        IconCache.shared.prewarm(RootRanker.rankEmpty(candidates).compactMap { items[$0].icon })
     }
 
-    func didEnter(_ context: LauncherContext) { self.context = context }
+    func didEnter(_ context: LauncherContext) {
+        self.context = context
+        checkPermissions()
+    }
+
+    private func checkPermissions() {
+        guard Date().timeIntervalSince(permissionsCheckedAt) > 5 else { return }
+        permissionsCheckedAt = Date()
+        let config = settings.data
+        Task { [weak self] in
+            let missing = await Task.detached { Permission.missing(for: config) }.value
+            guard let self, missing != missingPermissions else { return }
+            missingPermissions = missing
+            context?.reload()
+        }
+    }
 
     func sections(for query: String) -> [ResultSection] {
         if let (prefix, make) = prefixModes.first(where: { query.lowercased().hasPrefix($0.prefix) }) {
@@ -88,7 +111,8 @@ final class RootMode: Mode {
         var sections: [ResultSection] = []
         var setup: [Item] = []
         if let error = settings.error { setup.append(configErrorItem(error)) }
-        let missing = Permission.missing(for: settings.data)
+        checkPermissions()
+        let missing = missingPermissions
         if !missing.isEmpty, let make = permissionsMode {
             setup.append(Item(id: "setup.permissions", title: "Finish Setup",
                               subtitle: "Allow \(missing.map(\.title).joined(separator: ", "))",
@@ -111,8 +135,7 @@ final class RootMode: Mode {
 
         let order = RootRanker.rankEmpty(candidates).filter { !suggestedIDs.contains(candidates[$0].id) }
         sections.append(ResultSection(title: "Commands", items: order.filter { commandIDs.contains(candidates[$0].id) }.map { decorated($0) }))
-        let appKinds = Set(apps.entries.filter { $0.kind == .application }.map(\.id))
-        sections.append(ResultSection(title: "Applications", items: order.filter { appKinds.contains(candidates[$0].id) }.map { decorated($0) }))
+        sections.append(ResultSection(title: "Applications", items: order.filter { applicationIDs.contains(candidates[$0].id) }.map { decorated($0) }))
         return sections
     }
 

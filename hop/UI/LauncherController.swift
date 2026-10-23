@@ -16,6 +16,8 @@ final class LauncherController: NSObject, LauncherContext, NSTableViewDataSource
     var popToRootSeconds: () -> Int = { 90 }
 
     private var rows: [Row] = []
+    /// The mode `rows` were built for; a different mode gets a full reload (row tint, cell kinds).
+    private var rowsMode: ObjectIdentifier?
     private var lastHidden = Date.distantPast
     private var loadingCount = 0
     private var autoHideSuppression = 0
@@ -121,6 +123,26 @@ final class LauncherController: NSObject, LauncherContext, NSTableViewDataSource
         activeField.currentEditor()?.selectAll(nil)
     }
 
+    /// Builds and lays out the current view while hidden, so the first show after launch
+    /// (or after the app list changed) does not create cells while the user waits.
+    func prepare() {
+        guard !panel.isVisible else { return }
+        refresh()
+        panel.contentView?.layoutSubtreeIfNeeded()
+        guard !warmedUp else { return }
+        // The first time a window is ordered in, the window server and the glass layers do
+        // one-off setup; do it invisibly now rather than on the first ⌘Space.
+        warmedUp = true
+        panel.alphaValue = 0
+        panel.orderFrontRegardless()
+        panel.displayIfNeeded()
+        CATransaction.flush()
+        panel.orderOut(nil)
+        panel.alphaValue = 1
+    }
+
+    private var warmedUp = false
+
     func hide() {
         guard panel.isVisible else { return }
         closeActionPanel()
@@ -156,19 +178,50 @@ final class LauncherController: NSObject, LauncherContext, NSTableViewDataSource
 
     private func refresh(keepSelection: Bool = false) {
         let previousID = keepSelection ? selectedItem?.id : nil
-        let sections = current.sections(for: query)
-        rows = []
-        for s in sections where !s.items.isEmpty {
-            if let t = s.title { rows.append(.header(t)) }
-            rows.append(contentsOf: s.items.map(Row.item))
+        var newRows: [Row] = []
+        for s in current.sections(for: query) where !s.items.isEmpty {
+            if let t = s.title { newRows.append(.header(t)) }
+            newRows.append(contentsOf: s.items.map(Row.item))
         }
-        table.reloadData()
+        update(to: newRows)
         var target = firstItemRow(from: 0, step: 1)
         if let previousID, let i = rows.firstIndex(where: { if case .item(let it) = $0 { it.id == previousID } else { false } }) {
             target = i
         }
         select(target)
         emptyLabel.isHidden = !rows.isEmpty || query.isEmpty && current === root
+    }
+
+    /// Swaps in new rows. While the layout keeps its shape (same mode, same kind of row at
+    /// each shared index) the cells on screen are reconfigured in place: `reloadData` tears
+    /// down and rebuilds every visible row view, which was most of the cost of a keystroke.
+    private func update(to newRows: [Row]) {
+        let oldRows = rows
+        rows = newRows
+        let mode = ObjectIdentifier(current)
+        let sameShape = rowsMode == mode && !oldRows.isEmpty
+            && zip(oldRows, newRows).allSatisfy { height(of: $0) == height(of: $1) }
+        guard sameShape else {
+            rowsMode = mode
+            table.reloadData()
+            return
+        }
+        // Results replace each other instantly: no row fades, no text cross-fades.
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        defer { CATransaction.commit() }
+        if newRows.count < oldRows.count {
+            table.removeRows(at: IndexSet(newRows.count..<oldRows.count), withAnimation: [])
+        }
+        var mismatched = IndexSet()
+        table.enumerateAvailableRowViews { rowView, row in
+            guard row < newRows.count, !configure(rowView.view(atColumn: 0) as? NSView, with: newRows[row]) else { return }
+            mismatched.insert(row)
+        }
+        if !mismatched.isEmpty { table.reloadData(forRowIndexes: mismatched, columnIndexes: [0]) }
+        if newRows.count > oldRows.count {
+            table.insertRows(at: IndexSet(oldRows.count..<newRows.count), withAnimation: [])
+        }
     }
 
     // MARK: - Selection
@@ -320,10 +373,12 @@ final class LauncherController: NSObject, LauncherContext, NSTableViewDataSource
 
     func numberOfRows(in tableView: NSTableView) -> Int { rows.count }
 
-    func tableView(_ tableView: NSTableView, heightOfRow row: Int) -> CGFloat {
-        switch rows[row] {
-        case .header: return 30
-        case .item(let item): return item.calculation == nil ? 40 : 116
+    func tableView(_ tableView: NSTableView, heightOfRow row: Int) -> CGFloat { height(of: rows[row]) }
+
+    private func height(of row: Row) -> CGFloat {
+        switch row {
+        case .header: 30
+        case .item(let item): item.calculation == nil ? 40 : 116
         }
     }
 
@@ -333,30 +388,48 @@ final class LauncherController: NSObject, LauncherContext, NSTableViewDataSource
     }
 
     func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? {
-        let v = ResultRowView()
+        let v = tableView.makeView(withIdentifier: ResultRowView.identifier, owner: nil) as? ResultRowView ?? {
+            let v = ResultRowView()
+            v.identifier = ResultRowView.identifier
+            return v
+        }()
         v.tint = current.tint
         return v
     }
 
     func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
-        switch rows[row] {
-        case .header(let title):
-            let v = tableView.makeView(withIdentifier: SectionHeaderView.identifier, owner: nil) as? SectionHeaderView
+        let v: NSView = switch rows[row] {
+        case .header:
+            tableView.makeView(withIdentifier: SectionHeaderView.identifier, owner: nil) as? SectionHeaderView
                 ?? SectionHeaderView(frame: .zero)
-            v.configure(title)
-            return v
         case .item(let item) where item.calculation != nil:
-            let v = tableView.makeView(withIdentifier: CalculationCellView.identifier, owner: nil) as? CalculationCellView
+            tableView.makeView(withIdentifier: CalculationCellView.identifier, owner: nil) as? CalculationCellView
                 ?? CalculationCellView(frame: .zero)
-            let c = item.calculation!
-            v.configure(c.expression, c.result, left: c.left, right: c.right)
-            return v
-        case .item(let item):
-            let v = tableView.makeView(withIdentifier: ResultCellView.identifier, owner: nil) as? ResultCellView
+        case .item:
+            tableView.makeView(withIdentifier: ResultCellView.identifier, owner: nil) as? ResultCellView
                 ?? ResultCellView(frame: .zero)
-            v.configure(item)
-            return v
         }
+        configure(v, with: rows[row])
+        return v
+    }
+
+    /// Fills `view` with `row`; false when the view is the wrong kind of cell for it.
+    @discardableResult
+    private func configure(_ view: NSView?, with row: Row) -> Bool {
+        switch row {
+        case .header(let title):
+            guard let v = view as? SectionHeaderView else { return false }
+            v.configure(title)
+        case .item(let item):
+            if let c = item.calculation {
+                guard let v = view as? CalculationCellView else { return false }
+                v.configure(c.expression, c.result, left: c.left, right: c.right)
+            } else {
+                guard let v = view as? ResultCellView else { return false }
+                v.configure(item)
+            }
+        }
+        return true
     }
 
     func tableViewSelectionDidChange(_ notification: Notification) { updateFooter() }
@@ -497,22 +570,31 @@ final class LauncherController: NSObject, LauncherContext, NSTableViewDataSource
     }
 }
 
-/// Draws the bunny logo centred and faint; outside Auto Layout so it can never size the window.
+/// The bunny logo centred and faint; outside Auto Layout so it can never size the window.
+/// Rendered once into the layer's contents, so showing the panel never re-renders the SVG.
 final class WatermarkView: NSView {
     private let image: NSImage? = Bundle.main.url(forResource: "bunny", withExtension: "svg").flatMap(NSImage.init(contentsOf:))
 
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+    override var wantsUpdateLayer: Bool { true }
 
     override func viewDidMoveToSuperview() {
         super.viewDidMoveToSuperview()
         if let s = superview { frame = s.bounds }
     }
 
-    override func draw(_ dirtyRect: NSRect) {
-        guard let image else { return }
-        let b = superview?.bounds ?? bounds
+    override func updateLayer() {
+        guard let image, let layer, bounds.width > 0 else { return }
+        let b = bounds
         let side = b.height * 0.82
         let rect = NSRect(x: b.midX - side / 2, y: b.midY - side / 2, width: side, height: side)
-        image.draw(in: rect, from: .zero, operation: .sourceOver, fraction: 0.05)
+        let rendered = NSImage(size: b.size, flipped: false) { _ in
+            image.draw(in: rect, from: .zero, operation: .sourceOver, fraction: 0.05)
+            return true
+        }
+        let scale = window?.backingScaleFactor ?? 2
+        layer.contentsScale = scale
+        layer.contents = rendered.layerContents(forContentsScale: scale)
     }
 }

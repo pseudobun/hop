@@ -11,6 +11,8 @@ nonisolated struct RankCandidate: Sendable {
     let keywords: [FuzzyTarget]
     let typeWeight: Int
     var frecency: Double
+    /// Position in a localized sort of all titles (see `RootRanker.assignTitleOrder`); 0 when unset.
+    var titleOrder = 0
 
     init(id: String, title: String, alternateTitles: [String] = [], subtitle: String? = nil,
          keywords: [String] = [], typeWeight: Int, frecency: Double = 1) {
@@ -136,14 +138,30 @@ nonisolated enum RootRanker {
         if df != 0 { return sign(df) }
         if ra.title != rb.title { return rb.title > ra.title ? 1 : -1 }
         if a.typeWeight != b.typeWeight { return b.typeWeight - a.typeWeight }
-        return collate(a.title, b.title)
+        return titleCompare(a, b)
     }
 
     /// `B4` subset: frecency, type weight, title.
     static func base(_ a: RankCandidate, _ b: RankCandidate) -> Int {
         if a.frecency != b.frecency { return a.frecency > b.frecency ? -1 : 1 }
         if a.typeWeight != b.typeWeight { return b.typeWeight - a.typeWeight }
-        return collate(a.title, b.title)
+        return titleCompare(a, b)
+    }
+
+    /// Precomputes the localized title order once, so sorting compares integers instead
+    /// of collating strings; equal titles share a position.
+    static func assignTitleOrder(_ candidates: inout [RankCandidate]) {
+        let sorted = candidates.indices.sorted { collate(candidates[$0].title, candidates[$1].title) < 0 }
+        var order = 0
+        for (n, i) in sorted.enumerated() {
+            if n > 0, collate(candidates[sorted[n - 1]].title, candidates[i].title) != 0 { order += 1 }
+            candidates[i].titleOrder = order + 1
+        }
+    }
+
+    private static func titleCompare(_ a: RankCandidate, _ b: RankCandidate) -> Int {
+        guard a.titleOrder > 0, b.titleOrder > 0 else { return collate(a.title, b.title) }
+        return a.titleOrder == b.titleOrder ? 0 : (a.titleOrder < b.titleOrder ? -1 : 1)
     }
 
     private static func sign(_ d: Double) -> Int { d > 0 ? 1 : (d < 0 ? -1 : 0) }

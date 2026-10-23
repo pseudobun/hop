@@ -5,10 +5,11 @@ import ServiceManagement
 
 /// The macOS permissions hop's features need, with status checks and the
 /// system prompts that grant them.
-enum Permission: CaseIterable {
+/// Nonisolated so the status checks can run off the main thread.
+nonisolated enum Permission: CaseIterable {
     case accessibility, finderAutomation, downloads, fullDiskAccess, loginItem
 
-    enum Status { case granted, missing, unknown }
+    nonisolated enum Status { case granted, missing, unknown }
 
     var title: String {
         switch self {
@@ -40,7 +41,7 @@ enum Permission: CaseIterable {
         }
     }
 
-    var color: NSColor {
+    @MainActor var color: NSColor {
         switch self {
         case .accessibility: Theme.info
         case .finderAutomation: Theme.chart1
@@ -63,7 +64,7 @@ enum Permission: CaseIterable {
         return URL(string: "x-apple.systempreferences:\(pane)")!
     }
 
-    /// Current status without prompting.
+    /// Current status without prompting. Some checks are IPC round trips; safe off the main thread.
     func status() -> Status {
         switch self {
         case .accessibility:
@@ -86,7 +87,7 @@ enum Permission: CaseIterable {
     }
 
     /// Shows the system prompt where macOS has one; otherwise opens System Settings.
-    func request() async {
+    @MainActor func request() async {
         switch self {
         case .accessibility:
             let options = ["AXTrustedCheckOptionPrompt": true] as CFDictionary
@@ -141,8 +142,8 @@ enum ConfigEditor {
 }
 
 /// Remembers answers macOS gives no API to query (Downloads access) and first launch.
-enum PermissionLog {
-    private static let defaults = UserDefaults.standard
+nonisolated enum PermissionLog {
+    private static var defaults: UserDefaults { .standard }
 
     static var downloadsGranted: Bool? {
         get { defaults.object(forKey: "PermissionDownloadsGranted") as? Bool }

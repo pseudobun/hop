@@ -2,7 +2,11 @@ import AppKit
 
 /// Rounded selection like Raycast, drawn on top of glass.
 final class ResultRowView: NSTableRowView {
-    var tint: NSColor?
+    static let identifier = NSUserInterfaceItemIdentifier("ResultRow")
+
+    var tint: NSColor? {
+        didSet { if tint != oldValue && isSelected { needsDisplay = true } }
+    }
 
     override func drawSelection(in dirtyRect: NSRect) {
         guard isSelected else { return }
@@ -100,26 +104,33 @@ final class ResultCellView: NSTableCellView {
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError() }
 
+    /// Cells are reconfigured in place on every keystroke; only touch what changed,
+    /// since each text change invalidates layout.
     func configure(_ item: Item) {
-        icon.image = IconCache.shared.image(for: item.icon)
-        if case .symbol(_, let tint) = item.icon {
-            icon.contentTintColor = tint ?? .secondaryLabelColor
-        } else {
-            icon.contentTintColor = nil
-        }
-        runningDot.isHidden = !item.isRunning
-        title.stringValue = item.title
-        title.font = item.monoTitle ? Theme.mono(15, 500) : Theme.body
-        subtitle.stringValue = item.subtitle ?? ""
-        accessory.stringValue = item.accessory ?? ""
+        let image = IconCache.shared.image(for: item.icon)
+        if icon.image !== image { icon.image = image }
+        let tint: NSColor? = if case .symbol(_, let tint) = item.icon { tint ?? .secondaryLabelColor } else { nil }
+        if icon.contentTintColor != tint { icon.contentTintColor = tint }
+        if runningDot.isHidden == item.isRunning { runningDot.isHidden = !item.isRunning }
+        Self.set(title, item.title)
+        let font = item.monoTitle ? Theme.mono(15, 500) : Theme.body
+        if title.font != font { title.font = font }
+        Self.set(subtitle, item.subtitle ?? "")
+        Self.set(accessory, item.accessory ?? "")
         if let c = item.chip {
-            chip.isHidden = false
-            chipLabel.stringValue = c.text
-            chipLabel.textColor = c.color
-            chip.layer?.backgroundColor = c.color.withAlphaComponent(0.15).cgColor
-        } else {
+            if chip.isHidden { chip.isHidden = false }
+            Self.set(chipLabel, c.text)
+            if chipLabel.textColor != c.color {
+                chipLabel.textColor = c.color
+                chip.layer?.backgroundColor = c.color.withAlphaComponent(0.15).cgColor
+            }
+        } else if !chip.isHidden {
             chip.isHidden = true
         }
+    }
+
+    private static func set(_ field: NSTextField, _ text: String) {
+        if field.stringValue != text { field.stringValue = text }
     }
 }
 
@@ -152,7 +163,13 @@ final class SectionHeaderView: NSTableCellView {
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError() }
 
-    func configure(_ title: String) { label.attributedStringValue = Theme.labelString(title) }
+    private var title: String?
+
+    func configure(_ title: String) {
+        guard title != self.title else { return }
+        self.title = title
+        label.attributedStringValue = Theme.labelString(title)
+    }
 }
 
 /// Calculator card: the parsed expression on the left, the result on the right.

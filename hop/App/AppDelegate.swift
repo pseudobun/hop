@@ -57,8 +57,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         root.didEnter(launcher)
 
         apps.onChange = { [weak self] in
-            self?.root.rebuild()
-            if self?.launcher.isVisible == true { self?.launcher.reload() }
+            guard let self else { return }
+            root.rebuild()
+            if launcher.isVisible { launcher.reload() } else { launcher.prepare() }
         }
         RunningApps.shared.onChange = { [weak self] in
             if self?.launcher.isVisible == true { self?.launcher.reload() }
@@ -83,6 +84,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         #if DEBUG
         let defaults = UserDefaults.standard
         if let backdrop = defaults.string(forKey: "DebugBackdrop") { debugBackdrop = DebugSnapshot.showBackdrop(backdrop) }
+        if defaults.bool(forKey: "DebugBenchmark") {
+            let root = root!
+            Task {
+                await DebugBenchmark.run(launcher, probes: [
+                    ("Permission.missing", { _ = Permission.missing(for: settings.data) }),
+                    ("SpotlightHotkey.ownsCommandSpace", { _ = SpotlightHotkey.ownsCommandSpace }),
+                    ("root sections, empty query", { _ = root.sections(for: "") }),
+                    ("root sections, \"saf\"", { _ = root.sections(for: "saf") }),
+                ])
+            }
+        }
         if defaults.bool(forKey: "DebugShowOnLaunch") {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
                 guard let self else { return }

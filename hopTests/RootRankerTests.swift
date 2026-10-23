@@ -62,4 +62,16 @@ struct RootRankerTests {
         let order = RootRanker.rank(apps, query: SearchQuery("saf"), sensitivity: .high)
         #expect(apps[order[0]].id == "Safari")
     }
+
+    @Test func precomputedTitleOrderSortsLikeCollation() {
+        let titles = ["Zoom", "äpfel", "Apfel", "app 10", "App 2", "Écran", "ecran", "Notes", "notes", "Ｗide"]
+        let plain = titles.map { RankCandidate(id: $0, title: $0, typeWeight: TypeWeight.application) }
+        var ordered = plain
+        RootRanker.assignTitleOrder(&ordered)
+        let ids = { (c: [RankCandidate]) in RootRanker.rankEmpty(c).map { c[$0].id } }
+        #expect(ids(ordered) == ids(plain))
+        // Titles that collate equal share a position.
+        let notes = ordered.filter { $0.title.lowercased() == "notes" }.map(\.titleOrder)
+        #expect(Set(notes).count == 1)
+    }
 }

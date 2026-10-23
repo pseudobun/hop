@@ -1,12 +1,13 @@
 import AppKit
 
-/// Small cache of file and symbol icons; only visible rows ask for icons.
+/// Cache of file and symbol icons; only visible rows ask for icons. File icons are
+/// flattened to small bitmaps (~8 KB each), so a few hundred apps stay cheap.
 final class IconCache {
     static let shared = IconCache()
 
     private let cache: NSCache<NSString, NSImage> = {
         let c = NSCache<NSString, NSImage>()
-        c.countLimit = 128
+        c.countLimit = 512
         return c
     }()
 
@@ -16,8 +17,7 @@ final class IconCache {
         case .file(let path):
             let key = "file:\(path)" as NSString
             if let hit = cache.object(forKey: key) { return hit }
-            let img = NSWorkspace.shared.icon(forFile: path)
-            img.size = NSSize(width: size, height: size)
+            let img = Self.bitmap(NSWorkspace.shared.icon(forFile: path), size: size)
             cache.setObject(img, forKey: key)
             return img
         case .symbol(let name, _):
@@ -51,6 +51,33 @@ final class IconCache {
     }
 
     func purge() { cache.removeAllObjects() }
+
+    private var prewarmTask: Task<Void, Never>?
+
+    /// Renders icons ahead of time, a few per main-actor turn with a pause in between,
+    /// so neither the first show nor the first matches render icons while the user waits.
+    func prewarm(_ icons: [ItemIcon]) {
+        prewarmTask?.cancel()
+        prewarmTask = Task {
+            for (n, icon) in icons.enumerated() {
+                guard !Task.isCancelled else { return }
+                _ = image(for: icon)
+                if n % 8 == 7 { try? await Task.sleep(for: .milliseconds(2)) }
+            }
+        }
+    }
+
+    /// Renders the best representation once; drawing a workspace icon directly goes
+    /// through IconServices (and a placeholder pass in NSImageView) every time.
+    private static func bitmap(_ icon: NSImage, size: CGFloat) -> NSImage {
+        let scale = NSScreen.main?.backingScaleFactor ?? 2
+        var rect = NSRect(x: 0, y: 0, width: size * scale, height: size * scale)
+        guard let cg = icon.cgImage(forProposedRect: &rect, context: nil, hints: nil) else {
+            icon.size = NSSize(width: size, height: size)
+            return icon
+        }
+        return NSImage(cgImage: cg, size: NSSize(width: size, height: size))
+    }
 
     private static func tile(_ symbol: String, _ color: NSColor, size: CGFloat) -> NSImage {
         NSImage(size: NSSize(width: size, height: size), flipped: false) { rect in
