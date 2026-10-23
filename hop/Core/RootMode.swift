@@ -210,20 +210,23 @@ final class RootMode: Mode {
     }
 }
 
-/// Spotlight owns ⌘Space until its symbolic hotkey (64) is disabled.
+/// Spotlight's symbolic hotkey (64) takes ⌘Space unless it is disabled or rebound.
 enum SpotlightHotkey {
-    static var isEnabled: Bool {
+    static var ownsCommandSpace: Bool {
         guard let all = CFPreferencesCopyAppValue("AppleSymbolicHotKeys" as CFString,
                                                   "com.apple.symbolichotkeys" as CFString) as? [String: Any],
               let entry = all["64"] as? [String: Any]
         else { return true }
-        if let on = entry["enabled"] as? Bool { return on }
-        if let n = entry["enabled"] as? Int { return n != 0 }
-        return true
+        let enabled = (entry["enabled"] as? Bool) ?? (entry["enabled"] as? Int).map { $0 != 0 } ?? true
+        guard enabled else { return false }
+        // parameters: (character, key code, modifier flags); space is 49, ⌘ alone is 1 << 20.
+        guard let value = entry["value"] as? [String: Any], let p = value["parameters"] as? [Int], p.count >= 3
+        else { return true }
+        return p[1] == 49 && p[2] == 1 << 20
     }
 
     static func hintItem() -> Item? {
-        guard isEnabled else { return nil }
+        guard ownsCommandSpace else { return nil }
         return Item(id: "setup.spotlight", title: "Free ⌘Space for hop",
                     subtitle: "Turn off “Show Spotlight search” in Keyboard Shortcuts",
                     icon: .tile("command", Theme.warn), accessory: "Setup",
