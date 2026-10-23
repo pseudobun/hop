@@ -60,6 +60,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.root.rebuild()
             if self?.launcher.isVisible == true { self?.launcher.reload() }
         }
+        RunningApps.shared.onChange = { [weak self] in
+            if self?.launcher.isVisible == true { self?.launcher.reload() }
+        }
+        RunningApps.shared.start()
         hotkey = GlobalHotkey { [weak self] in self?.launcher.toggle() }
 
         settings.onChange = { [weak self] old, new in self?.apply(new, previous: old) }

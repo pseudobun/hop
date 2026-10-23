@@ -117,6 +117,8 @@ struct Item {
     var pushesMode = false
     /// One tinted status chip, e.g. "Connected"; facts go in `accessory`.
     var chip: Chip?
+    /// App is open: a Dock-style dot under the icon.
+    var isRunning = false
     /// Title is a value (a number), set in mono.
     var monoTitle = false
     /// Large two-sided calculator card instead of a normal row.

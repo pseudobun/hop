@@ -32,6 +32,8 @@ final class ResultCellView: NSTableCellView {
     /// Pill behind `chipLabel`; a bare NSTextField draws its text at the top of a taller frame.
     private let chip = NSView()
     private let chipLabel = NSTextField(labelWithString: "")
+    /// Dock-style "app is open" dot under the icon.
+    private let runningDot = NSView()
 
     override init(frame: NSRect) {
         super.init(frame: frame)
@@ -60,7 +62,12 @@ final class ResultCellView: NSTableCellView {
         chipLabel.translatesAutoresizingMaskIntoConstraints = false
         chip.addSubview(chipLabel)
 
-        for v in [icon, title, subtitle, accessory, chip] as [NSView] {
+        runningDot.wantsLayer = true
+        runningDot.layer?.cornerRadius = 2
+        runningDot.layer?.backgroundColor = Theme.foreground.withAlphaComponent(0.85).cgColor
+        runningDot.isHidden = true
+
+        for v in [icon, title, subtitle, accessory, chip, runningDot] as [NSView] {
             v.translatesAutoresizingMaskIntoConstraints = false
             addSubview(v)
         }
@@ -69,6 +76,10 @@ final class ResultCellView: NSTableCellView {
             icon.centerYAnchor.constraint(equalTo: centerYAnchor),
             icon.widthAnchor.constraint(equalToConstant: 22),
             icon.heightAnchor.constraint(equalToConstant: 22),
+            runningDot.centerXAnchor.constraint(equalTo: icon.centerXAnchor),
+            runningDot.topAnchor.constraint(equalTo: icon.bottomAnchor, constant: 2),
+            runningDot.widthAnchor.constraint(equalToConstant: 4),
+            runningDot.heightAnchor.constraint(equalToConstant: 4),
             title.leadingAnchor.constraint(equalTo: icon.trailingAnchor, constant: 12),
             title.centerYAnchor.constraint(equalTo: centerYAnchor),
             subtitle.leadingAnchor.constraint(equalTo: title.trailingAnchor, constant: 8),
@@ -96,6 +107,7 @@ final class ResultCellView: NSTableCellView {
         } else {
             icon.contentTintColor = nil
         }
+        runningDot.isHidden = !item.isRunning
         title.stringValue = item.title
         title.font = item.monoTitle ? Theme.mono(15, 500) : Theme.body
         subtitle.stringValue = item.subtitle ?? ""

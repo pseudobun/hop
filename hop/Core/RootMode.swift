@@ -64,7 +64,7 @@ final class RootMode: Mode {
         if query.isEmpty { return emptySections() }
 
         let order = RootRanker.rank(candidates, query: SearchQuery(query), sensitivity: settings.data.general.sensitivity)
-        let results = order.map { items[$0] }
+        let results = order.map { decorated($0) }
         var sections: [ResultSection] = []
         let lower = query.lowercased()
         if let c = Converter.convert(query) {
@@ -75,6 +75,13 @@ final class RootMode: Mode {
         }
         sections.append(ResultSection(title: "Results", items: results))
         return sections
+    }
+
+    /// The cached item, marked when its app is running.
+    private func decorated(_ index: Int) -> Item {
+        var item = items[index]
+        item.isRunning = RunningApps.shared.contains(item.id)
+        return item
     }
 
     private func emptySections() -> [ResultSection] {
@@ -100,12 +107,12 @@ final class RootMode: Mode {
             .sorted { candidates[$0].frecency > candidates[$1].frecency }
             .prefix(5)
         let suggestedIDs = Set(suggested.map { candidates[$0].id })
-        sections.append(ResultSection(title: "Suggestions", items: suggested.map { items[$0] }))
+        sections.append(ResultSection(title: "Suggestions", items: suggested.map { decorated($0) }))
 
         let order = RootRanker.rankEmpty(candidates).filter { !suggestedIDs.contains(candidates[$0].id) }
-        sections.append(ResultSection(title: "Commands", items: order.filter { commandIDs.contains(candidates[$0].id) }.map { items[$0] }))
+        sections.append(ResultSection(title: "Commands", items: order.filter { commandIDs.contains(candidates[$0].id) }.map { decorated($0) }))
         let appKinds = Set(apps.entries.filter { $0.kind == .application }.map(\.id))
-        sections.append(ResultSection(title: "Applications", items: order.filter { appKinds.contains(candidates[$0].id) }.map { items[$0] }))
+        sections.append(ResultSection(title: "Applications", items: order.filter { appKinds.contains(candidates[$0].id) }.map { decorated($0) }))
         return sections
     }
 
