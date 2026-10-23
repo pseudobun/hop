@@ -2,6 +2,7 @@ import AppKit
 import Carbon.HIToolbox
 import CoreGraphics
 import IOKit
+import IOKit.hidsystem
 import os
 
 /// Caps Lock → F20 via the system HID key mapping (what `hidutil` sets).
@@ -44,7 +45,21 @@ nonisolated enum HyperKeyMapping {
         var entries = await current().filter { $0["HIDKeyboardModifierMappingSrc"] != capsLock }
         entries.append(["HIDKeyboardModifierMappingSrc": capsLock, "HIDKeyboardModifierMappingDst": f20])
         let r = try? await ProcessRunner.run("/usr/bin/hidutil", ["property", "--set", json(entries)])
-        return r?.ok == true
+        guard r?.ok == true else { return false }
+        clearCapsLock()
+        return true
+    }
+
+    /// Turns Caps Lock off. Once Caps sends F20 nothing else could, e.g. after it was
+    /// pressed while hop was restarting.
+    static func clearCapsLock() {
+        let service = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceMatching(kIOHIDSystemClass))
+        guard service != 0 else { return }
+        defer { IOObjectRelease(service) }
+        var connect: io_connect_t = 0
+        guard IOServiceOpen(service, mach_task_self_, UInt32(kIOHIDParamConnectType), &connect) == KERN_SUCCESS else { return }
+        defer { IOServiceClose(connect) }
+        IOHIDSetModifierLockState(connect, Int32(kIOHIDCapsLockState), false)
     }
 
     /// Removes our Caps → F20 entry only.
