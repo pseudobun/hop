@@ -50,13 +50,38 @@ enum Registry {
                  icon: .tile("checkmark.shield.fill", Theme.info), accessory: "Command",
                  actions: [Action(title: "Show Permissions") { .push(services.permissionsMode?() ?? PermissionsMode { services.settings.data }) }],
                  pushesMode: true),
+            Item(id: "hop.restart", title: "Restart hop", icon: .tile("arrow.clockwise", Theme.info), accessory: "Command",
+                 actions: [HopApp.restartAction()], tracksFrecency: false),
             Item(id: "hop.quit", title: "Quit hop", icon: .tile("power", Theme.chart5), accessory: "Command",
-                 actions: [Action(title: "Quit hop") {
-                     NSApp.terminate(nil)
-                     return .dismiss
-                 }], tracksFrecency: false),
+                 actions: [HopApp.quitAction()], tracksFrecency: false),
         ]
         return items
+    }
+}
+
+/// Quitting and restarting hop itself.
+enum HopApp {
+    static func restartAction() -> Action {
+        Action(title: "Restart hop") { restart() ? .dismiss : .stayWithHUD("Could not restart hop") }
+    }
+
+    static func quitAction(shortcut: KeyCombo? = nil) -> Action {
+        Action(title: "Quit hop", shortcut: shortcut) {
+            NSApp.terminate(nil)
+            return .dismiss
+        }
+    }
+
+    /// Opens a fresh copy once this process has exited, so the old one's cleanup
+    /// (restoring the Caps Lock mapping) can't undo the new one's setup, then quits.
+    static func restart() -> Bool {
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: "/bin/sh")
+        p.arguments = ["-c", "while /bin/kill -0 \(getpid()) 2>/dev/null; do /bin/sleep 0.1; done; /usr/bin/open \"$0\"",
+                       Bundle.main.bundlePath]
+        do { try p.run() } catch { return false }
+        NSApp.terminate(nil)
+        return true
     }
 }
 

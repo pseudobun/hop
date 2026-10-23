@@ -94,7 +94,7 @@ struct Action {
             ("uninstall", "trash"), ("trash", "trash"), ("force kill", "bolt.fill"), ("kill", "xmark.octagon"),
             ("unpin", "star.slash"), ("pin", "star"), ("unlock", "lock.open"), ("lock", "lock"),
             ("disconnect", "bolt.horizontal.circle"), ("connect", "bolt.horizontal.circle.fill"),
-            ("quit", "power"), ("config", "gearshape"), ("settings", "gearshape"), ("database", "cylinder.split.1x2"),
+            ("restart", "arrow.clockwise"), ("quit", "power"), ("config", "gearshape"), ("settings", "gearshape"), ("database", "cylinder.split.1x2"),
             ("paste", "doc.on.clipboard"), ("copy", "doc.on.doc"), ("open", "arrow.up.forward.app"),
             ("search", "magnifyingglass"), ("downloads", "arrow.down"), ("cancel", "xmark"),
         ]

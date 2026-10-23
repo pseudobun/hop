@@ -25,9 +25,10 @@ nonisolated enum Processes {
         .sorted { $0.cpu != $1.cpu ? $0.cpu > $1.cpu : $0.memory > $1.memory }
     }
 
-    static func list() async -> [RunningProcess] {
+    /// Leaves out the calling process unless `includingSelf`, so `hop kill hop` can't hit the CLI itself.
+    static func list(includingSelf: Bool = false) async -> [RunningProcess] {
         let r = try? await ProcessRunner.run("/bin/ps", ["-axo", "pid=,uid=,pcpu=,rss=,comm="], timeout: .seconds(10))
-        return parse(r?.out ?? "", excluding: [ProcessInfo.processInfo.processIdentifier])
+        return parse(r?.out ?? "", excluding: includingSelf ? [] : [ProcessInfo.processInfo.processIdentifier])
     }
 
     enum KillResult: Equatable { case ok, notPermitted, gone, failed }
@@ -69,7 +70,7 @@ final class KillProcessMode: Mode {
         Task {
             if let delay { try? await Task.sleep(for: delay) }
             context?.setLoading(true)
-            processes = await Processes.list()
+            processes = await Processes.list(includingSelf: true)
             apps = Dictionary(NSWorkspace.shared.runningApplications.map { ($0.processIdentifier, $0) }, uniquingKeysWith: { a, _ in a })
             context?.setLoading(false)
             context?.reload()
@@ -88,15 +89,19 @@ final class KillProcessMode: Mode {
             list = RootRanker.rank(cands, query: SearchQuery(q), sensitivity: sensitivity).map { list[$0] }
         }
         let me = getuid()
+        let ownPID = ProcessInfo.processInfo.processIdentifier
         let items = list.prefix(300).map { p in
             let app = apps[p.pid]
             let mem = ByteCountFormatter.string(fromByteCount: p.memory, countStyle: .memory)
             let owner = p.uid == me ? "" : (p.uid == 0 ? " · root" : " · uid \(p.uid)")
-            var actions = [
+            // Killing hop from hop: restart or quit cleanly instead.
+            var actions = p.pid == ownPID ? [HopApp.restartAction(), HopApp.quitAction(shortcut: .ret(.shift))] : [
                 Action(title: "Kill Process") { [weak self] in await self?.kill(p, force: false) ?? .stay },
                 Action(title: "Force Kill", shortcut: .ret(.shift), style: .destructive) { [weak self] in
                     await self?.kill(p, force: true) ?? .stay
                 },
+            ]
+            actions += [
                 Action(title: "Copy PID", shortcut: .cmd("c", .shift)) {
                     Pasteboard.copy(String(p.pid))
                     return .stayWithHUD("Copied PID \(p.pid)")
