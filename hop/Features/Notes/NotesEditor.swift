@@ -326,31 +326,45 @@ final class NotesPreviewView: NSTextView {
 
 /// ⌘/: every notes shortcut on one card.
 final class NotesShortcutsView: NSView {
-    static let groups: [(String, [(String, String)])] = [
-        ("Move", [
-            ("⌥.", "Show or hide notes"),
-            ("⌘P", "Search notes (also ⌘O)"),
-            ("↑ ↓", "Previous / next result"),
-            ("↵  Tab", "Back to the note"),
-            ("⇧↵", "New note named after the search"),
-            ("⌥⌘↑ ↓", "Previous / next note"),
-            ("⌘[  ⌘]", "Back / forward"),
-            ("⌥↵", "Follow the link at the caret"),
-            ("↑ ↓  Space", "Scroll the preview"),
-            ("Esc", "Close find, search, then the window"),
-        ]),
-        ("Edit", [
-            ("⌘K", "Actions: the note under the mouse, else the open one"),
-            ("⌘N", "New note"),
-            ("⌘E", "Edit / preview"),
-            ("⌘F", "Find in note (⌘G, ⇧⌘G)"),
-            ("⌘L", "Toggle task"),
-            ("⌘B  ⌘I", "Bold / italic"),
-            ("⌘\\", "Hide the sidebar"),
-            ("⌘D", "Pin / unpin (pinned stay on top)"),
-            ("⇧⌘⌫", "Move the note to the Trash"),
-            ("⇧⌘O", "Open in Obsidian"),
-        ]),
+    /// Two columns of groups: (heading, [(keys, what)]).
+    static let columns: [[(String, [(String, String)])]] = [
+        [
+            ("Move", [
+                ("⌥.", "Show or hide notes"),
+                ("⌘P", "Search titles and text (also ⌘O)"),
+                ("↑ ↓", "Previous / next result"),
+                ("↵  Tab", "Back to the note"),
+                ("⇧↵", "New note named after the search"),
+                ("⌥⌘↑ ↓", "Previous / next note"),
+                ("⌘[  ⌘]", "Back / forward"),
+                ("⌥↵", "Follow the link at the caret"),
+            ]),
+            ("Search", [
+                ("\"a b\"", "Exact phrase"),
+                ("-word", "Leave out notes with it"),
+                ("path:Infra", "Only in a folder"),
+                ("#tag", "With a tag (tags: or inline)"),
+                ("⌘G  ⇧⌘G", "Next / previous match in the note"),
+            ]),
+        ],
+        [
+            ("Edit", [
+                ("⌘K", "Actions: the note under the mouse, else the open one"),
+                ("⌘N", "New note"),
+                ("⌘E", "Edit / preview"),
+                ("⌘F", "Find in note"),
+                ("⌘L", "Toggle task"),
+                ("⌘B  ⌘I", "Bold / italic"),
+                ("⌘D", "Pin / unpin (pinned stay on top)"),
+                ("⇧⌘⌫", "Move the note to the Trash"),
+                ("⇧⌘O", "Open in Obsidian"),
+            ]),
+            ("View", [
+                ("↑ ↓  Space", "Scroll the preview"),
+                ("⌘\\", "Hide the sidebar"),
+                ("Esc", "Close find, search, then the window"),
+            ]),
+        ],
     ]
 
     override init(frame: NSRect) {
@@ -369,12 +383,26 @@ final class NotesShortcutsView: NSView {
             label.textColor = Theme.foreground
             return [NSImageView(image: Keycap.image(keys)), label]
         }
-        let left = Self.groups[0], right = Self.groups[1]
-        var rows: [[NSView]] = [[NSGridCell.emptyContentView, heading(left.0), NSGridCell.emptyContentView,
-                                 NSGridCell.emptyContentView, heading(right.0)]]
-        for i in 0..<max(left.1.count, right.1.count) {
-            rows.append(cells(i < left.1.count ? left.1[i] : nil) + [NSGridCell.emptyContentView]
-                        + cells(i < right.1.count ? right.1[i] : nil))
+        // Each column flattened to heading and key rows; a heading is (nil, title).
+        let flat = Self.columns.map { groups in
+            groups.flatMap { g in [(String?.none, g.0)] + g.1.map { (String?.some($0.0), $0.1) } }
+        }
+        var rows: [[NSView]] = []
+        var headingRows: [Int] = []
+        for i in 0..<(flat.map(\.count).max() ?? 0) {
+            var row: [NSView] = []
+            for (c, column) in flat.enumerated() {
+                if c > 0 { row.append(NSGridCell.emptyContentView) }
+                guard i < column.count else { row += cells(nil); continue }
+                let (keys, text) = column[i]
+                if let keys {
+                    row += cells((keys, text))
+                } else {
+                    row += [NSGridCell.emptyContentView, heading(text)]
+                    if i > 0 { headingRows.append(i) }
+                }
+            }
+            rows.append(row)
         }
         let grid = NSGridView(views: rows)
         grid.rowSpacing = 9
@@ -384,6 +412,10 @@ final class NotesShortcutsView: NSView {
         grid.column(at: 3).xPlacement = .trailing
         grid.column(at: 2).width = 20
         grid.row(at: 0).bottomPadding = 4
+        for r in headingRows {
+            grid.row(at: r).topPadding = 10
+            grid.row(at: r).bottomPadding = 4
+        }
         grid.translatesAutoresizingMaskIntoConstraints = false
         addSubview(grid)
         NSLayoutConstraint.activate([

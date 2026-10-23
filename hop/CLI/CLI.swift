@@ -435,6 +435,7 @@ enum CLI {
                     var row: [String: Any] = ["path": h.note.relativePath, "title": h.note.title,
                                               "modified": ISO8601DateFormatter().string(from: h.note.modified)]
                     if let s = h.snippet { row["match"] = s }
+                    if h.matches > 0 { row["matches"] = h.matches }
                     return row
                 })
             } else {

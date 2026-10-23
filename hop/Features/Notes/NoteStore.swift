@@ -20,6 +20,64 @@ nonisolated struct NoteHit: Sendable, Equatable {
     let note: NoteFile
     var snippet: String?
     var pinned = false
+    /// Occurrences of the search terms in the note's text.
+    var matches = 0
+    /// UTF-16 offset of the first match in the text (body before frontmatter).
+    var matchLocation: Int?
+    /// Words and phrases to highlight and jump to.
+    var terms: [String] = []
+}
+
+/// A notes search: words and "phrases" that must all appear, `-excluded` words,
+/// `path:` folder filters and `#tag` / `tag:` filters (frontmatter `tags:` or inline).
+nonisolated struct NoteQuery: Equatable, Sendable {
+    var terms: [String] = []
+    var excluded: [String] = []
+    var paths: [String] = []
+    var tags: [String] = []
+
+    var isEmpty: Bool { terms.isEmpty && excluded.isEmpty && paths.isEmpty && tags.isEmpty }
+    /// What the title ranking sees: the plain terms.
+    var titleText: String { terms.joined(separator: " ") }
+
+    static func parse(_ text: String) -> NoteQuery {
+        var tokens: [(text: String, phrase: Bool)] = []
+        var current = "", inQuotes = false
+        func flush(_ phrase: Bool) {
+            if !current.trimmingCharacters(in: .whitespaces).isEmpty { tokens.append((current, phrase)) }
+            current = ""
+        }
+        for ch in text {
+            if ch == "\"" {
+                flush(inQuotes)
+                inQuotes.toggle()
+            } else if ch.isWhitespace && !inQuotes {
+                flush(false)
+            } else {
+                current.append(ch)
+            }
+        }
+        flush(inQuotes) // an unclosed quote is still a phrase
+
+        var q = NoteQuery()
+        for (token, phrase) in tokens {
+            let lower = token.lowercased()
+            if phrase {
+                q.terms.append(token)
+            } else if token.count > 1 && token.hasPrefix("-") {
+                q.excluded.append(String(token.dropFirst()))
+            } else if let prefix = ["path:", "in:"].first(where: { lower.hasPrefix($0) }), token.count > prefix.count {
+                q.paths.append(String(token.dropFirst(prefix.count)))
+            } else if lower.hasPrefix("tag:"), token.count > 4 {
+                q.tags.append(String(token.dropFirst(4)).trimmingCharacters(in: CharacterSet(charactersIn: "#")))
+            } else if token.count > 1 && token.hasPrefix("#") && !token.dropFirst().hasPrefix("#") {
+                q.tags.append(String(token.dropFirst()))
+            } else {
+                q.terms.append(token)
+            }
+        }
+        return q
+    }
 }
 
 /// Pinned notes per vault, as relative paths in the order they were pinned.
@@ -107,33 +165,122 @@ nonisolated enum NoteStore {
 
     static func search(_ notes: [NoteFile], query: String, contents: [String: String],
                        sensitivity: Sensitivity = .high) -> [NoteHit] {
-        let q = query.trimmingCharacters(in: .whitespaces)
+        let q = NoteQuery.parse(query)
         guard !q.isEmpty else { return notes.map { NoteHit(note: $0) } }
-        let cands = notes.map { RankCandidate(id: $0.relativePath, title: $0.title, subtitle: $0.folder, typeWeight: 1) }
-        let titled = RootRanker.rank(cands, query: SearchQuery(q), sensitivity: sensitivity)
-        var hits = titled.map { NoteHit(note: notes[$0]) }
-        let seen = Set(titled)
-        let words = q.split(whereSeparator: \.isWhitespace).map(String.init)
         let options: String.CompareOptions = [.caseInsensitive, .diacriticInsensitive]
-        for (i, note) in notes.enumerated() where !seen.contains(i) {
-            guard let text = contents[note.relativePath],
-                  words.allSatisfy({ text.range(of: $0, options: options) != nil }) else { continue }
-            hits.append(NoteHit(note: note, snippet: snippet(text, word: words[0])))
+        func has(_ s: String, _ term: String) -> Bool { s.range(of: term, options: options) != nil }
+
+        // Filters every hit must pass.
+        let passing: [Int] = notes.indices.filter { i in
+            let note = notes[i], text = contents[note.relativePath] ?? ""
+            if !q.paths.allSatisfy({ has(note.relativePath, $0) }) { return false }
+            if q.excluded.contains(where: { has(note.title, $0) || has(text, $0) }) { return false }
+            if !q.tags.isEmpty {
+                let tags = Self.tags(text)
+                let wanted = q.tags.map { $0.lowercased() }
+                if !wanted.allSatisfy({ t in tags.contains { $0 == t || $0.hasPrefix(t + "/") } }) { return false }
+            }
+            return true
         }
-        return hits
+        guard !q.terms.isEmpty else { return passing.map { NoteHit(note: notes[$0]) } }
+
+        // Titles first, ranked like the launcher.
+        let cands = passing.map { RankCandidate(id: notes[$0].relativePath, title: notes[$0].title, subtitle: notes[$0].folder, typeWeight: 1) }
+        let titled = RootRanker.rank(cands, query: SearchQuery(q.titleText), sensitivity: sensitivity).map { passing[$0] }
+        var hits = titled.map { i -> NoteHit in
+            var h = NoteHit(note: notes[i], terms: q.terms)
+            if let text = contents[notes[i].relativePath] { (h.matches, h.matchLocation) = Self.matchInfo(text, terms: q.terms) }
+            return h
+        }
+
+        // Then every note whose title or text holds all terms, most relevant first.
+        let seen = Set(titled)
+        let phrase = q.terms.count > 1 ? q.titleText : nil
+        var scored: [(hit: NoteHit, score: Int)] = []
+        for i in passing where !seen.contains(i) {
+            let note = notes[i]
+            guard let text = contents[note.relativePath],
+                  q.terms.allSatisfy({ has(note.title, $0) || has(text, $0) }) else { continue }
+            let (count, location) = Self.matchInfo(text, terms: q.terms)
+            var hit = NoteHit(note: note, matches: count, matchLocation: location, terms: q.terms)
+            hit.snippet = location.map { Self.snippet(text, at: $0) }
+            let bodyStart = Self.frontmatterRange(text).map { NSRange($0, in: text).upperBound } ?? 0
+            var score = min(count, 20)
+            if let phrase, has(text, phrase) { score += 15 }
+            if let location, location >= bodyStart { score += 5 }
+            if q.terms.contains(where: { has(note.title, $0) }) { score += 10 }
+            scored.append((hit, score))
+        }
+        scored.sort { $0.score != $1.score ? $0.score > $1.score : $0.hit.note.modified > $1.hit.note.modified }
+        return hits + scored.map(\.hit)
     }
 
-    /// The trimmed line containing `word`, shortened around the match.
-    static func snippet(_ text: String, word: String, width: Int = 90) -> String? {
-        let options: String.CompareOptions = [.caseInsensitive, .diacriticInsensitive]
-        guard let hit = text.range(of: word, options: options) else { return nil }
-        let line = text[text.lineRange(for: hit)].trimmingCharacters(in: .whitespacesAndNewlines)
-        guard line.count > width, let inLine = line.range(of: word, options: options) else { return line }
-        let offset = line.distance(from: line.startIndex, to: inLine.lowerBound)
-        let start = max(0, min(offset - width / 3, line.count - width))
-        let from = line.index(line.startIndex, offsetBy: start)
-        let to = line.index(from, offsetBy: width)
-        return (start > 0 ? "…" : "") + line[from..<to].trimmingCharacters(in: .whitespaces) + (to < line.endIndex ? "…" : "")
+    /// How often the terms occur, and where the first one is (preferring the body to frontmatter).
+    static func matchInfo(_ text: String, terms: [String]) -> (count: Int, location: Int?) {
+        let ns = text as NSString
+        let bodyStart = frontmatterRange(text).map { NSRange($0, in: text).upperBound } ?? 0
+        var count = 0
+        var firstBody: Int?, firstAny: Int?
+        for term in terms where !term.isEmpty {
+            var from = 0
+            while from < ns.length {
+                let r = ns.range(of: term, options: [.caseInsensitive, .diacriticInsensitive],
+                                 range: NSRange(location: from, length: ns.length - from))
+                guard r.location != NSNotFound else { break }
+                count += 1
+                if r.location >= bodyStart { firstBody = min(firstBody ?? r.location, r.location) }
+                firstAny = min(firstAny ?? r.location, r.location)
+                from = r.upperBound
+            }
+        }
+        return (count, firstBody ?? firstAny)
+    }
+
+    /// The trimmed line around a UTF-16 offset, shortened to `width` with the match near
+    /// the start (the sidebar shows about 45 characters).
+    static func snippet(_ text: String, at location: Int, width: Int = 60) -> String {
+        let ns = text as NSString
+        let lineRange = ns.lineRange(for: NSRange(location: min(location, ns.length), length: 0))
+        let raw = ns.substring(with: lineRange)
+        let leading = (raw.prefix { $0.isWhitespace } as Substring).utf16.count
+        let line = raw.trimmingCharacters(in: .whitespacesAndNewlines) as NSString
+        guard line.length > width else { return line as String }
+        let offset = max(0, location - lineRange.location - leading)
+        let start = max(0, min(offset - 16, line.length - width))
+        let piece = line.substring(with: NSRange(location: start, length: width)).trimmingCharacters(in: .whitespaces)
+        return (start > 0 ? "…" : "") + piece + (start + width < line.length ? "…" : "")
+    }
+
+    private nonisolated(unsafe) static let inlineTag = try! NSRegularExpression(pattern: #"(?<![\w#/&])#([\p{L}_][\p{L}\p{N}_/-]*)"#)
+
+    /// Tags of a note, lower-cased without `#`: frontmatter `tags:` (inline list or
+    /// YAML list) plus inline `#tags` in the body.
+    static func tags(_ text: String) -> Set<String> {
+        var out: Set<String> = []
+        let strip = CharacterSet(charactersIn: " #\"'")
+        var body = text[...]
+        if let fm = frontmatterRange(text) {
+            body = text[fm.upperBound...]
+            var inList = false
+            for line in text[fm].split(whereSeparator: \.isNewline) {
+                let l = line.trimmingCharacters(in: .whitespaces)
+                if l.lowercased().hasPrefix("tags:") {
+                    let value = l.dropFirst(5).trimmingCharacters(in: CharacterSet(charactersIn: " []"))
+                    for t in value.split(separator: ",") { out.insert(t.trimmingCharacters(in: strip).lowercased()) }
+                    inList = value.isEmpty
+                } else if inList && l.hasPrefix("- ") {
+                    out.insert(l.dropFirst(2).trimmingCharacters(in: strip).lowercased())
+                } else {
+                    inList = false
+                }
+            }
+        }
+        let b = String(body) as NSString
+        for m in inlineTag.matches(in: b as String, range: NSRange(location: 0, length: b.length)) {
+            out.insert(b.substring(with: m.range(at: 1)).lowercased())
+        }
+        out.remove("")
+        return out
     }
 
     /// Compact age for the sidebar: "now", "5m", "3h", "2d", "3w", then "Oct 3" / "Oct 2025".

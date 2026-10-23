@@ -242,3 +242,75 @@ struct NotePinsTests {
         #expect(NoteStore.pinnedFirst(hits, pinned: [], query: "") == hits)
     }
 }
+
+struct NoteSearchTests {
+    private func notes(_ paths: [String]) -> [NoteFile] {
+        paths.enumerated().map { i, p in
+            NoteFile(url: URL(fileURLWithPath: "/v/" + p), relativePath: p, modified: Date(timeIntervalSince1970: Double(1000 - i)))
+        }
+    }
+
+    @Test func parsesQuerySyntax() {
+        let q = NoteQuery.parse(#""home server" -draft path:Infra #inbox tag:#hop word "unclosed phrase"#)
+        #expect(q.terms == ["home server", "word", "unclosed phrase"])
+        #expect(q.excluded == ["draft"])
+        #expect(q.paths == ["Infra"])
+        #expect(q.tags == ["inbox", "hop"])
+        #expect(NoteQuery.parse("  ").isEmpty)
+        #expect(NoteQuery.parse("- # ##x").terms == ["-", "#", "##x"])
+    }
+
+    @Test func filtersByPathTagAndExclusion() {
+        let all = notes(["Infra/olympus.md", "Infra/minsky.md", "Me/Bunny.md", "Inbox/todo.md"])
+        let contents = [
+            "Infra/olympus.md": "---\ntags: [machine, infra]\n---\nMac mini server",
+            "Infra/minsky.md": "---\ntags:\n  - machine\n  - unraid\n---\nUnraid server, draft",
+            "Me/Bunny.md": "Runs the server #person",
+            "Inbox/todo.md": "- [ ] server stuff #inbox/later",
+        ]
+        let titles = { (q: String) in NoteStore.search(all, query: q, contents: contents).map(\.note.title) }
+        #expect(Set(titles("server")) == ["olympus", "minsky", "Bunny", "todo"])
+        #expect(titles("server path:infra") == ["olympus", "minsky"])
+        #expect(titles("server -draft path:Infra") == ["olympus"])
+        #expect(titles("#unraid") == ["minsky"])
+        #expect(Set(titles("tag:machine")) == ["olympus", "minsky"])
+        #expect(titles("#inbox") == ["todo"]) // nested tag inbox/later
+        #expect(titles("#person server") == ["Bunny"])
+    }
+
+    @Test func ranksTitlesThenRelevantText() {
+        let all = notes(["Projects/hop.md", "Inbox/a.md", "Inbox/b.md", "Inbox/c.md"])
+        let contents = [
+            "Projects/hop.md": "launcher",
+            "Inbox/a.md": "notes window once",
+            "Inbox/b.md": "the notes window, notes window again, notes window",
+            "Inbox/c.md": "---\ntitle: c\n---\nwindow of notes",
+        ]
+        let hits = NoteStore.search(all, query: "notes window", contents: contents)
+        #expect(hits.map(\.note.title) == ["b", "a", "c"]) // phrase and count beat word-only matches
+        #expect(hits[0].matches == 6 && hits[0].terms == ["notes", "window"])
+        #expect(hits[0].snippet == "the notes window, notes window again, notes window")
+        #expect(NoteStore.search(all, query: "hop", contents: contents).first?.note.title == "hop")
+    }
+
+    @Test func firstMatchPrefersTheBody() {
+        let text = "---\ntitle: olympus\n---\nThe olympus box"
+        let (count, location) = NoteStore.matchInfo(text, terms: ["olympus"])
+        #expect(count == 2)
+        #expect(location == (text as NSString).range(of: "olympus box").location)
+        #expect(NoteStore.matchInfo("only: x\n", terms: ["zzz"]).location == nil)
+    }
+
+    @Test func tagsFromFrontmatterAndBody() {
+        let text = "---\ntags: [Moc, \"infra\"]\naliases:\n  - x\n---\nSee #Home-Lab and https://x.dev/#frag and C# code"
+        #expect(NoteStore.tags(text) == ["moc", "infra", "home-lab"])
+        #expect(NoteStore.tags("---\ntags:\n  - a\n  - b/c\ntype: x\n---\n") == ["a", "b/c"])
+    }
+
+    @Test func snippetsAroundTheMatch() {
+        let long = String(repeating: "lorem ", count: 30) + "needle " + String(repeating: "ipsum ", count: 30)
+        let s = NoteStore.snippet(long, at: (long as NSString).range(of: "needle").location)
+        #expect(s.hasPrefix("…") && s.hasSuffix("…") && s.contains("needle"))
+        #expect(NoteStore.snippet("  - short line\nnext", at: 5) == "- short line")
+    }
+}

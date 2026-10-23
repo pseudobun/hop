@@ -276,7 +276,9 @@ final class NotesController: NSObject, NSWindowDelegate, NSTableViewDataSource, 
                                      pinned: pins.paths(in: root), query: query)
         table.reloadData()
         let vault = root.lastPathComponent
-        countLabel.attributedStringValue = Theme.labelString(query.isEmpty ? "\(vault) · \(notes.count)" : "\(hits.count) of \(notes.count)")
+        let matches = hits.reduce(0) { $0 + $1.matches }
+        countLabel.attributedStringValue = Theme.labelString(query.isEmpty ? "\(vault) · \(notes.count)"
+            : "\(hits.count) of \(notes.count)" + (matches > 0 ? " · \(matches) matches" : ""))
         selectRow(for: currentPath)
     }
 
@@ -295,19 +297,89 @@ final class NotesController: NSObject, NSWindowDelegate, NSTableViewDataSource, 
     private func moveSelection(_ step: Int, record: Bool = false) {
         guard !hits.isEmpty else { return }
         let next = table.selectedRow < 0 ? (step > 0 ? 0 : hits.count - 1) : max(0, min(hits.count - 1, table.selectedRow + step))
-        if record { open(hits[next].note) } else { preview(hits[next].note) }
+        if record { open(hits[next].note) } else { preview(hits[next]) }
+        if !query.isEmpty { reveal(hits[next]) }
     }
 
     /// Opens a note while searching; history gets only the note the search started from.
-    private func preview(_ note: NoteFile) {
+    private func preview(_ hit: NoteHit) {
         if searchOrigin == nil { searchOrigin = currentPath ?? "" }
-        open(note, record: false)
+        open(hit.note, record: false)
+        reveal(hit)
     }
 
-    /// The search is over (↵, Tab, Esc): remember where it started.
+    /// The search is over (↵, Tab, Esc): remember where it started. The selected match
+    /// becomes a caret, so typing in the note does not replace it.
     private func endSearch() {
         if let origin = searchOrigin, !origin.isEmpty, origin != currentPath { pushHistory(origin) }
         searchOrigin = nil
+        let sel = textView.selectedRange()
+        if !matchTerms.isEmpty && sel.length > 0 { textView.setSelectedRange(NSRange(location: sel.location, length: 0)) }
+    }
+
+    // MARK: - Search matches
+
+    /// Terms of the search that opened the note; ⌘G / ⇧⌘G step through them.
+    private var matchTerms: [String] = []
+
+    /// Selects the first match of a search hit in the open note and flashes it.
+    private func reveal(_ hit: NoteHit) {
+        guard currentPath == hit.note.relativePath, !hit.terms.isEmpty else { return }
+        matchTerms = hit.terms
+        let find = NSPasteboard(name: .find)
+        find.clearContents()
+        find.setString(hit.terms[0], forType: .string)
+        let text = textView.string
+        let bodyStart = previewMode ? 0 : NoteStore.frontmatterRange(text).map { NSRange($0, in: text).upperBound } ?? 0
+        highlightMatches()
+        jumpToMatch(forward: true, from: bodyStart)
+    }
+
+    /// Washes every occurrence of `matchTerms` in the editor and preview (drawing only;
+    /// the note's text is untouched).
+    private func highlightMatches() {
+        for view in [textView, preview] as [NSTextView] {
+            guard let lm = view.textLayoutManager, let tcm = lm.textContentManager else { continue }
+            lm.removeRenderingAttribute(.backgroundColor, for: tcm.documentRange)
+            let ns = view.string as NSString
+            for term in matchTerms where !term.isEmpty {
+                var from = 0
+                while from < ns.length {
+                    let r = ns.range(of: term, options: [.caseInsensitive, .diacriticInsensitive],
+                                     range: NSRange(location: from, length: ns.length - from))
+                    guard r.location != NSNotFound else { break }
+                    if let start = tcm.location(tcm.documentRange.location, offsetBy: r.location),
+                       let end = tcm.location(start, offsetBy: r.length),
+                       let range = NSTextRange(location: start, end: end) {
+                        lm.addRenderingAttribute(.backgroundColor, value: Palette.notes.withAlphaComponent(0.32), for: range)
+                    }
+                    from = r.upperBound
+                }
+            }
+        }
+    }
+
+    /// The next (or previous) occurrence of `matchTerms` from `start` (default: the
+    /// selection), wrapping around the note.
+    private func jumpToMatch(forward: Bool, from start: Int? = nil) {
+        let view: NSTextView = previewMode ? preview : textView
+        let ns = view.string as NSString
+        guard ns.length > 0, !matchTerms.isEmpty else { return }
+        let sel = view.selectedRange()
+        let origin = min(ns.length, start ?? (forward ? sel.upperBound : sel.location))
+        let opts: NSString.CompareOptions = [.caseInsensitive, .diacriticInsensitive]
+        func find(_ range: NSRange) -> NSRange? {
+            let found = matchTerms.compactMap { term -> NSRange? in
+                let r = ns.range(of: term, options: forward ? opts : opts.union(.backwards), range: range)
+                return r.location == NSNotFound ? nil : r
+            }
+            return forward ? found.min { $0.location < $1.location } : found.max { $0.location < $1.location }
+        }
+        let ahead = forward ? NSRange(location: origin, length: ns.length - origin) : NSRange(location: 0, length: origin)
+        guard let r = find(ahead) ?? find(NSRange(location: 0, length: ns.length)) else { return }
+        view.setSelectedRange(r)
+        view.scrollRangeToVisible(r)
+        if panel.isVisible { view.showFindIndicator(for: r) }
     }
 
     private func pushHistory(_ path: String) {
@@ -344,6 +416,10 @@ final class NotesController: NSObject, NSWindowDelegate, NSTableViewDataSource, 
     private func open(_ note: NoteFile, record: Bool = true) {
         closeActionPanel()
         if currentPath == note.relativePath { return }
+        if !matchTerms.isEmpty {
+            matchTerms = []
+            highlightMatches()
+        }
         if record, let previous = currentPath { pushHistory(previous) }
         flush(force: true)
         current = .file(note)
@@ -396,6 +472,7 @@ final class NotesController: NSObject, NSWindowDelegate, NSTableViewDataSource, 
         UserDefaults.standard.set(on, forKey: Self.previewKey)
         if editorScroll.isFindBarVisible { finderAction(.hideFindInterface) }
         if on { preview.show(textView.string) }
+        if !matchTerms.isEmpty { highlightMatches() }
         previewScroll.isHidden = !on
         editorScroll.isHidden = on || scanError != nil
         updateHeader()
@@ -712,6 +789,7 @@ final class NotesController: NSObject, NSWindowDelegate, NSTableViewDataSource, 
         dirty = true
         textView.restyle()
         if previewMode { preview.show(textView.string) }
+        if !matchTerms.isEmpty { highlightMatches() }
         scheduleSave()
     }
 
@@ -877,6 +955,8 @@ final class NotesController: NSObject, NSWindowDelegate, NSTableViewDataSource, 
                 focusEditor()
             } else if searchFocused && !query.isEmpty {
                 searchField.stringValue = ""
+                matchTerms = []
+                highlightMatches()
                 refilter()
             } else if searchFocused {
                 endSearch()
@@ -929,7 +1009,9 @@ final class NotesController: NSObject, NSWindowDelegate, NSTableViewDataSource, 
             case "e": setPreview(!previewMode); return true
             case "p", "o": focusSearch(); return true
             case "f": findInNote(); return true
-            case "g": finderAction(.nextMatch); return true
+            case "g":
+                if findBarVisible || matchTerms.isEmpty { finderAction(.nextMatch) } else { jumpToMatch(forward: true) }
+                return true
             case "w": hide(); return true
             case "s": flush(force: true); return true
             case "d": if let note = currentNote { togglePin(note) }; return true
@@ -943,7 +1025,9 @@ final class NotesController: NSObject, NSWindowDelegate, NSTableViewDataSource, 
         if mods == [.command, .shift] {
             switch c {
             case "o": openInObsidian(); return true
-            case "g": finderAction(.previousMatch); return true
+            case "g":
+                if findBarVisible || matchTerms.isEmpty { finderAction(.previousMatch) } else { jumpToMatch(forward: false) }
+                return true
             default: break
             }
         }
@@ -1000,7 +1084,7 @@ final class NotesController: NSObject, NSWindowDelegate, NSTableViewDataSource, 
         guard obj.object as? NSTextField === searchField else { return }
         refilter()
         updateFooter()
-        if !query.isEmpty, let first = hits.first { preview(first.note) }
+        if !query.isEmpty, let first = hits.first { preview(first) }
     }
 
     // MARK: - Table
@@ -1024,7 +1108,9 @@ final class NotesController: NSObject, NSWindowDelegate, NSTableViewDataSource, 
 
     func tableViewSelectionDidChange(_ notification: Notification) {
         guard !selectingProgrammatically, table.selectedRow >= 0, table.selectedRow < hits.count else { return }
-        open(hits[table.selectedRow].note)
+        let hit = hits[table.selectedRow]
+        open(hit.note)
+        if !query.isEmpty { reveal(hit) }
     }
 
     #if DEBUG
@@ -1032,8 +1118,12 @@ final class NotesController: NSObject, NSWindowDelegate, NSTableViewDataSource, 
         focusSearch()
         searchField.stringValue = text
         searchField.currentEditor()?.moveToEndOfDocument(nil)
-        refilter()
-        if let first = hits.first { open(first.note) }
+        Task {
+            try? await Task.sleep(for: .milliseconds(300)) // contents load in the background
+            refilter()
+            updateFooter()
+            if let first = hits.first { preview(first) }
+        }
     }
 
     func debugShowShortcuts() { shortcuts.isHidden = false }
@@ -1083,7 +1173,7 @@ final class NotesController: NSObject, NSWindowDelegate, NSTableViewDataSource, 
         searchField.focusRingType = .none
         searchField.font = Theme.sans(14)
         searchField.textColor = Theme.foreground
-        searchField.placeholderAttributedString = NSAttributedString(string: "Search notes", attributes: [
+        searchField.placeholderAttributedString = NSAttributedString(string: "Search titles and text", attributes: [
             .font: Theme.sans(14), .foregroundColor: Theme.mutedForeground.withAlphaComponent(0.7),
         ])
         searchField.delegate = self
@@ -1290,11 +1380,42 @@ final class NoteCellView: NSTableCellView {
 
     func configure(_ hit: NoteHit) {
         pin.isHidden = !hit.pinned
-        title.stringValue = hit.note.title
+        title.attributedStringValue = Self.highlight(hit.note.title, terms: hit.terms, font: Theme.sans(14, 500),
+                                                     strong: Theme.sans(14, 650), color: Theme.foreground)
         let where_ = hit.note.folder.isEmpty ? "—" : hit.note.folder
-        detail.stringValue = hit.snippet ?? (hit.note.isPlaceholder ? "☁︎ " + where_ : where_)
-        detail.textColor = hit.snippet == nil ? Theme.mutedForeground : Theme.foreground.withAlphaComponent(0.75)
-        age.stringValue = NoteStore.shortAge(hit.note.modified, now: Date())
+        if let snippet = hit.snippet {
+            detail.attributedStringValue = Self.highlight(snippet, terms: hit.terms, font: Theme.sans(12), strong: Theme.sans(12, 600),
+                                                          color: Theme.foreground.withAlphaComponent(0.75))
+        } else {
+            detail.attributedStringValue = Self.highlight(hit.note.isPlaceholder ? "☁︎ " + where_ : where_, terms: [],
+                                                          font: Theme.sans(12), strong: Theme.sans(12), color: Theme.mutedForeground)
+        }
+        if hit.matches > 0 && !hit.terms.isEmpty {
+            age.stringValue = "\(hit.matches)×"
+            age.textColor = Palette.notes
+        } else {
+            age.stringValue = NoteStore.shortAge(hit.note.modified, now: Date())
+            age.textColor = Theme.mutedForeground.withAlphaComponent(0.8)
+        }
+    }
+
+    /// `text` with every occurrence of the terms in the notes colour.
+    static func highlight(_ text: String, terms: [String], font: NSFont, strong: NSFont, color: NSColor) -> NSAttributedString {
+        let p = NSMutableParagraphStyle()
+        p.lineBreakMode = .byTruncatingTail
+        let out = NSMutableAttributedString(string: text, attributes: [.font: font, .foregroundColor: color, .paragraphStyle: p])
+        let ns = text as NSString
+        for term in terms where !term.isEmpty {
+            var from = 0
+            while from < ns.length {
+                let r = ns.range(of: term, options: [.caseInsensitive, .diacriticInsensitive],
+                                 range: NSRange(location: from, length: ns.length - from))
+                guard r.location != NSNotFound else { break }
+                out.addAttributes([.font: strong, .foregroundColor: Palette.notes], range: r)
+                from = r.upperBound
+            }
+        }
+        return out
     }
 }
 

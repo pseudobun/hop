@@ -52,7 +52,8 @@ Notes are keyboard-first; ⌘/ shows every shortcut.
 | Notes key | |
 |---|---|
 | ⌥. | show / hide (from anywhere) |
-| ⌘P (or ⌘O) | search notes: typing previews the first match, ↑ ↓ move, ↵ or Tab back to the note |
+| ⌘P (or ⌘O) | search titles and text: title matches first, then notes whose text has every word (phrase and match count rank them). Matches are highlighted, the count shows per note, and opening one jumps to it; ⌘G / ⇧⌘G step through the rest. ↑ ↓ move, ↵ or Tab back to the note |
+| search syntax | `"exact phrase"`, `-word` leaves notes out, `path:Infra` (or `in:`) limits to a folder, `#tag` / `tag:x` matches frontmatter `tags:` or inline tags (nested `#a/b` counts for `#a`) |
 | ⇧↵ in search | new note named after the search (also ↵ when nothing matches) |
 | ⌥⌘↑ / ⌥⌘↓ | previous / next note in the list |
 | ⌘[ / ⌘] | back / forward |
