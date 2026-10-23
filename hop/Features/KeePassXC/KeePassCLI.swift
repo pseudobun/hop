@@ -80,9 +80,10 @@ nonisolated enum KeePassCLI {
 nonisolated enum CredentialVault {
     static let service = "dev.hop.app.keepass"
 
-    static func save(_ password: String, account: String) -> Bool {
+    /// `errSecSuccess`, or why the Keychain refused the password.
+    static func save(_ password: String, account: String) -> OSStatus {
         delete(account: account)
-        let query: [String: Any] = [
+        var query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: account,
@@ -90,7 +91,13 @@ nonisolated enum CredentialVault {
             kSecValueData as String: Data(password.utf8),
             kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly,
         ]
-        return SecItemAdd(query as CFDictionary, nil) == errSecSuccess
+        var status = SecItemAdd(query as CFDictionary, nil)
+        if status != errSecSuccess && status != errSecInteractionNotAllowed {
+            // The file-based login keychain may reject data-protection attributes.
+            query.removeValue(forKey: kSecAttrAccessible as String)
+            status = SecItemAdd(query as CFDictionary, nil)
+        }
+        return status
     }
 
     static func hasPassword(account: String) -> Bool {

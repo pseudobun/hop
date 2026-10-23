@@ -1,4 +1,5 @@
 import AppKit
+import os
 
 /// KeePassXC sub-mode: unlock, then search entries and paste or copy fields.
 /// Works on one database or on all unlocked ones; ⌘D switches. Action shortcuts
@@ -161,7 +162,14 @@ final class KeePassMode: NSObject, Mode {
         context?.setQuery("")
         do {
             try await s.unlock(password: password)
-            if s.database.password == .keychain { _ = CredentialVault.save(password, account: s.account) }
+            if s.database.password == .keychain {
+                let status = CredentialVault.save(password, account: s.account)
+                if status != errSecSuccess {
+                    let reason = SecCopyErrorMessageString(status, nil) as String? ?? "error \(status)"
+                    Log.app.error("keepass: Keychain save failed: \(status) \(reason, privacy: .public)")
+                    return .stayWithHUD("Unlocked, but the Keychain did not keep the password: \(reason)")
+                }
+            }
             return .stay
         } catch let e as KeePassError {
             return .stayWithHUD(e.message)

@@ -1,7 +1,7 @@
 import AppKit
 
-/// One unlocked database, in memory only, until it locks
-/// (inactivity, screen lock, sleep or an explicit lock).
+/// One unlocked database, in memory only, until it is locked by hand, hop quits, or
+/// (with `keepass.autoLock`) inactivity, screen lock or sleep.
 final class KeePassSession {
     enum State { case locked, unlocking, unlocked }
 
@@ -55,11 +55,11 @@ final class KeePassSession {
         try? await unlock(password: password)
     }
 
-    /// Resets the inactivity timer.
+    /// Resets the inactivity timer (only with `keepass.autoLock`).
     func touch() {
         lockTask?.cancel()
         let minutes = keepass.lockAfterMinutes
-        guard minutes >= 0 else { return }
+        guard keepass.autoLock, minutes >= 0 else { return }
         lockTask = Task { [weak self] in
             try? await Task.sleep(for: .seconds(max(minutes, 1) * 60))
             guard !Task.isCancelled else { return }
@@ -85,7 +85,7 @@ final class KeePassSession {
 }
 
 /// All configured databases' sessions, the current selection, and locking on
-/// sleep or screen lock.
+/// sleep or screen lock when `keepass.autoLock` is on.
 final class KeePassManager {
     enum Selection: Equatable { case database(String), all }
 
@@ -99,12 +99,12 @@ final class KeePassManager {
         let ws = NSWorkspace.shared.notificationCenter
         for name in [NSWorkspace.willSleepNotification, NSWorkspace.sessionDidResignActiveNotification] {
             observers.append(ws.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
-                MainActor.assumeIsolated { self?.lockAll() }
+                MainActor.assumeIsolated { self?.autoLockAll() }
             })
         }
         observers.append(DistributedNotificationCenter.default().addObserver(
             forName: .init("com.apple.screenIsLocked"), object: nil, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.lockAll() }
+            MainActor.assumeIsolated { self?.autoLockAll() }
         })
     }
 
@@ -135,4 +135,8 @@ final class KeePassManager {
     }
 
     func lockAll() { sessions.values.forEach { $0.lock() } }
+
+    private func autoLockAll() {
+        if settings.data.keepass.autoLock { lockAll() }
+    }
 }

@@ -117,3 +117,17 @@ struct KeePassCLITests {
                 == ["db-info", "-q", "-k", "/k", "--no-password", "/d.kdbx"])
     }
 }
+
+struct KeePassLockConfigTests {
+    @Test func staysUnlockedUnlessAutoLockIsOn() throws {
+        let decoder = JSONDecoder()
+        decoder.allowsJSON5 = true
+        // Configs written by the old template carry lockAfterMinutes but no autoLock.
+        let old = try decoder.decode(HopConfig.self, from: Data("{ keepass: { lockAfterMinutes: 10 } }".utf8))
+        #expect(!old.keepass.autoLock && old.keepass.lockAfterMinutes == 10)
+        let template = try decoder.decode(HopConfig.self, from: Data(AppSettings.template.utf8))
+        #expect(!template.keepass.autoLock)
+        let on = try decoder.decode(HopConfig.self, from: Data("{ keepass: { autoLock: true } }".utf8))
+        #expect(on.keepass.autoLock)
+    }
+}

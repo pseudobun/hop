@@ -228,7 +228,7 @@ enum CLI {
                 "hyperKey": ["enabled": c.hyperKey.enabled, "quickPressEscape": c.hyperKey.quickPressEscape],
                 "wireguard": ["enabled": c.wireguard.enabled, "showFlags": c.wireguard.showFlags],
                 "keepass": ["enabled": c.keepass.enabled, "databases": c.keepass.allDatabases.map { ["name": $0.label, "path": $0.path, "password": $0.password.rawValue] },
-                            "lockAfterMinutes": c.keepass.lockAfterMinutes, "cliAccess": c.keepass.cliAccess, "favicons": c.keepass.favicons],
+                            "autoLock": c.keepass.autoLock, "lockAfterMinutes": c.keepass.lockAfterMinutes, "cliAccess": c.keepass.cliAccess, "favicons": c.keepass.favicons],
                 "system": ["downloadsFolder": c.system.downloadsFolder],
                 "bookmarks": c.bookmarks.map { ["name": $0.name, "url": $0.url, "aliases": $0.aliases, "icon": $0.icon] },
             ])

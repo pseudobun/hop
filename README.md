@@ -15,7 +15,7 @@ A tiny native macOS launcher. Pure Swift + AppKit, no WebKit. ~3 MB binary, ~15 
 - Caps Lock as Hyper key (⌃⌥⌘⇧), optional tap-for-Escape
 - WireGuard: connect, disconnect, disconnect all (WireGuard.app tunnels)
 - Notes on ⌥. : a floating window over a folder of Markdown files (an Obsidian vault works as is). Search titles and text, live Markdown styling, tasks, `[[links]]` (⌘-click), new notes saved straight into the vault
-- KeePassXC: several databases (⌘D to switch, or search all), paste or copy password / username / TOTP / URL, favicons, pins, folder filter, auto-lock
+- KeePassXC: several databases (⌘D to switch, or search all), paste or copy password / username / TOTP / URL, favicons, pins, folder filter. Stays unlocked until ⌘L or quit (`keepass.autoLock` locks on sleep, screen lock and inactivity)
 - Bookmarks from the config: name, URL, aliases ("hass") and an icon (image file, SF Symbol or emoji); ↵ opens in the default browser
 - Permissions screen: every macOS permission hop needs, with the system prompts (opens on first launch)
 - `hop` CLI for scripts and agents
@@ -40,7 +40,7 @@ KeePassXC master password: never put it in the config. Choose `keepass.password`
 
 | value | where the password comes from |
 |---|---|
-| `keychain` | typed once in hop, kept in the login Keychain, released after Touch ID |
+| `keychain` | typed once in hop, kept in the login Keychain, released after Touch ID (once per hop launch) |
 | `prompt` | typed every time the database unlocks |
 | `command` | stdout of `keepass.passwordCommand`, e.g. `security find-generic-password -w -s hop-keepass` |
 | `none` | database without a password (key file only) |

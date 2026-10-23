@@ -55,7 +55,10 @@ nonisolated struct HopConfig: Decodable, Equatable, Sendable {
         var keyFile = ""
         var password: PasswordSource = .keychain
         var passwordCommand = ""
-        /// Minutes of inactivity before locking; -1 never.
+        /// Lock on sleep, screen lock and after `lockAfterMinutes`; off keeps databases
+        /// unlocked until locked by hand or hop quits.
+        var autoLock = false
+        /// Minutes of inactivity before locking (with `autoLock`); -1 never.
         var lockAfterMinutes = 10
         /// Override the keepassxc-cli path.
         var cli = ""
@@ -169,7 +172,7 @@ nonisolated extension HopConfig.WireGuard {
 }
 
 nonisolated extension HopConfig.KeePass {
-    private enum Keys: String, CodingKey { case enabled, databases, database, keyFile, password, passwordCommand, lockAfterMinutes, cli, cliAccess, favicons }
+    private enum Keys: String, CodingKey { case enabled, databases, database, keyFile, password, passwordCommand, autoLock, lockAfterMinutes, cli, cliAccess, favicons }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: Keys.self), d = Self()
         enabled = try c.value(.enabled, d.enabled)
@@ -178,6 +181,7 @@ nonisolated extension HopConfig.KeePass {
         keyFile = try c.value(.keyFile, d.keyFile)
         password = try c.value(.password, d.password)
         passwordCommand = try c.value(.passwordCommand, d.passwordCommand)
+        autoLock = try c.value(.autoLock, d.autoLock)
         lockAfterMinutes = try c.value(.lockAfterMinutes, d.lockAfterMinutes)
         cli = try c.value(.cli, d.cli)
         cliAccess = try c.value(.cliAccess, d.cliAccess)
@@ -384,7 +388,10 @@ final class AppSettings {
         //   "command"  run passwordCommand and read the password from its output,
         //              e.g. "security find-generic-password -w -s hop-keepass"
         //   "none"     the database has no password (key file only)
-        // Lock after this many minutes without use; -1 never
+        // Lock again on sleep, when the screen locks and after lockAfterMinutes without use.
+        // Off: an unlocked database stays open until you lock it (⌘L) or quit hop.
+        autoLock: false,
+        // With autoLock: minutes without use before locking; -1 only on sleep / screen lock
         lockAfterMinutes: 10,
         // Path to keepassxc-cli if it is not in KeePassXC.app or Homebrew
         cli: "",
