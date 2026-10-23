@@ -1,7 +1,15 @@
 import Foundation
 
+/// Data rates; Foundation has none. Base unit: bits per second.
+nonisolated final class UnitDataRate: Dimension, @unchecked Sendable {
+    static let bitsPerSecond = UnitDataRate(symbol: "bit/s", converter: UnitConverterLinear(coefficient: 1))
+    override class func baseUnit() -> Self { bitsPerSecond as! Self }
+}
+
 /// Natural-language unit conversion: "1 sq mile = km2", "1 m2 to ft2", "734h to mins",
-/// "how many minutes in 2 days", "100 f in c", "1.5 GiB as MB".
+/// "how many minutes in 2 days", "100 f in c", "1.5 GiB as MB", "1h 30min to min",
+/// "half an hour in s", "koliko minut je 2 uri". Without a target ("2 min =", "5 km")
+/// the usual counterpart unit is used; a target typed in part ("to sec", "to mil") is completed.
 nonisolated enum Converter {
     struct UnitInfo {
         let unit: Dimension
@@ -16,6 +24,8 @@ nonisolated enum Converter {
         let to: String
         let fromName: String
         let toName: String
+        /// No target was typed; `to` is the usual counterpart of `from`.
+        var implicitTarget = false
     }
 
     // MARK: - Unit table
@@ -37,7 +47,7 @@ nonisolated enum Converter {
     private static let dimensions: [Dimension.Type] = [
         UnitLength.self, UnitArea.self, UnitVolume.self, UnitMass.self, UnitDuration.self, UnitSpeed.self,
         UnitTemperature.self, UnitPressure.self, UnitEnergy.self, UnitPower.self, UnitAngle.self,
-        UnitFrequency.self, UnitFuelEfficiency.self, UnitInformationStorage.self,
+        UnitFrequency.self, UnitFuelEfficiency.self, UnitInformationStorage.self, UnitDataRate.self,
     ]
 
     static func sameDimension(_ a: Dimension, _ b: Dimension) -> Bool {
@@ -88,17 +98,17 @@ nonisolated enum Converter {
 
         return [
             // Length
-            (UnitLength.meters, "m", "Meters", ["m", "meter", "meters", "metre", "metres", "metrov", "metra", "metri"]),
-            (UnitLength.kilometers, "km", "Kilometers", ["km", "kms", "kilometer", "kilometers", "kilometre", "kilometres", "kilometrov", "kilometra", "kilometri"]),
-            (UnitLength.centimeters, "cm", "Centimeters", ["cm", "centimeter", "centimeters", "centimetre", "centimetres", "centimetrov"]),
-            (UnitLength.millimeters, "mm", "Millimeters", ["mm", "millimeter", "millimeters", "millimetre", "millimetres", "milimeter", "milimetrov"]),
+            (UnitLength.meters, "m", "Meters", ["m", "meter", "meters", "metre", "metres", "metrov", "metra", "metri", "metrih", "metre"]),
+            (UnitLength.kilometers, "km", "Kilometers", ["km", "kms", "kilometer", "kilometers", "kilometre", "kilometres", "kilometrov", "kilometra", "kilometri", "kilometrih", "kilometre"]),
+            (UnitLength.centimeters, "cm", "Centimeters", ["cm", "centimeter", "centimeters", "centimetre", "centimetres", "centimetrov", "centimetrih"]),
+            (UnitLength.millimeters, "mm", "Millimeters", ["mm", "millimeter", "millimeters", "millimetre", "millimetres", "milimeter", "milimetrov", "milimetrih", "milimetre"]),
             (UnitLength.decimeters, "dm", "Decimeters", ["dm", "decimeter", "decimeters", "decimetre"]),
             (UnitLength.micrometers, "µm", "Micrometers", ["µm", "um", "micrometer", "micrometers", "micron", "microns"]),
             (UnitLength.nanometers, "nm", "Nanometers", ["nm", "nanometer", "nanometers"]),
-            (UnitLength.miles, "mi", "Miles", ["mi", "mile", "miles", "milja", "milj"]),
+            (UnitLength.miles, "mi", "Miles", ["mi", "mile", "miles", "milja", "milj", "milje", "miljah"]),
             (UnitLength.yards, "yd", "Yards", ["yd", "yds", "yard", "yards"]),
             (UnitLength.feet, "ft", "Feet", ["ft", "foot", "feet", "'"]),
-            (UnitLength.inches, "in", "Inches", ["in", "inch", "inches", "\"", "palec", "palcev"]),
+            (UnitLength.inches, "in", "Inches", ["in", "inch", "inches", "\"", "palec", "palcev", "palcih", "palce"]),
             (UnitLength.nauticalMiles, "nmi", "Nautical Miles", ["nmi", "nautical mile", "nautical miles", "nm mile"]),
             (UnitLength.lightyears, "ly", "Light-years", ["ly", "light year", "light years", "lightyear", "lightyears", "light-year", "light-years"]),
             (UnitLength.astronomicalUnits, "au", "Astronomical Units", ["au", "astronomical unit", "astronomical units"]),
@@ -118,10 +128,10 @@ nonisolated enum Converter {
             (squareNauticalMile, "nmi²", "Square Nautical Miles", ["nmi2", "square nautical mile", "square nautical miles"]),
 
             // Volume
-            (UnitVolume.liters, "L", "Liters", ["l", "liter", "liters", "litre", "litres", "litrov", "litra", "litri"]),
-            (UnitVolume.milliliters, "mL", "Milliliters", ["ml", "milliliter", "milliliters", "millilitre", "millilitres", "mililiter"]),
+            (UnitVolume.liters, "L", "Liters", ["l", "liter", "liters", "litre", "litres", "litrov", "litra", "litri", "litrih", "litre"]),
+            (UnitVolume.milliliters, "mL", "Milliliters", ["ml", "milliliter", "milliliters", "millilitre", "millilitres", "mililiter", "mililitrov", "mililitrih", "mililitre"]),
             (UnitVolume.centiliters, "cL", "Centiliters", ["cl", "centiliter", "centiliters", "centilitre"]),
-            (UnitVolume.deciliters, "dL", "Deciliters", ["dl", "deciliter", "deciliters", "decilitre"]),
+            (UnitVolume.deciliters, "dL", "Deciliters", ["dl", "deciliter", "deciliters", "decilitre", "decilitrov", "decilitrih"]),
             (UnitVolume.cubicMeters, "m³", "Cubic Meters", ["m3", "cubic meter", "cubic meters", "cubic metre", "cubic metres", "kubik", "kubikov"]),
             (UnitVolume.cubicCentimeters, "cm³", "Cubic Centimeters", ["cm3", "cc", "ccm", "cubic centimeter", "cubic centimeters"]),
             (UnitVolume.cubicMillimeters, "mm³", "Cubic Millimeters", ["mm3", "cubic millimeter", "cubic millimeters"]),
@@ -139,40 +149,40 @@ nonisolated enum Converter {
             (teaspoon, "tsp", "Teaspoons", ["tsp", "teaspoon", "teaspoons"]),
 
             // Mass
-            (UnitMass.kilograms, "kg", "Kilograms", ["kg", "kgs", "kilo", "kilos", "kilogram", "kilograms", "kilogramov"]),
-            (UnitMass.grams, "g", "Grams", ["g", "gr", "gram", "grams", "gramov"]),
+            (UnitMass.kilograms, "kg", "Kilograms", ["kg", "kgs", "kilo", "kilos", "kilogram", "kilograms", "kilogramov", "kilogramih", "kilograme", "kila", "kile", "kil"]),
+            (UnitMass.grams, "g", "Grams", ["g", "gr", "gram", "grams", "gramov", "gramih", "grame"]),
             (UnitMass.milligrams, "mg", "Milligrams", ["mg", "milligram", "milligrams", "miligram"]),
             (UnitMass.micrograms, "µg", "Micrograms", ["µg", "ug", "mcg", "microgram", "micrograms"]),
             (UnitMass.metricTons, "t", "Tonnes", ["t", "tonne", "tonnes", "metric ton", "metric tons", "tona", "ton metric"]),
             (shortTon, "ton", "US Tons", ["ton", "tons", "short ton", "short tons", "us ton", "us tons"]),
-            (pound, "lb", "Pounds", ["lb", "lbs", "pound", "pounds", "funt", "funtov"]),
+            (pound, "lb", "Pounds", ["lb", "lbs", "pound", "pounds", "funt", "funtov", "funte", "funtih", "funta"]),
             (ounce, "oz", "Ounces", ["oz", "ounce", "ounces", "unča"]),
             (stone, "st", "Stones", ["st", "stone", "stones"]),
             (UnitMass.carats, "ct", "Carats", ["ct", "carat", "carats", "karat"]),
             (longTon, "long ton", "Long Tons", ["long ton", "long tons", "uk ton", "uk tons", "imperial ton"]),
 
             // Time
-            (UnitDuration.seconds, "s", "Seconds", ["s", "sec", "secs", "second", "seconds", "sekunda", "sekunde", "sekund", "sek"]),
-            (UnitDuration.minutes, "min", "Minutes", ["min", "mins", "minute", "minutes", "minuta", "minut"]),
-            (UnitDuration.hours, "h", "Hours", ["h", "hr", "hrs", "hour", "hours", "ura", "ure", "ur", "uri"]),
+            (UnitDuration.seconds, "s", "Seconds", ["s", "sec", "secs", "second", "seconds", "sekunda", "sekunde", "sekund", "sek", "sekundah"]),
+            (UnitDuration.minutes, "min", "Minutes", ["min", "mins", "minute", "minutes", "minuta", "minut", "minutah"]),
+            (UnitDuration.hours, "h", "Hours", ["h", "hr", "hrs", "hour", "hours", "ura", "ure", "ur", "uri", "urah", "uro"]),
             (UnitDuration.milliseconds, "ms", "Milliseconds", ["ms", "msec", "millisecond", "milliseconds", "milisekund"]),
             (UnitDuration.microseconds, "µs", "Microseconds", ["µs", "us", "microsecond", "microseconds"]),
             (UnitDuration.nanoseconds, "ns", "Nanoseconds", ["ns", "nanosecond", "nanoseconds"]),
-            (day, "d", "Days", ["d", "day", "days", "dan", "dni", "dnevi", "dneva", "dnevov"]),
-            (week, "wk", "Weeks", ["w", "wk", "wks", "week", "weeks", "teden", "tedna", "tedni", "tednov"]),
-            (month, "mo", "Months", ["mo", "mos", "month", "months", "mesec", "meseca", "meseci", "mesecev"]),
-            (year, "yr", "Years", ["y", "yr", "yrs", "year", "years", "leto", "leta", "let"]),
+            (day, "d", "Days", ["d", "day", "days", "dan", "dni", "dnevi", "dneva", "dnevov", "dneh", "dnevih"]),
+            (week, "wk", "Weeks", ["w", "wk", "wks", "week", "weeks", "teden", "tedna", "tedni", "tednov", "tednih", "tedne"]),
+            (month, "mo", "Months", ["mo", "mos", "month", "months", "mesec", "meseca", "meseci", "mesecev", "mesecih", "mesece"]),
+            (year, "yr", "Years", ["y", "yr", "yrs", "year", "years", "leto", "leta", "let", "letih"]),
 
             // Speed
-            (kmh, "km/h", "Kilometers per Hour", ["km/h", "kmh", "kph", "kmph", "km per hour", "kilometers per hour", "kilometres per hour"]),
+            (kmh, "km/h", "Kilometers per Hour", ["km/h", "kmh", "kph", "kmph", "km per hour", "kilometers per hour", "kilometres per hour", "km/uro", "kilometrov na uro"]),
             (UnitSpeed.metersPerSecond, "m/s", "Meters per Second", ["m/s", "mps", "meters per second", "metres per second"]),
             (UnitSpeed.milesPerHour, "mph", "Miles per Hour", ["mph", "mi/h", "miles per hour", "mile per hour"]),
             (knot, "kn", "Knots", ["kn", "kt", "kts", "knot", "knots", "vozel", "vozlov"]),
             (custom(UnitSpeed.self, "ft/s", 0.3048), "ft/s", "Feet per Second", ["ft/s", "fps", "feet per second"]),
 
             // Temperature
-            (UnitTemperature.celsius, "°C", "Celsius", ["c", "°c", "celsius", "degc", "degrees celsius", "stopinj"]),
-            (UnitTemperature.fahrenheit, "°F", "Fahrenheit", ["f", "°f", "fahrenheit", "degf", "degrees fahrenheit"]),
+            (UnitTemperature.celsius, "°C", "Celsius", ["c", "°c", "celsius", "degc", "degrees celsius", "degree celsius", "degrees c", "degree c", "deg c", "centigrade", "celzija", "stopinj", "stopinj celzija"]),
+            (UnitTemperature.fahrenheit, "°F", "Fahrenheit", ["f", "°f", "fahrenheit", "degf", "degrees fahrenheit", "degree fahrenheit", "degrees f", "degree f", "deg f", "fahrenheita", "stopinj fahrenheita"]),
             (UnitTemperature.kelvin, "K", "Kelvin", ["k", "kelvin", "kelvins"]),
 
             // Pressure
@@ -248,25 +258,48 @@ nonisolated enum Converter {
             (S.megabits, "Mbit", "Megabits", ["Mb", "mbit", "mbits", "megabit", "megabits"]),
             (S.gigabits, "Gbit", "Gigabits", ["Gb", "gbit", "gbits", "gigabit", "gigabits"]),
             (S.terabits, "Tbit", "Terabits", ["Tb", "tbit", "terabit", "terabits"]),
+            // Rates: lower-case "mbps" is megabits, as people write it; "mb/s" is megabytes, like "mb".
+            (UnitDataRate.bitsPerSecond, "bit/s", "Bits per Second", ["bit/s", "bps", "bits per second"]),
+            (rate(1e3), "kbit/s", "Kilobits per Second", ["kbps", "kbit/s", "Kb/s", "kilobits per second"]),
+            (rate(1e6), "Mbit/s", "Megabits per Second", ["Mbps", "mbps", "Mb/s", "mbit/s", "megabits per second"]),
+            (rate(1e9), "Gbit/s", "Gigabits per Second", ["Gbps", "gbps", "Gb/s", "gbit/s", "gigabits per second"]),
+            (rate(8), "B/s", "Bytes per Second", ["B/s", "Bps", "bytes per second"]),
+            (rate(8e3), "kB/s", "Kilobytes per Second", ["kB/s", "KB/s", "kb/s", "kBps", "kilobytes per second"]),
+            (rate(8e6), "MB/s", "Megabytes per Second", ["MB/s", "MBps", "mb/s", "megabytes per second"]),
+            (rate(8e9), "GB/s", "Gigabytes per Second", ["GB/s", "GBps", "gb/s", "gigabytes per second"]),
+            (rate(8 * 1_048_576), "MiB/s", "Mebibytes per Second", ["MiB/s", "mib/s"]),
         ]
     }
+
+    private static func rate(_ bitsPerSecond: Double) -> UnitDataRate { custom(UnitDataRate.self, "", bitsPerSecond) }
 
     private struct Tables {
         var exact: [String: UnitInfo] = [:] // case-sensitive (data units)
         var folded: [String: UnitInfo] = [:] // lower-cased
+        var bySymbol: [String: UnitInfo] = [:]
+        /// Folded aliases in table order, for completing a target typed in part.
+        var aliases: [(alias: String, info: UnitInfo)] = []
     }
 
     nonisolated(unsafe) private static let tables: Tables = {
         var t = Tables()
+        func fold(_ alias: String, _ info: UnitInfo) {
+            let key = normalize(alias)
+            guard t.folded[key] == nil else { return }
+            t.folded[key] = info
+            t.aliases.append((key, info))
+        }
         for (unit, symbol, name, aliases) in entries() {
             let info = UnitInfo(unit: unit, symbol: symbol, name: name)
-            for a in aliases { t.folded[normalize(a)] = t.folded[normalize(a)] ?? info }
+            t.bySymbol[symbol] = t.bySymbol[symbol] ?? info
+            for a in aliases { fold(a, info) }
         }
         for (unit, symbol, name, aliases) in dataEntries() {
             let info = UnitInfo(unit: unit, symbol: symbol, name: name)
+            t.bySymbol[symbol] = t.bySymbol[symbol] ?? info
             for a in aliases {
                 if a.count <= 4, a != a.lowercased() { t.exact[a] = info } // MB, Mb, KiB
-                else { t.folded[normalize(a)] = t.folded[normalize(a)] ?? info }
+                else { fold(a, info) }
             }
         }
         return t
@@ -307,10 +340,68 @@ nonisolated enum Converter {
         return nil
     }
 
+    /// A unit by its display symbol ("km", "°C", "MB/s").
+    static func unit(symbol: String) -> UnitInfo? { tables.bySymbol[symbol] }
+
+    /// The unit you most likely want when none is typed ("2 min =", "5 km", "30 c to").
+    static let defaultTargets: [String: String] = [
+        // Length
+        "m": "ft", "km": "mi", "cm": "in", "mm": "in", "dm": "cm", "µm": "mm", "nm": "µm",
+        "mi": "km", "yd": "m", "ft": "m", "in": "cm", "nmi": "km", "ly": "km", "au": "km",
+        // Area
+        "m²": "ft²", "km²": "mi²", "cm²": "in²", "mm²": "cm²", "mi²": "km²", "ft²": "m²", "in²": "cm²",
+        "yd²": "m²", "ha": "ac", "ac": "ha", "a": "m²", "nmi²": "km²",
+        // Volume
+        "L": "gal", "mL": "fl oz", "cL": "fl oz", "dL": "cup", "m³": "L", "cm³": "mL", "mm³": "mL", "km³": "m³",
+        "ft³": "L", "in³": "cm³", "yd³": "m³", "gal": "L", "imp gal": "L", "qt": "L", "pt": "mL", "cup": "mL",
+        "fl oz": "mL", "tbsp": "mL", "tsp": "mL",
+        // Mass
+        "kg": "lb", "g": "oz", "mg": "g", "µg": "mg", "t": "ton", "ton": "t", "long ton": "t", "lb": "kg",
+        "oz": "g", "st": "kg", "ct": "g",
+        // Time
+        "s": "min", "min": "s", "h": "min", "ms": "s", "µs": "ms", "ns": "µs", "d": "h", "wk": "d", "mo": "d", "yr": "d",
+        // Speed
+        "km/h": "mph", "m/s": "km/h", "mph": "km/h", "kn": "km/h", "ft/s": "m/s",
+        // Temperature
+        "°C": "°F", "°F": "°C", "K": "°C",
+        // Pressure
+        "Pa": "psi", "hPa": "inHg", "kPa": "psi", "MPa": "psi", "bar": "psi", "mbar": "inHg", "psi": "bar",
+        "mmHg": "kPa", "inHg": "hPa", "atm": "bar", "Torr": "kPa",
+        // Energy
+        "J": "cal", "kJ": "kcal", "cal": "J", "kcal": "kJ", "kWh": "MJ", "Wh": "kJ", "MJ": "kWh", "BTU": "kJ", "eV": "J",
+        // Power
+        "W": "hp", "kW": "hp", "MW": "kW", "hp": "kW", "PS": "kW",
+        // Angle
+        "°": "rad", "rad": "°", "grad": "°", "rev": "°", "′": "°", "″": "′",
+        // Frequency
+        "Hz": "rpm", "kHz": "Hz", "MHz": "kHz", "GHz": "MHz", "rpm": "Hz",
+        // Fuel economy
+        "L/100km": "mpg", "mpg": "L/100km", "mpg (imp)": "L/100km", "km/L": "L/100km",
+        // Data
+        "B": "bit", "bit": "B", "kB": "KiB", "MB": "MiB", "GB": "GiB", "TB": "TiB", "PB": "TB",
+        "KiB": "kB", "MiB": "MB", "GiB": "GB", "TiB": "TB", "kbit": "kB", "Mbit": "MB", "Gbit": "GB", "Tbit": "TB",
+        // Data rate
+        "bit/s": "B/s", "kbit/s": "kB/s", "Mbit/s": "MB/s", "Gbit/s": "MB/s", "B/s": "bit/s", "kB/s": "kbit/s",
+        "MB/s": "Mbit/s", "GB/s": "Gbit/s", "MiB/s": "Mbit/s",
+    ]
+
+    /// A target typed in part, in the source's dimension: "sec" → seconds, "mil" → miles from km.
+    static func completion(_ raw: String, like from: UnitInfo) -> UnitInfo? {
+        let key = normalize(raw)
+        guard key.count >= 2 else { return nil }
+        return tables.aliases
+            .filter { $0.alias.hasPrefix(key) && sameDimension($0.info.unit, from.unit) && $0.info.symbol != from.symbol }
+            .min { $0.alias.count < $1.alias.count }?.info
+    }
+
     // MARK: - Parsing
 
     private static let separatorWords: Set<String> = ["to", "in", "into", "as", "v", "na", "->", "→", "=", "=>"]
     private static let separatorSymbols = ["=>", "->", "→", "="]
+    private static let questionPrefixes = [
+        "convert ", "pretvori ", "what is ", "what's ", "whats ", "what are ", "how much is ", "how much are ",
+        "koliko je ", "koliko so ",
+    ]
 
     /// Every (quantity, target) split, left to right. Word separators split only between whole
     /// words, so "12 in to cm" also tries "12 in" | "cm" after "12" | "to cm" fails.
@@ -332,32 +423,65 @@ nonisolated enum Converter {
     /// Parses and converts; nil when the input isn't a conversion.
     static func convert(_ input: String) -> Conversion? {
         var q = input.trimmingCharacters(in: .whitespaces)
-        guard q.count >= 3, q.count < 120, q.contains(where: \.isLetter) || q.contains("°") else { return nil }
-        for prefix in ["convert ", "pretvori ", "what is ", "how much is ", "koliko je "] where q.lowercased().hasPrefix(prefix) {
-            q = String(q.dropFirst(prefix.count))
+        while q.hasSuffix("?") { q.removeLast() }
+        guard q.count >= 2, q.count < 120,
+              q.contains(where: \.isLetter) || q.contains("°") || q.contains("'") || q.contains("\"")
+        else { return nil }
+        var stripped = true
+        while stripped {
+            stripped = false
+            for prefix in questionPrefixes where q.lowercased().hasPrefix(prefix) {
+                q = String(q.dropFirst(prefix.count))
+                stripped = true
+            }
         }
-        // "how many minutes in 2 days" / "koliko minut je 2 dni"
-        if let m = q.firstMatch(of: /(?i)^how many\s+(.+?)\s+(?:are\s+)?in\s+(?:a\s+|an\s+|one\s+)?(.+)$/) {
+        // "how many minutes in 2 days", "how many cm is 5 ft", "koliko minut je 2 uri", "koliko sekund ima dan"
+        if let m = q.firstMatch(of: /(?i)^how (?:many|much)\s+(.+?)\s+(?:are there in|are in|is in|is there in|in|is|are|make|makes)\s+(.+)$/)
+            ?? q.firstMatch(of: /(?i)^koliko\s+(.+?)\s+(?:je v|je|ima|imajo|gre v|v)\s+(.+)$/) {
             return pair(String(m.2), String(m.1))
         }
         for (left, right) in splits(q) {
             if let c = pair(left, right) { return c }
         }
+        // No target: "2 min", "2 min =", "2 min to".
+        for quantity in [q, droppingTrailingSeparator(q)].compactMap(\.self) {
+            if let (value, from) = parseQuantity(quantity, requireNumber: true),
+               let symbol = defaultTargets[from.symbol], let to = unit(symbol: symbol) {
+                return make(value, from, to, implicit: true)
+            }
+        }
         return nil
     }
 
-    private static func pair(_ quantity: String, _ target: String) -> Conversion? {
-        guard let (value, from) = parseQuantity(quantity), let to = unit(target),
-              sameDimension(from.unit, to.unit), from.symbol != to.symbol || from.name != to.name
-        else { return nil }
-        let result = Measurement(value: value, unit: from.unit).converted(to: to.unit).value
-        guard result.isFinite else { return nil }
-        return Conversion(value: value, result: result, from: from.symbol, to: to.symbol, fromName: from.name, toName: to.name)
+    private static func droppingTrailingSeparator(_ q: String) -> String? {
+        let t = q.trimmingCharacters(in: .whitespaces)
+        for symbol in separatorSymbols where t.hasSuffix(symbol) { return String(t.dropLast(symbol.count)) }
+        let words = t.split(whereSeparator: \.isWhitespace)
+        guard words.count >= 2, let last = words.last, separatorWords.contains(last.lowercased()) else { return nil }
+        return words.dropLast().joined(separator: " ")
     }
 
-    /// "734h", "1 sq mile", "2*3 km", "km" (= 1 km).
-    static func parseQuantity(_ raw: String) -> (Double, UnitInfo)? {
-        let s = raw.trimmingCharacters(in: .whitespaces)
+    private static func pair(_ quantity: String, _ target: String) -> Conversion? {
+        let typed = target.trimmingCharacters(in: .whitespaces)
+        guard !typed.isEmpty, let (value, from) = parseQuantity(quantity) else { return nil }
+        let exact = unit(typed).flatMap { sameDimension($0.unit, from.unit) ? $0 : nil }
+        guard let to = exact ?? completion(typed, like: from) else { return nil }
+        return make(value, from, to, implicit: false)
+    }
+
+    private static func make(_ value: Double, _ from: UnitInfo, _ to: UnitInfo, implicit: Bool) -> Conversion? {
+        guard sameDimension(from.unit, to.unit), from.symbol != to.symbol || from.name != to.name else { return nil }
+        let result = Measurement(value: value, unit: from.unit).converted(to: to.unit).value
+        guard result.isFinite else { return nil }
+        return Conversion(value: value, result: result, from: from.symbol, to: to.symbol, fromName: from.name,
+                          toName: to.name, implicitTarget: implicit)
+    }
+
+    /// "734h", "1 sq mile", "2*3 km", "1e3 m", "1.5k km", "half an hour", "1h 30min", "km" (= 1 km,
+    /// unless `requireNumber`).
+    static func parseQuantity(_ raw: String, requireNumber: Bool = false) -> (Double, UnitInfo)? {
+        let s = digitsForWords(raw.trimmingCharacters(in: .whitespaces))
+        if let compound = parseCompound(s) { return compound }
         let chars = Array(s)
         for i in 0..<chars.count {
             // A unit starts at the beginning, after a space, or right after a digit / ')' / '.'.
@@ -368,10 +492,84 @@ nonisolated enum Converter {
             let suffix = String(chars[i...])
             guard let u = unit(suffix) else { continue }
             let prefix = String(chars[..<i]).trimmingCharacters(in: .whitespaces)
-            if prefix.isEmpty { return (1, u) }
-            if let v = try? Calculator.evaluate(prefix) { return (NSDecimalNumber(decimal: v).doubleValue, u) }
+            if prefix.isEmpty {
+                if requireNumber { continue }
+                return (1, u)
+            }
+            if let v = number(prefix) { return (v, u) }
         }
         return nil
+    }
+
+    /// An expression ("2*3", "1/2", "1,5"), scientific notation ("1e3") or a k / M multiple ("1.5k").
+    static func number(_ text: String) -> Double? {
+        if let v = try? Calculator.evaluate(text) { return NSDecimalNumber(decimal: v).doubleValue }
+        let t = text.replacingOccurrences(of: ",", with: ".")
+        if let v = Double(t), v.isFinite { return v }
+        for (suffix, factor) in [("k", 1e3), ("K", 1e3), ("M", 1e6)] where t.hasSuffix(suffix) {
+            if let v = Double(t.dropLast()), v.isFinite { return v * factor }
+        }
+        return nil
+    }
+
+    /// Several parts of one dimension, summed into the first part's unit: "1h 30min", "5 ft 11 in",
+    /// "5'11\"", "2 hours and 30 minutes".
+    static func parseCompound(_ raw: String) -> (Double, UnitInfo)? {
+        let s = raw.replacingOccurrences(of: " and ", with: " ")
+        let parts = s.matches(of: /(\d+(?:[.,]\d+)?)\s*([^\d\s][^\d]*?)\s*(?=\d|$)/)
+        guard parts.count >= 2,
+              s.replacing(/(\d+(?:[.,]\d+)?)\s*([^\d\s][^\d]*?)\s*(?=\d|$)/, with: "").allSatisfy(\.isWhitespace)
+        else { return nil }
+        var total = 0.0
+        var first: UnitInfo?
+        for part in parts {
+            guard let v = Double(part.1.replacingOccurrences(of: ",", with: ".")),
+                  let u = unit(String(part.2).trimmingCharacters(in: .whitespaces).trimmingCharacters(in: [","]))
+            else { return nil }
+            if let f = first {
+                guard sameDimension(f.unit, u.unit) else { return nil }
+            } else {
+                first = u
+            }
+            total += Measurement(value: v, unit: u.unit).converted(to: first!.unit).value
+        }
+        return first.map { (total, $0) }
+    }
+
+    private static let numberWords: [String: String] = [
+        "zero": "0", "one": "1", "two": "2", "three": "3", "four": "4", "five": "5", "six": "6", "seven": "7",
+        "eight": "8", "nine": "9", "ten": "10", "eleven": "11", "twelve": "12", "fifteen": "15", "twenty": "20",
+        "thirty": "30", "forty": "40", "fifty": "50", "sixty": "60", "hundred": "100", "thousand": "1000",
+        "dozen": "12", "half": "0.5", "quarter": "0.25",
+        "en": "1", "ena": "1", "eno": "1", "enega": "1", "dva": "2", "dve": "2", "tri": "3", "štiri": "4",
+        "pet": "5", "šest": "6", "sedem": "7", "osem": "8", "devet": "9", "deset": "10", "pol": "0.5", "četrt": "0.25",
+    ]
+
+    /// "a day", "an hour", "half an hour", "two weeks", "pol ure" → "1 day", "0.5 hour", …
+    static func digitsForWords(_ s: String) -> String {
+        let words = s.split(whereSeparator: \.isWhitespace).map(String.init)
+        guard words.count >= 2 else { return s }
+        var out: [String] = []
+        var i = 0
+        while i < words.count {
+            let w = words[i].lowercased()
+            let hasNext = i + 1 < words.count
+            if hasNext, let n = numberWords[w] {
+                out.append(n)
+                i += 1
+                // "half an hour", "a quarter of an hour"
+                while i < words.count - 1, ["a", "an", "of"].contains(words[i].lowercased()) { i += 1 }
+                continue
+            }
+            if i == 0, hasNext, w == "a" || w == "an" {
+                if numberWords[words[1].lowercased()] == nil { out.append("1") }
+                i += 1
+                continue
+            }
+            out.append(words[i])
+            i += 1
+        }
+        return out.joined(separator: " ")
     }
 
     // MARK: - Formatting

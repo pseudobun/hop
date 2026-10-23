@@ -90,10 +90,11 @@ final class RootMode: Mode {
         let results = order.map { decorated($0) }
         var sections: [ResultSection] = []
         let lower = query.lowercased()
-        if let c = Converter.convert(query) {
+        let startsATitle = results.contains { $0.title.lowercased().hasPrefix(lower) }
+        // A conversion with no typed target ("2 min") must not push aside an app that starts that way.
+        if let c = Converter.convert(query), !(c.implicitTarget && startsATitle) {
             sections.append(ResultSection(title: "Conversion", items: [conversionItem(c)]))
-        } else if let value = Calculator.evaluateIfExpression(query),
-                  !results.contains(where: { $0.title.lowercased().hasPrefix(lower) }) {
+        } else if let value = Calculator.evaluateIfExpression(query), !startsATitle {
             sections.append(ResultSection(title: "Calculator", items: [calculatorItem(query, value)]))
         }
         sections.append(ResultSection(title: "Results", items: results))

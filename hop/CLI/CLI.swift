@@ -45,7 +45,7 @@ enum CLI {
           apps [query] [--json]               List apps, ranked like the launcher
           open <query>                        Open the best-matching app
           calc <expression>                   Evaluate an expression
-          convert <query> [--json]            Convert units: "734h to min", "1 sq mile = km2"
+          convert <query> [--json]            Convert units: "734h to min", "1 sq mile = km2", "2 min ="
           uninstall <app> [--yes] [--json]    Remove an app and its ~/Library leftovers
           downloads clear [--yes] [--json]    Move everything in Downloads to the Trash
           trash count | empty [--yes]         Count or empty the Trash

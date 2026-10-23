@@ -9,7 +9,7 @@ A tiny native macOS launcher. Pure Swift + AppKit, no WebKit. ~3 MB binary, ~15 
 ## Features
 
 - App launcher on ⌘Space with frecency ranking (Raycast-compatible scorer)
-- Inline calculator
+- Inline calculator and unit conversion in plain language: "5 km to mi", "how many cm is 5 ft", "1h 30min in min", "half an hour in s", "100 mbps to MB/s", "koliko minut je 2 uri". Leave the target out ("2 min =", "30c") for the usual counterpart unit, or type part of it ("to sec")
 - Uninstall app (with `~/Library` leftovers, `brew uninstall --cask` when it applies), Clear Downloads, Empty Trash
 - Kill Process: search running processes, quit, force kill or kill as administrator
 - Caps Lock as Hyper key (⌃⌥⌘⇧), optional tap-for-Escape
