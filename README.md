@@ -14,7 +14,7 @@ A tiny native macOS launcher. Pure Swift + AppKit, no WebKit. ~3 MB binary, ~15 
 - Kill Process: search running processes, quit, force kill or kill as administrator
 - Caps Lock as Hyper key (⌃⌥⌘⇧), optional tap-for-Escape
 - WireGuard: connect, disconnect, disconnect all (WireGuard.app tunnels)
-- Notes on ⌥. : a floating window over a folder of Markdown files (an Obsidian vault works as is). Search titles and text, live Markdown styling, tasks, `[[links]]` (⌘-click), new notes saved straight into the vault
+- Notes on ⌥. : a keyboard-first floating window over a folder of Markdown files (an Obsidian vault works as is). Search titles and text, live Markdown styling, ⌘E preview, tasks, `[[links]]`, back / forward, new notes saved straight into the vault
 - KeePassXC: several databases (⌘D to switch, or search all), paste or copy password / username / TOTP / URL, favicons, pins, folder filter. Stays unlocked until ⌘L or quit (`keepass.autoLock` locks on sleep, screen lock and inactivity)
 - Bookmarks from the config: name, URL, aliases ("hass") and an icon (image file, SF Symbol or emoji); ↵ opens in the default browser
 - Permissions screen: every macOS permission hop needs, with the system prompts (opens on first launch)
@@ -47,13 +47,23 @@ KeePassXC master password: never put it in the config. Choose `keepass.password`
 
 Notes are plain `.md` files in `notes.folder`; hop keeps no copy. ⌘N starts a note in `notes.newNoteFolder` from `notes.template` (`{{title}}`, `{{date}}`, `{{time}}`). It gets its file name from its title, or from its first line. With `notes.bumpUpdated`, saving an edit sets an existing `updated:` frontmatter date to today. If a file changed elsewhere while it had unsaved edits in hop, the other version is kept next to it as `<name> (conflict).md`.
 
+Notes are keyboard-first; ⌘/ shows every shortcut.
+
 | Notes key | |
 |---|---|
-| ⌘N / ⌘F / ⌘O | new note / search / open in Obsidian |
+| ⌥. | show / hide (from anywhere) |
+| ⌘P (or ⌘O, ⌘K) | search notes: typing previews the first match, ↑ ↓ move, ↵ or Tab back to the note |
+| ⇧↵ in search | new note named after the search (also ↵ when nothing matches) |
+| ⌥⌘↑ / ⌥⌘↓ | previous / next note in the list |
+| ⌘[ / ⌘] | back / forward |
+| ⌥↵ or ⌘↵ | follow the link at the caret (⌘-click, or a plain click in preview); a missing `[[page]]` starts a new note |
+| ⌘E | edit ⇄ preview (rendered, read-only; click a task box to tick it; ↑ ↓ Space scroll) |
+| ⌘F, ⌘G, ⇧⌘G | find in the note |
+| ⌘N | new note |
 | ⌘L / ⌘B / ⌘I | toggle task / bold / italic |
 | ⌘\\ | hide the sidebar |
-| ⌘-click | follow a link; a missing `[[page]]` starts a new note |
-| Esc | hide (the window floats above other apps until then) |
+| ⇧⌘O | open in Obsidian |
+| Esc | close find, then search, then the window (it floats above other apps until then) |
 
 ## Permissions
 

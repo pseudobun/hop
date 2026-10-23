@@ -63,6 +63,11 @@ final class NotesController: NSObject, NSWindowDelegate, NSTableViewDataSource, 
     private var draftConfirmed = false
     private var saveTask: Task<Void, Never>?
     private var selectingProgrammatically = false
+    /// Back / forward history of relative paths (⌘[ / ⌘]).
+    private var back: [String] = []
+    private var forward: [String] = []
+    /// The note open before the current search started; it enters history when the search is done.
+    private var searchOrigin: String?
 
     private static let frameName = "hop.notes"
     private static let lastNoteKey = "NotesLastNote"
@@ -79,8 +84,13 @@ final class NotesController: NSObject, NSWindowDelegate, NSTableViewDataSource, 
     private let metaLabel = NSTextField(labelWithString: "")
     private let textView = NotesTextView.make()
     private let editorScroll = NSScrollView()
+    private let preview = NotesPreviewView.make()
+    private let previewScroll = NSScrollView()
+    private static let previewKey = "NotesPreview"
+    private var previewMode: Bool { !previewScroll.isHidden }
     private let messageLabel = NSTextField(wrappingLabelWithString: "")
     private let footer = NSTextField(labelWithString: "")
+    private let shortcuts = NotesShortcutsView()
 
     init(settings: AppSettings) {
         self.settings = settings
@@ -90,6 +100,9 @@ final class NotesController: NSObject, NSWindowDelegate, NSTableViewDataSource, 
         panel.keyHandler = { [weak self] in self?.handleKey($0) ?? false }
         panel.setFrameAutosaveName(Self.frameName)
         textView.onOpenLink = { [weak self] in self?.openLink($0) }
+        preview.onOpenLink = { [weak self] in self?.openLink($0) }
+        preview.onToggleTask = { [weak self] in self?.toggleTask(at: $0) }
+        if UserDefaults.standard.bool(forKey: Self.previewKey) { setPreview(true, focus: false) }
         if UserDefaults.standard.bool(forKey: Self.sidebarHiddenKey) { setSidebar(hidden: true) }
     }
 
@@ -209,10 +222,43 @@ final class NotesController: NSObject, NSWindowDelegate, NSTableViewDataSource, 
         table.scrollRowToVisible(i)
     }
 
-    private func moveSelection(_ step: Int) {
+    /// Previous / next note in the list; from the search field it previews without history.
+    private func moveSelection(_ step: Int, record: Bool = false) {
         guard !hits.isEmpty else { return }
         let next = table.selectedRow < 0 ? (step > 0 ? 0 : hits.count - 1) : max(0, min(hits.count - 1, table.selectedRow + step))
-        open(hits[next].note)
+        if record { open(hits[next].note) } else { preview(hits[next].note) }
+    }
+
+    /// Opens a note while searching; history gets only the note the search started from.
+    private func preview(_ note: NoteFile) {
+        if searchOrigin == nil { searchOrigin = currentPath ?? "" }
+        open(note, record: false)
+    }
+
+    /// The search is over (↵, Tab, Esc): remember where it started.
+    private func endSearch() {
+        if let origin = searchOrigin, !origin.isEmpty, origin != currentPath { pushHistory(origin) }
+        searchOrigin = nil
+    }
+
+    private func pushHistory(_ path: String) {
+        if back.last != path { back.append(path) }
+        if back.count > 50 { back.removeFirst(back.count - 50) }
+        forward.removeAll()
+    }
+
+    private func goBack(_ forwardDirection: Bool) {
+        var from = forwardDirection ? forward : back
+        var to = forwardDirection ? back : forward
+        while let path = from.popLast() {
+            guard let note = notes.first(where: { $0.relativePath == path }) else { continue }
+            if let current = currentPath { to.append(current) }
+            if forwardDirection { forward = from; back = to } else { back = from; forward = to }
+            open(note, record: false)
+            focusEditor()
+            return
+        }
+        if forwardDirection { forward = [] } else { back = [] }
     }
 
     // MARK: - Opening
@@ -226,8 +272,9 @@ final class NotesController: NSObject, NSWindowDelegate, NSTableViewDataSource, 
         }
     }
 
-    private func open(_ note: NoteFile) {
+    private func open(_ note: NoteFile, record: Bool = true) {
         if currentPath == note.relativePath { return }
+        if record, let previous = currentPath { pushHistory(previous) }
         flush(force: true)
         current = .file(note)
         UserDefaults.standard.set(note.relativePath, forKey: Self.lastNoteKey)
@@ -266,6 +313,40 @@ final class NotesController: NSObject, NSWindowDelegate, NSTableViewDataSource, 
             : (text as NSString).length
         textView.setSelectedRange(NSRange(location: caret, length: 0))
         textView.scrollToBeginningOfDocument(nil)
+        if previewMode {
+            preview.show(text)
+            preview.scrollToBeginningOfDocument(nil)
+        }
+    }
+
+    // MARK: - Preview
+
+    /// ⌘E: rendered reading view ⇄ Markdown source.
+    private func setPreview(_ on: Bool, focus: Bool = true) {
+        UserDefaults.standard.set(on, forKey: Self.previewKey)
+        if editorScroll.isFindBarVisible { finderAction(.hideFindInterface) }
+        if on { preview.show(textView.string) }
+        previewScroll.isHidden = !on
+        editorScroll.isHidden = on || scanError != nil
+        updateHeader()
+        if focus { focusEditor() }
+    }
+
+    /// A click on a task box in the preview edits the note (undoable, saved like typing).
+    private func toggleTask(at location: Int) {
+        let inner = NSRange(location: location + 1, length: 1)
+        guard let storage = textView.textStorage, inner.upperBound <= storage.length else { return }
+        let replacement = storage.attributedSubstring(from: inner).string == " " ? "x" : " "
+        guard textView.shouldChangeText(in: inner, replacementString: replacement) else { return }
+        storage.replaceCharacters(in: inner, with: replacement)
+        textView.didChangeText()
+    }
+
+    private func scrollPreview(by dy: CGFloat) {
+        let clip = previewScroll.contentView
+        let maxY = max(0, (preview.frame.height) - clip.bounds.height)
+        clip.scroll(to: NSPoint(x: 0, y: min(maxY, max(0, clip.bounds.origin.y + dy))))
+        previewScroll.reflectScrolledClipView(clip)
     }
 
     /// Picks up edits made elsewhere (Obsidian, another Mac) while hop had no changes.
@@ -319,6 +400,7 @@ final class NotesController: NSObject, NSWindowDelegate, NSTableViewDataSource, 
     /// written to `newNoteFolder`.
     private func startDraft(title: String, confirmed: Bool = false) {
         flush(force: true)
+        if previewMode { setPreview(false, focus: false) }
         current = .draft
         draftConfirmed = confirmed
         titleField.stringValue = title
@@ -393,6 +475,7 @@ final class NotesController: NSObject, NSWindowDelegate, NSTableViewDataSource, 
         guard notification.object as? NotesTextView === textView else { return }
         dirty = true
         textView.restyle()
+        if previewMode { preview.show(textView.string) }
         scheduleSave()
     }
 
@@ -458,7 +541,7 @@ final class NotesController: NSObject, NSWindowDelegate, NSTableViewDataSource, 
             titleField.isEditable = false
             titleField.stringValue = note.title
             let edited = loadedModified.map { "Edited " + Self.relative.localizedString(for: $0, relativeTo: Date()) } ?? ""
-            metaLabel.stringValue = meta ?? edited
+            metaLabel.stringValue = meta ?? (previewMode ? edited + " · Preview, ⌘E to edit" : edited)
         case nil:
             folderLabel.stringValue = ""
             titleField.isEditable = false
@@ -490,7 +573,8 @@ final class NotesController: NSObject, NSWindowDelegate, NSTableViewDataSource, 
             messageLabel.stringValue = ""
         }
         messageLabel.isHidden = messageLabel.stringValue.isEmpty
-        editorScroll.isHidden = scanError != nil
+        editorScroll.isHidden = scanError != nil || previewMode
+        if scanError != nil { previewScroll.isHidden = true }
     }
 
     // MARK: - Keys
@@ -498,45 +582,117 @@ final class NotesController: NSObject, NSWindowDelegate, NSTableViewDataSource, 
     private var editorFocused: Bool { panel.firstResponder === textView }
     private var searchFocused: Bool { searchField.currentEditor() != nil && panel.firstResponder === searchField.currentEditor() }
 
+    /// Focuses the note: the editor, or the preview in reading mode.
     private func focusEditor() {
-        panel.makeFirstResponder(textView)
-        textView.scrollRangeToVisible(textView.selectedRange())
+        if previewMode {
+            panel.makeFirstResponder(preview)
+        } else {
+            panel.makeFirstResponder(textView)
+            textView.scrollRangeToVisible(textView.selectedRange())
+        }
     }
+
+    private var previewFocused: Bool { previewMode && panel.firstResponder === preview }
 
     private func focusSearch() {
         if UserDefaults.standard.bool(forKey: Self.sidebarHiddenKey) { setSidebar(hidden: false) }
+        if findBarVisible { finderAction(.hideFindInterface) }
         panel.makeFirstResponder(searchField)
         searchField.currentEditor()?.selectAll(nil)
     }
 
+    /// ⌘F: the native find bar over the note.
+    private func findInNote() {
+        if !editorFocused && !previewFocused && !findBarVisible { focusEditor() }
+        finderAction(.showFindInterface)
+    }
+
+    private var findBarVisible: Bool { (previewMode ? previewScroll : editorScroll).isFindBarVisible }
+
+    private func finderAction(_ action: NSTextFinder.Action) {
+        let sender = NSMenuItem()
+        sender.tag = action.rawValue
+        (previewMode ? preview : textView).performTextFinderAction(sender)
+    }
+
     private func handleKey(_ event: NSEvent) -> Bool {
         let mods = event.modifierFlags.intersection(KeyCombo.relevant)
-        if event.keyCode == 53 && mods.isEmpty { // Esc
-            if searchFocused && !query.isEmpty {
+        let isReturn = event.keyCode == 36 || event.keyCode == 76
+        if !shortcuts.isHidden {
+            shortcuts.isHidden = true
+            return event.keyCode == 53 || (event.keyCode == 44 && mods == .command)
+        }
+        if event.keyCode == 53 && mods.isEmpty { // Esc steps back: find bar, search text, search, window
+            if findBarVisible {
+                finderAction(.hideFindInterface)
+                focusEditor()
+            } else if searchFocused && !query.isEmpty {
                 searchField.stringValue = ""
                 refilter()
+            } else if searchFocused {
+                endSearch()
+                focusEditor()
             } else {
                 hide()
             }
             return true
         }
+        if isReturn && searchFocused && mods == .shift { // ⇧↵: new note named after the search
+            let title = query.trimmingCharacters(in: .whitespaces)
+            searchField.stringValue = ""
+            endSearch()
+            startDraft(title: title, confirmed: !title.isEmpty)
+            return true
+        }
+        if isReturn && editorFocused && (mods == .option || mods == .command) { // follow the link at the caret
+            if let target = textView.linkAtCaret() { openLink(target) }
+            return true
+        }
+        if previewFocused {
+            let page = previewScroll.contentView.bounds.height - 60
+            switch (event.keyCode, mods) {
+            case (125, []): scrollPreview(by: 48); return true // ↓
+            case (126, []): scrollPreview(by: -48); return true // ↑
+            case (49, []), (121, []): scrollPreview(by: page); return true // Space, Page Down
+            case (49, .shift), (116, []): scrollPreview(by: -page); return true // ⇧Space, Page Up
+            case (126, .command), (115, []): scrollPreview(by: -.greatestFiniteMagnitude); return true // ⌘↑, Home
+            case (125, .command), (119, []): scrollPreview(by: .greatestFiniteMagnitude); return true // ⌘↓, End
+            default: break
+            }
+        }
         guard mods.contains(.command) else { return false }
-        if event.keyCode == 42 && mods == .command { // ⌘\ (by key position, any layout)
+        switch (event.keyCode, mods) {
+        case (42, .command): // ⌘\ (by key position, any layout)
             setSidebar(hidden: !UserDefaults.standard.bool(forKey: Self.sidebarHiddenKey))
             return true
+        case (33, .command): goBack(false); return true // ⌘[
+        case (30, .command): goBack(true); return true // ⌘]
+        case (126, [.command, .option]): moveSelection(-1, record: true); return true // ⌥⌘↑
+        case (125, [.command, .option]): moveSelection(1, record: true); return true // ⌥⌘↓
+        case (44, .command): shortcuts.isHidden = false; return true // ⌘/
+        default: break
         }
         let c = event.charactersIgnoringModifiers?.lowercased() ?? ""
         if mods == .command {
             switch c {
             case "n": startDraft(title: ""); return true
-            case "f", "p": focusSearch(); return true
-            case "o": openInObsidian(); return true
+            case "e": setPreview(!previewMode); return true
+            case "p", "o", "k": focusSearch(); return true
+            case "f": findInNote(); return true
+            case "g": finderAction(.nextMatch); return true
             case "w": hide(); return true
             case "s": flush(force: true); return true
             case ",": openConfig?(); return true
             case "l" where editorFocused: textView.toggleTaskOnCurrentLine(); return true
             case "b" where editorFocused: textView.toggleWrap("**"); return true
             case "i" where editorFocused: textView.toggleWrap("*"); return true
+            default: break
+            }
+        }
+        if mods == [.command, .shift] {
+            switch c {
+            case "o": openInObsidian(); return true
+            case "g": finderAction(.previousMatch); return true
             default: break
             }
         }
@@ -560,6 +716,7 @@ final class NotesController: NSObject, NSWindowDelegate, NSTableViewDataSource, 
             case #selector(NSResponder.moveDown(_:)): moveSelection(1); return true
             case #selector(NSResponder.moveUp(_:)): moveSelection(-1); return true
             case #selector(NSResponder.insertNewline(_:)):
+                endSearch()
                 if hits.isEmpty && !query.trimmingCharacters(in: .whitespaces).isEmpty {
                     let title = query.trimmingCharacters(in: .whitespaces)
                     searchField.stringValue = ""
@@ -567,6 +724,10 @@ final class NotesController: NSObject, NSWindowDelegate, NSTableViewDataSource, 
                 } else {
                     focusEditor()
                 }
+                return true
+            case #selector(NSResponder.insertTab(_:)):
+                endSearch()
+                focusEditor()
                 return true
             default: return false
             }
@@ -587,7 +748,7 @@ final class NotesController: NSObject, NSWindowDelegate, NSTableViewDataSource, 
     func controlTextDidChange(_ obj: Notification) {
         guard obj.object as? NSTextField === searchField else { return }
         refilter()
-        if !query.isEmpty, let first = hits.first { open(first.note) }
+        if !query.isEmpty, let first = hits.first { preview(first.note) }
     }
 
     // MARK: - Table
@@ -619,6 +780,8 @@ final class NotesController: NSObject, NSWindowDelegate, NSTableViewDataSource, 
         refilter()
         if let first = hits.first { open(first.note) }
     }
+
+    func debugShowShortcuts() { shortcuts.isHidden = false }
 
     func debugType(_ text: String, title: String?) {
         if let title {
@@ -709,7 +872,19 @@ final class NotesController: NSObject, NSWindowDelegate, NSTableViewDataSource, 
         metaLabel.lineBreakMode = .byTruncatingTail
 
         textView.delegate = self
+        textView.usesFindBar = true
+        textView.isIncrementalSearchingEnabled = true
         editorScroll.documentView = textView
+        editorScroll.findBarPosition = .aboveContent
+        previewScroll.documentView = preview
+        previewScroll.drawsBackground = false
+        previewScroll.hasVerticalScroller = true
+        previewScroll.autohidesScrollers = true
+        previewScroll.scrollerStyle = .overlay
+        previewScroll.findBarPosition = .aboveContent
+        previewScroll.isHidden = true
+        preview.minSize = NSSize(width: 0, height: 0)
+        preview.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
         editorScroll.drawsBackground = false
         editorScroll.hasVerticalScroller = true
         editorScroll.autohidesScrollers = true
@@ -723,7 +898,7 @@ final class NotesController: NSObject, NSWindowDelegate, NSTableViewDataSource, 
         messageLabel.isHidden = true
 
         let hints = NSMutableAttributedString()
-        for (i, (title, keys)) in [("New", "⌘N"), ("Search", "⌘F"), ("Task", "⌘L"), ("Obsidian", "⌘O"), ("Links", "⌘ click")].enumerated() {
+        for (i, (title, keys)) in [("Notes", "⌘P"), ("Find", "⌘F"), ("New", "⌘N"), ("Preview", "⌘E"), ("Link", "⌥↵"), ("Keys", "⌘/")].enumerated() {
             if i > 0 { hints.append(NSAttributedString(string: "     ")) }
             hints.append(Keycap.label(title, keys: keys))
         }
@@ -737,7 +912,8 @@ final class NotesController: NSObject, NSWindowDelegate, NSTableViewDataSource, 
             v.translatesAutoresizingMaskIntoConstraints = false
             sidebar.addSubview(v)
         }
-        for v in [sidebar, sidebarRule, folderLabel, titleField, metaLabel, editorScroll, messageLabel, footerRule, footer] as [NSView] {
+        shortcuts.isHidden = true
+        for v in [sidebar, sidebarRule, folderLabel, titleField, metaLabel, editorScroll, previewScroll, messageLabel, footerRule, footer, shortcuts] as [NSView] {
             v.translatesAutoresizingMaskIntoConstraints = false
             content.addSubview(v)
         }
@@ -784,6 +960,10 @@ final class NotesController: NSObject, NSWindowDelegate, NSTableViewDataSource, 
             editorScroll.leadingAnchor.constraint(equalTo: editorLeading),
             editorScroll.trailingAnchor.constraint(equalTo: content.trailingAnchor),
             editorScroll.bottomAnchor.constraint(equalTo: footerRule.topAnchor),
+            previewScroll.topAnchor.constraint(equalTo: editorScroll.topAnchor),
+            previewScroll.leadingAnchor.constraint(equalTo: editorScroll.leadingAnchor),
+            previewScroll.trailingAnchor.constraint(equalTo: editorScroll.trailingAnchor),
+            previewScroll.bottomAnchor.constraint(equalTo: editorScroll.bottomAnchor),
             messageLabel.centerYAnchor.constraint(equalTo: editorScroll.centerYAnchor),
             messageLabel.leadingAnchor.constraint(equalTo: editorLeading, constant: 40),
             messageLabel.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -40),
@@ -794,6 +974,8 @@ final class NotesController: NSObject, NSWindowDelegate, NSTableViewDataSource, 
             footer.leadingAnchor.constraint(equalTo: editorLeading, constant: 30),
             footer.trailingAnchor.constraint(lessThanOrEqualTo: content.trailingAnchor, constant: -16),
             footer.centerYAnchor.constraint(equalTo: content.bottomAnchor, constant: -19),
+            shortcuts.centerXAnchor.constraint(equalTo: content.centerXAnchor),
+            shortcuts.centerYAnchor.constraint(equalTo: content.centerYAnchor),
         ])
     }
 }

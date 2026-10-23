@@ -200,3 +200,20 @@ struct NoteStoreTests {
         #expect(NotesCommands.display("alt+.") == "⌥.")
     }
 }
+
+struct MarkdownPreviewTests {
+    @Test func stripsSyntaxForReading() {
+        let source = "---\ntitle: X\n---\n## Today\n- [ ] buy **milk** at [[Shop|the shop]]\n- [x] done\n"
+            + "> [!note] Read `this`\n1. one\n```sh\nls\n```\n---\n[site](https://x.dev) ==hi=="
+        #expect(MarkdownPreview.plain(source)
+            == "title: X\nToday\n• ☐ buy milk at the shop\n• ☑ done\nNOTE Read this\n1. one\nls\n────────\nsite hi")
+    }
+
+    @Test func taskBoxesPointBackToTheSource() {
+        let source = "a\n- [ ] x"
+        let tasks = MarkdownPreview.edits(source).compactMap { e -> Int? in
+            if case .task(false, let at) = e.replacement { at } else { nil }
+        }
+        #expect(tasks == [4])
+    }
+}

@@ -201,3 +201,91 @@ nonisolated enum MarkdownEditing {
         return marker + selected + marker
     }
 }
+
+/// Reading view: the same spans, with Markdown syntax removed or replaced.
+/// Edits are in source (UTF-16) coordinates and never overlap.
+nonisolated enum MarkdownPreview {
+    enum Replacement: Equatable {
+        case delete
+        case text(String)
+        /// A task box; `source` is the location of its `[` in the note.
+        case task(done: Bool, source: Int)
+        /// A callout type, e.g. "NOTE".
+        case label(String)
+    }
+
+    struct Edit: Equatable {
+        let range: NSRange
+        let replacement: Replacement
+    }
+
+    private nonisolated(unsafe) static let callout = try! NSRegularExpression(pattern: #"\[!([A-Za-z-]+)\][+-]?[ \t]*"#)
+
+    static func edits(_ text: String, spans: [StyledRange]? = nil) -> [Edit] {
+        let ns = text as NSString
+        var out: [Edit] = []
+        func line(_ r: NSRange) -> NSRange { // the line plus its newline
+            r.upperBound < ns.length && ns.character(at: r.upperBound) == 10 ? NSRange(location: r.location, length: r.length + 1) : r
+        }
+        for s in spans ?? MarkdownStyler.spans(text) {
+            let r = s.range
+            let piece = ns.substring(with: r)
+            switch s.span {
+            case .marker:
+                let trimmed = piece.trimmingCharacters(in: .whitespaces)
+                if ["-", "*", "+"].contains(trimmed) {
+                    let bullet = (piece as NSString).range(of: trimmed)
+                    out.append(Edit(range: NSRange(location: r.location + bullet.location, length: 1), replacement: .text("•")))
+                } else if trimmed.first?.isNumber == true {
+                    continue // ordered list numbers stay
+                } else if trimmed.hasPrefix("#") {
+                    var end = r.upperBound
+                    while end < ns.length, [32, 9].contains(ns.character(at: end)) { end += 1 }
+                    out.append(Edit(range: NSRange(location: r.location, length: end - r.location), replacement: .delete))
+                } else {
+                    out.append(Edit(range: r, replacement: .delete))
+                }
+            case .frontmatter where piece == "---" || piece == "...":
+                out.append(Edit(range: line(r), replacement: .delete))
+            case .codeBlock where piece.trimmingCharacters(in: .whitespaces).hasPrefix("```") || piece.trimmingCharacters(in: .whitespaces).hasPrefix("~~~"):
+                out.append(Edit(range: line(r), replacement: .delete))
+            case .task(let done):
+                out.append(Edit(range: r, replacement: .task(done: done, source: r.location)))
+            case .rule:
+                out.append(Edit(range: r, replacement: .text("────────")))
+            case .link(let target) where target.hasPrefix("note:") && piece.contains("|"):
+                let pipe = (piece as NSString).range(of: "|")
+                out.append(Edit(range: NSRange(location: r.location, length: pipe.upperBound), replacement: .delete))
+            case .quote:
+                if let m = callout.firstMatch(in: text, range: r) {
+                    out.append(Edit(range: m.range, replacement: .label(ns.substring(with: m.range(at: 1)).uppercased())))
+                }
+            default:
+                break
+            }
+        }
+        // Keep the first of any overlapping edits.
+        var kept: [Edit] = []
+        var end = 0
+        for e in out.sorted(by: { $0.range.location < $1.range.location }) where e.range.location >= end {
+            kept.append(e)
+            end = e.range.upperBound
+        }
+        return kept
+    }
+
+    /// Plain-text preview (tests, CLI).
+    static func plain(_ text: String) -> String {
+        let s = NSMutableString(string: text)
+        for e in edits(text).reversed() {
+            let replacement: String = switch e.replacement {
+            case .delete: ""
+            case .text(let t): t
+            case .task(let done, _): done ? "☑" : "☐"
+            case .label(let l): l + " "
+            }
+            s.replaceCharacters(in: e.range, with: replacement)
+        }
+        return s as String
+    }
+}
