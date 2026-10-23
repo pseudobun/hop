@@ -9,8 +9,11 @@ final class NotesPanel: NSPanel {
     /// Focus moved (search, editor, preview, find bar); the footer hints follow it.
     var onFocusChange: (() -> Void)?
 
+    /// First-open size; after that the panel keeps the size you leave it at.
+    static let defaultSize = NSSize(width: 820, height: 520)
+
     init() {
-        super.init(contentRect: NSRect(x: 0, y: 0, width: 900, height: 580),
+        super.init(contentRect: NSRect(origin: .zero, size: Self.defaultSize),
                    styleMask: [.titled, .resizable, .nonactivatingPanel, .fullSizeContentView],
                    backing: .buffered, defer: false)
         titleVisibility = .hidden
@@ -163,7 +166,8 @@ final class NotesController: NSObject, NSWindowDelegate, NSTableViewDataSource, 
         let mouse = NSEvent.mouseLocation
         let screen = NSScreen.screens.first { NSMouseInRect(mouse, $0.frame, false) } ?? NSScreen.main
         guard let v = screen?.visibleFrame else { return }
-        let size = NSSize(width: min(900, v.width - 80), height: min(580, v.height - 80))
+        let size = NSSize(width: min(NotesPanel.defaultSize.width, v.width - 80),
+                          height: min(NotesPanel.defaultSize.height, v.height - 80))
         panel.setFrame(NSRect(x: (v.midX - size.width / 2).rounded(), y: (v.midY - size.height / 2).rounded(),
                               width: size.width, height: size.height), display: false)
     }
