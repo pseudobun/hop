@@ -50,7 +50,7 @@ final class NotesPanel: NSPanel {
 /// Browse, search and edit the Markdown files of a folder (an Obsidian vault) in a
 /// floating window. Files are the only storage: every edit is saved back to its `.md`.
 final class NotesController: NSObject, NSWindowDelegate, NSTableViewDataSource, NSTableViewDelegate,
-    NSTextFieldDelegate, NSTextViewDelegate {
+    NSTextFieldDelegate, NSTextViewDelegate, NSMenuDelegate {
     let panel = NotesPanel()
     var openConfig: (() -> Void)?
 
@@ -60,6 +60,7 @@ final class NotesController: NSObject, NSWindowDelegate, NSTableViewDataSource, 
 
     private var notes: [NoteFile] = []
     private var hits: [NoteHit] = []
+    private let pins = NotesPins()
     private var contents: [String: (modified: Date, text: String)] = [:]
     private var scanError: String?
 
@@ -203,9 +204,9 @@ final class NotesController: NSObject, NSWindowDelegate, NSTableViewDataSource, 
         case .title: return [("Start writing", "↵"), ("Close", "esc")]
         case .find: return [("Next", "⌘G"), ("Previous", "⇧⌘G"), ("Close", "esc")]
         case .edit: return [("Notes", "⌘P"), ("Preview", "⌘E"), ("New", "⌘N"), ("Find", "⌘F"), ("Task", "⌘L"),
-                            ("Link", "⌥↵"), ("Back", "⌘["), ("Next", "⌥⌘↓")]
+                            ("Link", "⌥↵"), ("Pin", "⌘D"), ("Back", "⌘["), ("Next", "⌥⌘↓")]
         case .preview: return [("Notes", "⌘P"), ("Edit", "⌘E"), ("Scroll", "↑↓"), ("Find", "⌘F"), ("New", "⌘N"),
-                               ("Back", "⌘["), ("Next", "⌥⌘↓")]
+                               ("Pin", "⌘D"), ("Back", "⌘["), ("Next", "⌥⌘↓")]
         case .empty: return [("New", "⌘N"), ("Notes", "⌘P")]
         }
     }
@@ -266,8 +267,9 @@ final class NotesController: NSObject, NSWindowDelegate, NSTableViewDataSource, 
     }
 
     private func refilter() {
-        hits = NoteStore.search(notes, query: query, contents: contents.mapValues(\.text),
-                                sensitivity: settings.data.general.sensitivity)
+        hits = NoteStore.pinnedFirst(NoteStore.search(notes, query: query, contents: contents.mapValues(\.text),
+                                                      sensitivity: settings.data.general.sensitivity),
+                                     pinned: pins.paths(in: root), query: query)
         table.reloadData()
         let vault = root.lastPathComponent
         countLabel.attributedStringValue = Theme.labelString(query.isEmpty ? "\(vault) · \(notes.count)" : "\(hits.count) of \(notes.count)")
@@ -457,6 +459,83 @@ final class NotesController: NSObject, NSWindowDelegate, NSTableViewDataSource, 
         }
         hide()
     }
+
+    // MARK: - Pin and delete
+
+    private var currentNote: NoteFile? { if case .file(let n) = current { n } else { nil } }
+
+    private func togglePin(_ note: NoteFile) {
+        pins.toggle(note.relativePath, in: root)
+        let pinned = pins.contains(note.relativePath, in: root)
+        refilter()
+        HUD.shared.show(pinned ? "Pinned “\(note.title)”" : "Unpinned “\(note.title)”", symbol: pinned ? "pin.fill" : "pin.slash")
+    }
+
+    /// Moves a note to the Trash (Finder can put it back); a draft is just dropped.
+    private func trashCurrent() {
+        if case .draft = current {
+            discardDraft()
+            openInitial()
+            return
+        }
+        if let note = currentNote { trash(note) }
+    }
+
+    private func trash(_ note: NoteFile) {
+        let wasOpen = currentPath == note.relativePath
+        let index = hits.firstIndex { $0.note.relativePath == note.relativePath }
+        if wasOpen {
+            flush(force: true) // the Trash gets the latest text
+            current = nil
+        }
+        do {
+            try FileManager.default.trashItem(at: note.url, resultingItemURL: nil)
+        } catch {
+            if wasOpen { open(note, record: false) }
+            HUD.shared.show("Could not move “\(note.title)” to the Trash", symbol: "exclamationmark.triangle.fill")
+            return
+        }
+        pins.remove(note.relativePath, in: root)
+        contents[note.relativePath] = nil
+        back.removeAll { $0 == note.relativePath }
+        forward.removeAll { $0 == note.relativePath }
+        rescan()
+        if wasOpen {
+            if let i = index, !hits.isEmpty { open(hits[min(i, hits.count - 1)].note, record: false) } else { openInitial() }
+        }
+        HUD.shared.show("Moved “\(note.title)” to the Trash", symbol: "trash.fill")
+    }
+
+    /// Right-click on a sidebar row.
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        menu.removeAllItems()
+        let row = table.clickedRow
+        guard row >= 0, row < hits.count else { return }
+        let note = hits[row].note
+        func add(_ title: String, _ symbol: String, _ action: Selector) {
+            let item = NSMenuItem(title: title, action: action, keyEquivalent: "")
+            item.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)
+            item.target = self
+            item.representedObject = note.relativePath
+            menu.addItem(item)
+        }
+        let pinned = hits[row].pinned
+        add(pinned ? "Unpin" : "Pin to Top", pinned ? "pin.slash" : "pin", #selector(menuTogglePin(_:)))
+        add("Show in Finder", "folder", #selector(menuShowInFinder(_:)))
+        menu.addItem(.separator())
+        add("Move to Trash", "trash", #selector(menuTrash(_:)))
+    }
+
+    private func note(for item: NSMenuItem) -> NoteFile? {
+        guard let path = item.representedObject as? String else { return nil }
+        return notes.first { $0.relativePath == path }
+    }
+
+    @objc private func menuTogglePin(_ sender: NSMenuItem) { if let n = note(for: sender) { togglePin(n) } }
+    @objc private func menuShowInFinder(_ sender: NSMenuItem) {
+        if let n = note(for: sender) { NSWorkspace.shared.activateFileViewerSelecting([n.url]) }
+    }
+    @objc private func menuTrash(_ sender: NSMenuItem) { if let n = note(for: sender) { trash(n) } }
 
     // MARK: - New notes
 
@@ -736,6 +815,7 @@ final class NotesController: NSObject, NSWindowDelegate, NSTableViewDataSource, 
         case (126, [.command, .option]): moveSelection(-1, record: true); return true // ⌥⌘↑
         case (125, [.command, .option]): moveSelection(1, record: true); return true // ⌥⌘↓
         case (44, .command): shortcuts.isHidden = false; return true // ⌘/
+        case (51, [.command, .shift]): trashCurrent(); return true // ⇧⌘⌫
         default: break
         }
         let c = event.charactersIgnoringModifiers?.lowercased() ?? ""
@@ -748,6 +828,7 @@ final class NotesController: NSObject, NSWindowDelegate, NSTableViewDataSource, 
             case "g": finderAction(.nextMatch); return true
             case "w": hide(); return true
             case "s": flush(force: true); return true
+            case "d": if let note = currentNote { togglePin(note) }; return true
             case ",": openConfig?(); return true
             case "l" where editorFocused: textView.toggleTaskOnCurrentLine(); return true
             case "b" where editorFocused: textView.toggleWrap("**"); return true
@@ -912,6 +993,9 @@ final class NotesController: NSObject, NSWindowDelegate, NSTableViewDataSource, 
         table.refusesFirstResponder = true
         table.columnAutoresizingStyle = .uniformColumnAutoresizingStyle
         table.dataSource = self
+        let rowMenu = NSMenu()
+        rowMenu.delegate = self
+        table.menu = rowMenu
         table.delegate = self
         let listScroll = NSScrollView()
         listScroll.documentView = table
@@ -1044,9 +1128,11 @@ final class NotesController: NSObject, NSWindowDelegate, NSTableViewDataSource, 
     }
 }
 
-/// Sidebar row: title, then folder (or the matching line) and age.
+/// Sidebar row: title, then folder (or the matching line) and age; a pin in the gutter.
 final class NoteCellView: NSTableCellView {
     static let identifier = NSUserInterfaceItemIdentifier("NoteCell")
+    private let pin = NSImageView(image: NSImage(systemSymbolName: "pin.fill", accessibilityDescription: "Pinned")?
+        .withSymbolConfiguration(.init(pointSize: 8, weight: .semibold)) ?? NSImage())
     private let title = NSTextField(labelWithString: "")
     private let detail = NSTextField(labelWithString: "")
     private let age = NSTextField(labelWithString: "")
@@ -1066,11 +1152,15 @@ final class NoteCellView: NSTableCellView {
         age.textColor = Theme.mutedForeground.withAlphaComponent(0.8)
         age.setContentCompressionResistancePriority(.required, for: .horizontal)
         age.setContentHuggingPriority(.required, for: .horizontal)
-        for v in [title, detail, age] {
+        pin.contentTintColor = Palette.notes
+        pin.isHidden = true
+        for v in [pin, title, detail, age] {
             v.translatesAutoresizingMaskIntoConstraints = false
             addSubview(v)
         }
         NSLayoutConstraint.activate([
+            pin.centerXAnchor.constraint(equalTo: leadingAnchor, constant: 11),
+            pin.centerYAnchor.constraint(equalTo: title.centerYAnchor),
             title.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 20),
             title.topAnchor.constraint(equalTo: topAnchor, constant: 8),
             title.trailingAnchor.constraint(equalTo: age.leadingAnchor, constant: -8),
@@ -1086,6 +1176,7 @@ final class NoteCellView: NSTableCellView {
     required init?(coder: NSCoder) { fatalError() }
 
     func configure(_ hit: NoteHit) {
+        pin.isHidden = !hit.pinned
         title.stringValue = hit.note.title
         let where_ = hit.note.folder.isEmpty ? "—" : hit.note.folder
         detail.stringValue = hit.snippet ?? (hit.note.isPlaceholder ? "☁︎ " + where_ : where_)

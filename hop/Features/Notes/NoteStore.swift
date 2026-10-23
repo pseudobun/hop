@@ -19,6 +19,37 @@ nonisolated struct NoteFile: Sendable, Hashable {
 nonisolated struct NoteHit: Sendable, Equatable {
     let note: NoteFile
     var snippet: String?
+    var pinned = false
+}
+
+/// Pinned notes per vault, as relative paths in the order they were pinned.
+final class NotesPins {
+    private let store = JSONStore<[String: [String]]>(url: AppPaths.file("notes-pins.json"))
+    private var data: [String: [String]]
+
+    init() { data = store.load() ?? [:] }
+
+    func paths(in root: URL) -> [String] { data[Self.key(root)] ?? [] }
+
+    func contains(_ path: String, in root: URL) -> Bool { paths(in: root).contains(path) }
+
+    func toggle(_ path: String, in root: URL) {
+        var list = paths(in: root)
+        if let i = list.firstIndex(of: path) { list.remove(at: i) } else { list.append(path) }
+        set(list, in: root)
+    }
+
+    func remove(_ path: String, in root: URL) {
+        let list = paths(in: root)
+        if list.contains(path) { set(list.filter { $0 != path }, in: root) }
+    }
+
+    private func set(_ list: [String], in root: URL) {
+        data[Self.key(root)] = list.isEmpty ? nil : list
+        store.save(data)
+    }
+
+    private static func key(_ root: URL) -> String { root.standardizedFileURL.path }
 }
 
 /// Files, names, frontmatter and search for a folder of Markdown notes (an Obsidian vault).
@@ -59,6 +90,21 @@ nonisolated enum NoteStore {
 
     /// Title matches first (ranked like the launcher), then notes whose text contains
     /// every word of the query, with the first matching line as a snippet.
+    /// Marks pinned hits; without a query they come first, in the order they were pinned.
+    static func pinnedFirst(_ hits: [NoteHit], pinned: [String], query: String) -> [NoteHit] {
+        guard !pinned.isEmpty else { return hits }
+        var order: [String: Int] = [:]
+        for (i, path) in pinned.enumerated() where order[path] == nil { order[path] = i }
+        let marked = hits.map { h in
+            var h = h
+            h.pinned = order[h.note.relativePath] != nil
+            return h
+        }
+        guard query.trimmingCharacters(in: .whitespaces).isEmpty else { return marked }
+        return marked.filter(\.pinned).sorted { order[$0.note.relativePath]! < order[$1.note.relativePath]! }
+            + marked.filter { !$0.pinned }
+    }
+
     static func search(_ notes: [NoteFile], query: String, contents: [String: String],
                        sensitivity: Sensitivity = .high) -> [NoteHit] {
         let q = query.trimmingCharacters(in: .whitespaces)

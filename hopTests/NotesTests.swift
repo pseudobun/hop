@@ -217,3 +217,28 @@ struct MarkdownPreviewTests {
         #expect(tasks == [4])
     }
 }
+
+struct NotePinsTests {
+    private func hit(_ path: String) -> NoteHit {
+        NoteHit(note: NoteFile(url: URL(fileURLWithPath: "/v/" + path), relativePath: path, modified: .distantPast))
+    }
+
+    @Test func pinnedComeFirstInPinOrderWithoutQuery() {
+        let hits = ["a.md", "b.md", "c.md", "d.md"].map(hit)
+        let out = NoteStore.pinnedFirst(hits, pinned: ["d.md", "b.md", "gone.md"], query: "")
+        #expect(out.map(\.note.relativePath) == ["d.md", "b.md", "a.md", "c.md"])
+        #expect(out.map(\.pinned) == [true, true, false, false])
+    }
+
+    @Test func searchKeepsRankButMarksPins() {
+        let hits = ["a.md", "b.md", "c.md"].map(hit)
+        let out = NoteStore.pinnedFirst(hits, pinned: ["c.md"], query: "x")
+        #expect(out.map(\.note.relativePath) == ["a.md", "b.md", "c.md"])
+        #expect(out.map(\.pinned) == [false, false, true])
+    }
+
+    @Test func nothingPinnedLeavesHitsAlone() {
+        let hits = ["a.md", "b.md"].map(hit)
+        #expect(NoteStore.pinnedFirst(hits, pinned: [], query: "") == hits)
+    }
+}

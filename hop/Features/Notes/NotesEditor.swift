@@ -346,6 +346,8 @@ final class NotesShortcutsView: NSView {
             ("⌘L", "Toggle task"),
             ("⌘B  ⌘I", "Bold / italic"),
             ("⌘\\", "Hide the sidebar"),
+            ("⌘D", "Pin / unpin (pinned stay on top)"),
+            ("⇧⌘⌫", "Move the note to the Trash"),
             ("⇧⌘O", "Open in Obsidian"),
         ]),
     ]

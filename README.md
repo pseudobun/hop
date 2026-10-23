@@ -14,7 +14,7 @@ A tiny native macOS launcher. Pure Swift + AppKit, no WebKit. ~3 MB binary, ~15 
 - Kill Process: search running processes, quit, force kill or kill as administrator
 - Caps Lock as Hyper key (⌃⌥⌘⇧), optional tap-for-Escape
 - WireGuard: connect, disconnect, disconnect all (WireGuard.app tunnels)
-- Notes on ⌥. : a keyboard-first floating window over a folder of Markdown files (an Obsidian vault works as is). Search titles and text, live Markdown styling, ⌘E preview, tasks, `[[links]]`, back / forward, new notes saved straight into the vault
+- Notes on ⌥. : a keyboard-first floating window over a folder of Markdown files (an Obsidian vault works as is). Search titles and text, live Markdown styling, ⌘E preview, tasks, `[[links]]`, back / forward, pinned notes on top, move to Trash, new notes saved straight into the vault
 - KeePassXC: several databases (⌘D to switch, or search all), paste or copy password / username / TOTP / URL, favicons, pins, folder filter. Stays unlocked until ⌘L or quit (`keepass.autoLock` locks on sleep, screen lock and inactivity)
 - Bookmarks from the config: name, URL, aliases ("hass") and an icon (image file, SF Symbol or emoji); ↵ opens in the default browser
 - Permissions screen: every macOS permission hop needs, with the system prompts (opens on first launch)
@@ -62,6 +62,8 @@ Notes are keyboard-first; ⌘/ shows every shortcut.
 | ⌘N | new note |
 | ⌘L / ⌘B / ⌘I | toggle task / bold / italic |
 | ⌘\\ | hide the sidebar |
+| ⌘D | pin / unpin; pinned notes stay at the top of the list |
+| ⇧⌘⌫ | move the note to the Trash (also on right-click in the list) |
 | ⇧⌘O | open in Obsidian |
 | Esc | close find, then search, then the window (it floats above other apps until then) |
 
