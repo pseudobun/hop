@@ -8,6 +8,18 @@ final class ResultRowView: NSTableRowView {
         didSet { if tint != oldValue && isSelected { needsDisplay = true } }
     }
 
+    /// Mouse over the row (lists that track hover): a lighter wash than the selection.
+    var isHovered = false {
+        didSet { if isHovered != oldValue { needsDisplay = true } }
+    }
+
+    override func drawBackground(in dirtyRect: NSRect) {
+        super.drawBackground(in: dirtyRect)
+        guard isHovered, !isSelected else { return }
+        (tint ?? Theme.info).withAlphaComponent(0.07).setFill()
+        NSBezierPath(roundedRect: bounds.insetBy(dx: 8, dy: 1), xRadius: 8, yRadius: 8).fill()
+    }
+
     override func drawSelection(in dirtyRect: NSRect) {
         guard isSelected else { return }
         let rect = bounds.insetBy(dx: 8, dy: 1)

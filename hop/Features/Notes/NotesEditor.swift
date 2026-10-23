@@ -329,7 +329,7 @@ final class NotesShortcutsView: NSView {
     static let groups: [(String, [(String, String)])] = [
         ("Move", [
             ("⌥.", "Show or hide notes"),
-            ("⌘P", "Search notes (also ⌘O, ⌘K)"),
+            ("⌘P", "Search notes (also ⌘O)"),
             ("↑ ↓", "Previous / next result"),
             ("↵  Tab", "Back to the note"),
             ("⇧↵", "New note named after the search"),
@@ -340,6 +340,7 @@ final class NotesShortcutsView: NSView {
             ("Esc", "Close find, search, then the window"),
         ]),
         ("Edit", [
+            ("⌘K", "Actions: the note under the mouse, else the open one"),
             ("⌘N", "New note"),
             ("⌘E", "Edit / preview"),
             ("⌘F", "Find in note (⌘G, ⇧⌘G)"),

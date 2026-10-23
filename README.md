@@ -52,7 +52,7 @@ Notes are keyboard-first; ⌘/ shows every shortcut.
 | Notes key | |
 |---|---|
 | ⌥. | show / hide (from anywhere) |
-| ⌘P (or ⌘O, ⌘K) | search notes: typing previews the first match, ↑ ↓ move, ↵ or Tab back to the note |
+| ⌘P (or ⌘O) | search notes: typing previews the first match, ↑ ↓ move, ↵ or Tab back to the note |
 | ⇧↵ in search | new note named after the search (also ↵ when nothing matches) |
 | ⌥⌘↑ / ⌥⌘↓ | previous / next note in the list |
 | ⌘[ / ⌘] | back / forward |
@@ -60,6 +60,7 @@ Notes are keyboard-first; ⌘/ shows every shortcut.
 | ⌘E | edit ⇄ preview (rendered, read-only; click a task box to tick it; ↑ ↓ Space scroll) |
 | ⌘F, ⌘G, ⇧⌘G | find in the note |
 | ⌘N | new note |
+| ⌘K | actions, like the launcher: open / preview, pin (⌘D), Obsidian (⇧⌘O), Show in Finder, copy `[[link]]` (⇧⌘C), Markdown (⌥⌘C) or path, Trash (⇧⌘⌫). Acts on the note under the mouse in the list, else the open one; right-click a row for the same list |
 | ⌘L / ⌘B / ⌘I | toggle task / bold / italic |
 | ⌘\\ | hide the sidebar |
 | ⌘D | pin / unpin; pinned notes stay at the top of the list |

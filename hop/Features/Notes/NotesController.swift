@@ -87,7 +87,11 @@ final class NotesController: NSObject, NSWindowDelegate, NSTableViewDataSource, 
 
     // Views
     private let searchField = NSTextField()
-    private let table = NSTableView()
+    private let table = NotesListView()
+    private let actionPanel = ActionPanelView()
+    private var actionPanelHeight: NSLayoutConstraint!
+    /// Actions behind the open right-click menu, by item tag.
+    private var menuActions: [Action] = []
     private let sidebar = NSView()
     private var sidebarWidth: NSLayoutConstraint!
     private let countLabel = NSTextField(labelWithString: "")
@@ -203,9 +207,9 @@ final class NotesController: NSObject, NSWindowDelegate, NSTableViewDataSource, 
             return open + [("New note", "⇧↵"), (query.isEmpty ? "Back" : "Clear", "esc")]
         case .title: return [("Start writing", "↵"), ("Close", "esc")]
         case .find: return [("Next", "⌘G"), ("Previous", "⇧⌘G"), ("Close", "esc")]
-        case .edit: return [("Notes", "⌘P"), ("Preview", "⌘E"), ("New", "⌘N"), ("Find", "⌘F"), ("Task", "⌘L"),
+        case .edit: return [("Notes", "⌘P"), ("Actions", "⌘K"), ("Preview", "⌘E"), ("New", "⌘N"), ("Find", "⌘F"), ("Task", "⌘L"),
                             ("Link", "⌥↵"), ("Pin", "⌘D"), ("Back", "⌘["), ("Next", "⌥⌘↓")]
-        case .preview: return [("Notes", "⌘P"), ("Edit", "⌘E"), ("Scroll", "↑↓"), ("Find", "⌘F"), ("New", "⌘N"),
+        case .preview: return [("Notes", "⌘P"), ("Actions", "⌘K"), ("Edit", "⌘E"), ("Scroll", "↑↓"), ("Find", "⌘F"), ("New", "⌘N"),
                                ("Pin", "⌘D"), ("Back", "⌘["), ("Next", "⌥⌘↓")]
         case .empty: return [("New", "⌘N"), ("Notes", "⌘P")]
         }
@@ -338,6 +342,7 @@ final class NotesController: NSObject, NSWindowDelegate, NSTableViewDataSource, 
     }
 
     private func open(_ note: NoteFile, record: Bool = true) {
+        closeActionPanel()
         if currentPath == note.relativePath { return }
         if record, let previous = currentPath { pushHistory(previous) }
         flush(force: true)
@@ -448,9 +453,9 @@ final class NotesController: NSObject, NSWindowDelegate, NSTableViewDataSource, 
         }
     }
 
-    private func openInObsidian() {
+    private func openInObsidian(_ target: NoteFile? = nil) {
         flush(force: true)
-        guard case .file(let note) = current else { return }
+        guard let note = target ?? currentNote else { return }
         let path = note.url.path.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? ""
         if let url = URL(string: "obsidian://open?path=\(path)"), NSWorkspace.shared.urlForApplication(toOpen: url) != nil {
             NSWorkspace.shared.open(url)
@@ -506,36 +511,124 @@ final class NotesController: NSObject, NSWindowDelegate, NSTableViewDataSource, 
         HUD.shared.show("Moved “\(note.title)” to the Trash", symbol: "trash.fill")
     }
 
-    /// Right-click on a sidebar row.
+    // MARK: - Actions (⌘K, right-click)
+
+    private enum ActionTarget { case note(NoteFile), draft }
+
+    /// The note under the mouse in the list, else the open note (or new draft).
+    private var actionTarget: ActionTarget? {
+        let row = table.hoveredRow
+        if !sidebar.isHidden, row >= 0, row < hits.count { return .note(hits[row].note) }
+        return openTarget
+    }
+
+    private var openTarget: ActionTarget? {
+        if case .draft = current { return .draft }
+        return currentNote.map(ActionTarget.note)
+    }
+
+    private static let trashKey = KeyCombo(key: .delete, modifiers: [.command, .shift])
+
+    private func actions(for target: ActionTarget) -> [Action] {
+        guard case .note(let note) = target else {
+            return [Action(title: "Discard New Note", symbol: "trash", shortcut: Self.trashKey, style: .destructive) { [weak self] in
+                self?.trashCurrent()
+                return .stay
+            }]
+        }
+        let isOpen = currentPath == note.relativePath
+        let pinned = pins.contains(note.relativePath, in: root)
+        let first = isOpen
+            ? Action(title: previewMode ? "Edit Note" : "Preview Note", symbol: previewMode ? "pencil" : "eye", shortcut: .cmd("e")) { [weak self] in
+                guard let self else { return .stay }
+                setPreview(!previewMode)
+                return .stay
+            }
+            : Action(title: "Open Note", symbol: "doc.text") { [weak self] in
+                self?.open(note)
+                self?.focusEditor()
+                return .stay
+            }
+        return [
+            first,
+            Action(title: pinned ? "Unpin" : "Pin to Top", symbol: pinned ? "pin.slash" : "pin", shortcut: .cmd("d")) { [weak self] in
+                self?.togglePin(note)
+                return .stay
+            },
+            Action(title: "Open in Obsidian", symbol: "arrow.up.forward.app", shortcut: .cmd("o", .shift)) { [weak self] in
+                self?.openInObsidian(note)
+                return .stay
+            },
+            Action(title: "Show in Finder", symbol: "folder") {
+                NSWorkspace.shared.activateFileViewerSelecting([note.url])
+                return .stay
+            },
+            Action(title: "Copy Link", symbol: "link", shortcut: .cmd("c", .shift)) {
+                Pasteboard.copy("[[\(note.title)]]")
+                HUD.shared.show("Copied [[\(note.title)]]")
+                return .stay
+            },
+            Action(title: "Copy Markdown", symbol: "doc.on.doc", shortcut: .cmd("c", .option)) { [weak self] in
+                guard let self else { return .stay }
+                let text = currentPath == note.relativePath ? textView.string : NoteStore.read(note.url) ?? ""
+                Pasteboard.copy(text)
+                HUD.shared.show("Copied “\(note.title)”")
+                return .stay
+            },
+            Action(title: "Copy Path", symbol: "text.cursor") {
+                Pasteboard.copy(note.url.path)
+                HUD.shared.show("Copied path")
+                return .stay
+            },
+            Action(title: "Move to Trash", symbol: "trash", shortcut: Self.trashKey, style: .destructive) { [weak self] in
+                self?.trash(note)
+                return .stay
+            },
+        ]
+    }
+
+    private func run(_ action: Action) {
+        closeActionPanel()
+        Task { _ = await action.perform() }
+    }
+
+    private func toggleActionPanel() {
+        if !actionPanel.isHidden { closeActionPanel(); return }
+        guard let target = actionTarget else { return }
+        let list = actions(for: target)
+        actionPanel.show(list)
+        actionPanel.onPerform = { [weak self] in self?.run($0) }
+        actionPanelHeight.constant = actionPanel.preferredHeight
+        actionPanel.isHidden = false
+        updateFooter()
+    }
+
+    private func closeActionPanel() {
+        guard !actionPanel.isHidden else { return }
+        actionPanel.isHidden = true
+        updateFooter()
+    }
+
+    /// Right-click on a sidebar row: the same actions as ⌘K.
     func menuNeedsUpdate(_ menu: NSMenu) {
         menu.removeAllItems()
         let row = table.clickedRow
         guard row >= 0, row < hits.count else { return }
-        let note = hits[row].note
-        func add(_ title: String, _ symbol: String, _ action: Selector) {
-            let item = NSMenuItem(title: title, action: action, keyEquivalent: "")
-            item.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)
+        menuActions = actions(for: .note(hits[row].note))
+        for (i, a) in menuActions.enumerated() {
+            if a.style == .destructive { menu.addItem(.separator()) }
+            let item = NSMenuItem(title: a.title, action: #selector(menuPerform(_:)), keyEquivalent: "")
+            item.image = NSImage(systemSymbolName: a.resolvedSymbol, accessibilityDescription: nil)
             item.target = self
-            item.representedObject = note.relativePath
+            item.tag = i
             menu.addItem(item)
         }
-        let pinned = hits[row].pinned
-        add(pinned ? "Unpin" : "Pin to Top", pinned ? "pin.slash" : "pin", #selector(menuTogglePin(_:)))
-        add("Show in Finder", "folder", #selector(menuShowInFinder(_:)))
-        menu.addItem(.separator())
-        add("Move to Trash", "trash", #selector(menuTrash(_:)))
     }
 
-    private func note(for item: NSMenuItem) -> NoteFile? {
-        guard let path = item.representedObject as? String else { return nil }
-        return notes.first { $0.relativePath == path }
+    @objc private func menuPerform(_ sender: NSMenuItem) {
+        guard sender.tag < menuActions.count else { return }
+        run(menuActions[sender.tag])
     }
-
-    @objc private func menuTogglePin(_ sender: NSMenuItem) { if let n = note(for: sender) { togglePin(n) } }
-    @objc private func menuShowInFinder(_ sender: NSMenuItem) {
-        if let n = note(for: sender) { NSWorkspace.shared.activateFileViewerSelecting([n.url]) }
-    }
-    @objc private func menuTrash(_ sender: NSMenuItem) { if let n = note(for: sender) { trash(n) } }
 
     // MARK: - New notes
 
@@ -767,6 +860,17 @@ final class NotesController: NSObject, NSWindowDelegate, NSTableViewDataSource, 
             shortcuts.isHidden = true
             return event.keyCode == 53 || (event.keyCode == 44 && mods == .command)
         }
+        if !actionPanel.isHidden {
+            if event.keyCode == 53 || KeyCombo.cmd("k").matches(event) { closeActionPanel(); return true }
+            if actionPanel.handle(event) { return true }
+            closeActionPanel() // any other key: close, then handle it as usual
+        }
+        if KeyCombo.cmd("k").matches(event) { toggleActionPanel(); return true }
+        // Action shortcuts (⌘D, ⇧⌘C, ⌥⌘C, ⇧⌘O, ⇧⌘⌫) always act on the open note.
+        if let target = openTarget, let a = actions(for: target).first(where: { $0.shortcut?.matches(event) == true }) {
+            run(a)
+            return true
+        }
         if event.keyCode == 53 && mods.isEmpty { // Esc steps back: find bar, search text, search, window
             if findBarVisible {
                 finderAction(.hideFindInterface)
@@ -823,7 +927,7 @@ final class NotesController: NSObject, NSWindowDelegate, NSTableViewDataSource, 
             switch c {
             case "n": startDraft(title: ""); return true
             case "e": setPreview(!previewMode); return true
-            case "p", "o", "k": focusSearch(); return true
+            case "p", "o": focusSearch(); return true
             case "f": findInNote(); return true
             case "g": finderAction(.nextMatch); return true
             case "w": hide(); return true
@@ -908,6 +1012,7 @@ final class NotesController: NSObject, NSWindowDelegate, NSTableViewDataSource, 
     func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? {
         let v = ResultRowView()
         v.tint = Palette.notes
+        v.isHovered = row == table.hoveredRow
         return v
     }
 
@@ -932,6 +1037,8 @@ final class NotesController: NSObject, NSWindowDelegate, NSTableViewDataSource, 
     }
 
     func debugShowShortcuts() { shortcuts.isHidden = false }
+
+    func debugOpenActions() { toggleActionPanel() }
 
     func debugType(_ text: String, title: String?) {
         if let title {
@@ -1061,12 +1168,14 @@ final class NotesController: NSObject, NSWindowDelegate, NSTableViewDataSource, 
             sidebar.addSubview(v)
         }
         shortcuts.isHidden = true
-        for v in [sidebar, sidebarRule, folderLabel, titleField, metaLabel, editorScroll, previewScroll, messageLabel, footerRule, footer, shortcuts] as [NSView] {
+        actionPanel.isHidden = true
+        for v in [sidebar, sidebarRule, folderLabel, titleField, metaLabel, editorScroll, previewScroll, messageLabel, footerRule, footer, actionPanel, shortcuts] as [NSView] {
             v.translatesAutoresizingMaskIntoConstraints = false
             content.addSubview(v)
         }
         sidebarWidth = sidebar.widthAnchor.constraint(equalToConstant: 250)
         let editorLeading = sidebarRule.trailingAnchor
+        actionPanelHeight = actionPanel.heightAnchor.constraint(equalToConstant: 100)
         NSLayoutConstraint.activate([
             sidebar.topAnchor.constraint(equalTo: content.topAnchor),
             sidebar.leadingAnchor.constraint(equalTo: content.leadingAnchor),
@@ -1122,6 +1231,10 @@ final class NotesController: NSObject, NSWindowDelegate, NSTableViewDataSource, 
             footer.leadingAnchor.constraint(equalTo: editorLeading, constant: 30),
             footer.trailingAnchor.constraint(lessThanOrEqualTo: content.trailingAnchor, constant: -16),
             footer.centerYAnchor.constraint(equalTo: content.bottomAnchor, constant: -19),
+            actionPanel.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -10),
+            actionPanel.bottomAnchor.constraint(equalTo: footerRule.topAnchor, constant: -6),
+            actionPanel.widthAnchor.constraint(equalToConstant: 300),
+            actionPanelHeight,
             shortcuts.centerXAnchor.constraint(equalTo: content.centerXAnchor),
             shortcuts.centerYAnchor.constraint(equalTo: content.centerYAnchor),
         ])
@@ -1182,5 +1295,59 @@ final class NoteCellView: NSTableCellView {
         detail.stringValue = hit.snippet ?? (hit.note.isPlaceholder ? "☁︎ " + where_ : where_)
         detail.textColor = hit.snippet == nil ? Theme.mutedForeground : Theme.foreground.withAlphaComponent(0.75)
         age.stringValue = NoteStore.shortAge(hit.note.modified, now: Date())
+    }
+}
+
+/// The sidebar list; tracks the row under the mouse for the hover wash and ⌘K.
+final class NotesListView: NSTableView {
+    private(set) var hoveredRow = -1
+    private var tracking: NSTrackingArea?
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let tracking { removeTrackingArea(tracking) }
+        let area = NSTrackingArea(rect: .zero, options: [.mouseMoved, .mouseEnteredAndExited, .activeAlways, .inVisibleRect],
+                                  owner: self)
+        addTrackingArea(area)
+        tracking = area
+    }
+
+    override func mouseMoved(with event: NSEvent) {
+        super.mouseMoved(with: event)
+        setHovered(row(at: convert(event.locationInWindow, from: nil)))
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        super.mouseExited(with: event)
+        setHovered(-1)
+    }
+
+    override func scrollWheel(with event: NSEvent) {
+        super.scrollWheel(with: event)
+        refreshHover()
+    }
+
+    override func reloadData() {
+        hoveredRow = -1
+        super.reloadData()
+        refreshHover()
+    }
+
+    /// Re-reads the row under the mouse (after scrolling or new rows).
+    private func refreshHover() {
+        guard let window else { return setHovered(-1) }
+        let point = convert(window.mouseLocationOutsideOfEventStream, from: nil)
+        setHovered(visibleRect.contains(point) ? row(at: point) : -1)
+    }
+
+    private func setHovered(_ row: Int) {
+        guard row != hoveredRow else { return }
+        if hoveredRow >= 0, hoveredRow < numberOfRows {
+            (rowView(atRow: hoveredRow, makeIfNecessary: false) as? ResultRowView)?.isHovered = false
+        }
+        hoveredRow = row
+        if row >= 0, row < numberOfRows {
+            (rowView(atRow: row, makeIfNecessary: false) as? ResultRowView)?.isHovered = true
+        }
     }
 }

@@ -110,6 +110,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 notes.show(newNote: defaults.bool(forKey: "DebugNotesNew"))
                 if let q = defaults.string(forKey: "DebugNotesQuery") { notes.debugSearch(q) }
                 if defaults.bool(forKey: "DebugNotesShortcuts") { notes.debugShowShortcuts() }
+                if defaults.bool(forKey: "DebugNotesActions") { notes.debugOpenActions() }
                 if let t = defaults.string(forKey: "DebugNotesType") {
                     notes.debugType(t.replacingOccurrences(of: "\\n", with: "\n"), title: defaults.string(forKey: "DebugNotesTitle"))
                     if defaults.bool(forKey: "DebugNotesHide") { notes.hide() }
