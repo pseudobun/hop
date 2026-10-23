@@ -29,15 +29,6 @@ final class LauncherPanel: NSPanel {
         isReleasedWhenClosed = false
     }
 
-    /// The frame's corner radius (16 on macOS 26), so the glass matches it exactly.
-    var frameCornerRadius: CGFloat {
-        let sel = NSSelectorFromString("_effectiveCornerRadius")
-        guard responds(to: sel), let m = class_getInstanceMethod(type(of: self), sel) else { return 16 }
-        typealias Getter = @convention(c) (AnyObject, Selector) -> CGFloat
-        let r = unsafeBitCast(method_getImplementation(m), to: Getter.self)(self, sel)
-        return r > 0 ? r : 16
-    }
-
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
 
@@ -54,6 +45,17 @@ final class LauncherPanel: NSPanel {
         let x = visible.midX - frame.width / 2
         let y = visible.minY + visible.height * 0.62 - frame.height / 2
         setFrameOrigin(NSPoint(x: x.rounded(), y: min(y, visible.maxY - frame.height).rounded()))
+    }
+}
+
+extension NSWindow {
+    /// The frame's corner radius (16 on macOS 26), so the glass matches it exactly.
+    var frameCornerRadius: CGFloat {
+        let sel = NSSelectorFromString("_effectiveCornerRadius")
+        guard responds(to: sel), let m = class_getInstanceMethod(type(of: self), sel) else { return 16 }
+        typealias Getter = @convention(c) (AnyObject, Selector) -> CGFloat
+        let r = unsafeBitCast(method_getImplementation(m), to: Getter.self)(self, sel)
+        return r > 0 ? r : 16
     }
 }
 

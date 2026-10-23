@@ -14,6 +14,7 @@ A tiny native macOS launcher. Pure Swift + AppKit, no WebKit. ~3 MB binary, ~15 
 - Kill Process: search running processes, quit, force kill or kill as administrator
 - Caps Lock as Hyper key (⌃⌥⌘⇧), optional tap-for-Escape
 - WireGuard: connect, disconnect, disconnect all (WireGuard.app tunnels)
+- Notes on ⌥. : a floating window over a folder of Markdown files (an Obsidian vault works as is). Search titles and text, live Markdown styling, tasks, `[[links]]` (⌘-click), new notes saved straight into the vault
 - KeePassXC: several databases (⌘D to switch, or search all), paste or copy password / username / TOTP / URL, favicons, pins, folder filter, auto-lock
 - Bookmarks from the config: name, URL, aliases ("hass") and an icon (image file, SF Symbol or emoji); ↵ opens in the default browser
 - Permissions screen: every macOS permission hop needs, with the system prompts (opens on first launch)
@@ -44,6 +45,16 @@ KeePassXC master password: never put it in the config. Choose `keepass.password`
 | `command` | stdout of `keepass.passwordCommand`, e.g. `security find-generic-password -w -s hop-keepass` |
 | `none` | database without a password (key file only) |
 
+Notes are plain `.md` files in `notes.folder`; hop keeps no copy. ⌘N starts a note in `notes.newNoteFolder` from `notes.template` (`{{title}}`, `{{date}}`, `{{time}}`). It gets its file name from its title, or from its first line. With `notes.bumpUpdated`, saving an edit sets an existing `updated:` frontmatter date to today. If a file changed elsewhere while it had unsaved edits in hop, the other version is kept next to it as `<name> (conflict).md`.
+
+| Notes key | |
+|---|---|
+| ⌘N / ⌘F / ⌘O | new note / search / open in Obsidian |
+| ⌘L / ⌘B / ⌘I | toggle task / bold / italic |
+| ⌘\\ | hide the sidebar |
+| ⌘-click | follow a link; a missing `[[page]]` starts a new note |
+| Esc | hide (the window floats above other apps until then) |
+
 ## Permissions
 
 Run **hop Permissions** (it opens by itself on first launch); ↵ shows each macOS prompt, **Grant All** asks for all of them.
@@ -53,6 +64,7 @@ Run **hop Permissions** (it opens by itself on first launch); ↵ shows each mac
 | Hyper key, paste into apps | Accessibility |
 | Empty Trash, removing protected apps | Automation → Finder |
 | Clear Downloads | Downloads folder |
+| Notes in iCloud Drive | iCloud Drive access, if macOS asks |
 | KeePassXC (`keychain`) | Touch ID / login password |
 | Open at Login (`general.openAtLogin`) | Login Items |
 
@@ -72,6 +84,10 @@ hop kill 1234 --force --yes
 hop kp dbs
 hop kp search github --db Work --json
 hop kp get github --field totp # password, totp and notes need keepass.cliAccess: true
+hop notes list olympus --json  # title matches, then text matches
+hop notes show "Home"
+hop notes new "Call Mojca" "about the flat"   # or pipe the text in
+echo "- [ ] renew domain" | hop notes append TODOs
 hop config path | check | show
 ```
 

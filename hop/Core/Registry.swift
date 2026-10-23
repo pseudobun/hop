@@ -9,6 +9,7 @@ final class Services {
     var keepassMode: (() -> Mode)?
     var keepass: KeePassManager?
     var permissionsMode: (() -> Mode)?
+    var notes: NotesController?
     /// Opens the config file in the user's editor.
     func openConfig() {
         let url = settings.url
@@ -34,6 +35,7 @@ enum Registry {
         items += WireGuardCommands.items(services)
         items += KeePassCommands.items(services)
         items += BookmarkCommands.items(services)
+        items += NotesCommands.items(services)
         items += [
             Item(id: "hop.config", title: "Open hop Config", subtitle: "~/.config/hop/config.json5",
                  icon: .tile("gearshape.fill", Palette.neutral), accessory: "Command",

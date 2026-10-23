@@ -17,6 +17,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var root: RootMode!
     private var launcher: LauncherController!
     private var hotkey: GlobalHotkey!
+    private var notes: NotesController!
+    private var notesHotkey: GlobalHotkey!
     private var statusItem: StatusItem?
     #if DEBUG
     private var debugBackdrop: NSWindow?
@@ -40,6 +42,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         services.keepassMode = makeKeePass
         services.keepass = keepass
+        notes = NotesController(settings: settings)
+        notes.openConfig = { [weak self] in self?.services.openConfig() }
+        services.notes = notes
 
         root = RootMode(apps: apps, frecency: frecency, settings: settings) { [unowned self] in
             Registry.commands(services)
@@ -66,6 +71,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         RunningApps.shared.start()
         hotkey = GlobalHotkey { [weak self] in self?.launcher.toggle() }
+        notesHotkey = GlobalHotkey { [weak self] in
+            self?.launcher.hide()
+            self?.notes.toggle()
+        }
 
         settings.onChange = { [weak self] old, new in self?.apply(new, previous: old) }
         settings.start()
@@ -93,6 +102,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     ("root sections, empty query", { _ = root.sections(for: "") }),
                     ("root sections, \"saf\"", { _ = root.sections(for: "saf") }),
                 ])
+            }
+        }
+        if defaults.bool(forKey: "DebugNotes") {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
+                guard let self else { return }
+                notes.show(newNote: defaults.bool(forKey: "DebugNotesNew"))
+                if let q = defaults.string(forKey: "DebugNotesQuery") { notes.debugSearch(q) }
+                if let t = defaults.string(forKey: "DebugNotesType") {
+                    notes.debugType(t.replacingOccurrences(of: "\\n", with: "\n"), title: defaults.string(forKey: "DebugNotesTitle"))
+                    if defaults.bool(forKey: "DebugNotesHide") { notes.hide() }
+                }
+                if let path = defaults.string(forKey: "DebugSnapshotPath") {
+                    Task {
+                        try? await Task.sleep(for: .milliseconds(700))
+                        if self.debugBackdrop != nil {
+                            await DebugSnapshot.captureRegion(around: self.notes.panel, padding: 60, to: path)
+                        } else {
+                            await DebugSnapshot.capture(self.notes.panel, to: path)
+                        }
+                    }
+                }
             }
         }
         if defaults.bool(forKey: "DebugShowOnLaunch") {
@@ -135,6 +165,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
+        if previous?.notes.enabled != config.notes.enabled || previous?.notes.hotkey != config.notes.hotkey {
+            if config.notes.enabled, let spec = HotkeySpec.parse(config.notes.hotkey) {
+                if !notesHotkey.register(keyCode: spec.keyCode, modifiers: spec.modifiers) {
+                    Log.app.error("Could not register notes hotkey \(config.notes.hotkey, privacy: .public)")
+                }
+            } else {
+                if config.notes.enabled { Log.app.error("Invalid notes hotkey \(config.notes.hotkey, privacy: .public)") }
+                notesHotkey.unregister()
+                notes.hide()
+            }
+        }
+        if previous != nil && previous?.notes.folder != config.notes.folder { notes.folderChanged() }
+
         let loginEnabled = SMAppService.mainApp.status == .enabled
         if config.general.openAtLogin != loginEnabled {
             do {
@@ -146,6 +189,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         if config.general.menuBarIcon && statusItem == nil {
             statusItem = StatusItem(onOpen: { [weak self] in self?.launcher.show() },
+                                    onNotes: { [weak self] in self?.notes.show() },
                                     onConfig: { [weak self] in self?.services.openConfig() })
         } else if !config.general.menuBarIcon, let item = statusItem {
             item.remove()
@@ -159,6 +203,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        notes?.saveNow()
         hyper.stop()
     }
 

@@ -90,12 +90,28 @@ nonisolated struct HopConfig: Decodable, Equatable, Sendable {
         var subtitle = ""
     }
 
+    nonisolated struct Notes: Decodable, Equatable, Sendable {
+        var enabled = true
+        var hotkey = "alt+."
+        /// Folder of Markdown files; an Obsidian vault works as is.
+        var folder = "~/Library/Mobile Documents/iCloud~md~obsidian/Documents/obsidian"
+        /// Where new notes go, relative to `folder`.
+        var newNoteFolder = "Inbox"
+        /// Start of every new note; `{{title}}` and `{{date}}` are filled in.
+        var template = "---\ntitle: {{title}}\ntags: [inbox]\ntype: note\nstatus: stub\nupdated: {{date}}\n---\n\n"
+        /// Set an existing `updated:` frontmatter date to today when a note is edited.
+        var bumpUpdated = true
+
+        var expandedFolder: String { folder.expandingTilde }
+    }
+
     var general = General()
     var hyperKey = HyperKey()
     var wireguard = WireGuard()
     var keepass = KeePass()
     var system = System()
     var bookmarks: [Bookmark] = []
+    var notes = Notes()
 
     init() {}
 }
@@ -109,7 +125,7 @@ nonisolated private extension KeyedDecodingContainer {
 }
 
 nonisolated extension HopConfig {
-    private enum Keys: String, CodingKey { case general, hyperKey, wireguard, keepass, system, bookmarks }
+    private enum Keys: String, CodingKey { case general, hyperKey, wireguard, keepass, system, bookmarks, notes }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: Keys.self)
         general = try c.value(.general, General())
@@ -118,6 +134,7 @@ nonisolated extension HopConfig {
         keepass = try c.value(.keepass, KeePass())
         system = try c.value(.system, System())
         bookmarks = try c.value(.bookmarks, [])
+        notes = try c.value(.notes, Notes())
     }
 }
 
@@ -198,6 +215,19 @@ nonisolated extension HopConfig.Bookmark {
         icon = try c.value(.icon, d.icon)
         color = try c.value(.color, d.color)
         subtitle = try c.value(.subtitle, d.subtitle)
+    }
+}
+
+nonisolated extension HopConfig.Notes {
+    private enum Keys: String, CodingKey { case enabled, hotkey, folder, newNoteFolder, template, bumpUpdated }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: Keys.self), d = Self()
+        enabled = try c.value(.enabled, d.enabled)
+        hotkey = try c.value(.hotkey, d.hotkey)
+        folder = try c.value(.folder, d.folder)
+        newNoteFolder = try c.value(.newNoteFolder, d.newNoteFolder)
+        template = try c.value(.template, d.template)
+        bumpUpdated = try c.value(.bumpUpdated, d.bumpUpdated)
     }
 }
 
@@ -382,6 +412,20 @@ final class AppSettings {
         //   color: "#18bcf2",
         // },
       ],
+
+      notes: {
+        enabled: true,
+        // Opens the floating notes window from anywhere
+        hotkey: "alt+.",
+        // Folder of Markdown files; an Obsidian vault works as is
+        folder: "~/Library/Mobile Documents/iCloud~md~obsidian/Documents/obsidian",
+        // Where ⌘N puts new notes, relative to folder
+        newNoteFolder: "Inbox",
+        // Start of every new note; {{title}} and {{date}} are filled in
+        template: "---\\ntitle: {{title}}\\ntags: [inbox]\\ntype: note\\nstatus: stub\\nupdated: {{date}}\\n---\\n\\n",
+        // Set an existing `updated:` date in the frontmatter to today when you edit a note
+        bumpUpdated: true,
+      },
     }
 
     """

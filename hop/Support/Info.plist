@@ -11,5 +11,7 @@
 	<string>hop uses Finder to empty the Trash and to move protected apps to the Trash.</string>
 	<key>NSDownloadsFolderUsageDescription</key>
 	<string>hop needs access to your Downloads folder to clear it when you ask.</string>
+	<key>NSFileProviderDomainUsageDescription</key>
+	<string>hop reads and saves your notes, for example an Obsidian vault in iCloud Drive.</string>
 </dict>
 </plist>
