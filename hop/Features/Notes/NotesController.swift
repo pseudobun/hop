@@ -6,6 +6,8 @@ import os
 final class NotesPanel: NSPanel {
     /// Sees every keyDown before the text views; return true to consume.
     var keyHandler: ((NSEvent) -> Bool)?
+    /// Focus moved (search, editor, preview, find bar); the footer hints follow it.
+    var onFocusChange: (() -> Void)?
 
     init() {
         super.init(contentRect: NSRect(x: 0, y: 0, width: 900, height: 580),
@@ -33,6 +35,12 @@ final class NotesPanel: NSPanel {
     override func sendEvent(_ event: NSEvent) {
         if event.type == .keyDown, let keyHandler, keyHandler(event) { return }
         super.sendEvent(event)
+    }
+
+    override func makeFirstResponder(_ responder: NSResponder?) -> Bool {
+        let ok = super.makeFirstResponder(responder)
+        onFocusChange?()
+        return ok
     }
 }
 
@@ -98,6 +106,7 @@ final class NotesController: NSObject, NSWindowDelegate, NSTableViewDataSource, 
         buildViews()
         panel.delegate = self
         panel.keyHandler = { [weak self] in self?.handleKey($0) ?? false }
+        panel.onFocusChange = { [weak self] in self?.updateFooter() }
         panel.setFrameAutosaveName(Self.frameName)
         textView.onOpenLink = { [weak self] in self?.openLink($0) }
         preview.onOpenLink = { [weak self] in self?.openLink($0) }
@@ -166,6 +175,56 @@ final class NotesController: NSObject, NSWindowDelegate, NSTableViewDataSource, 
     }
 
     func windowDidResignKey(_ notification: Notification) { flush(force: false) }
+
+    func windowDidResize(_ notification: Notification) { updateFooter() }
+
+    // MARK: - Footer hints
+
+    private enum FocusContext { case search, title, find, edit, preview, empty }
+
+    private var focusContext: FocusContext {
+        if findBarVisible { return .find }
+        if searchFocused { return .search }
+        if let editor = titleField.currentEditor(), panel.firstResponder === editor { return .title }
+        if current == nil { return .empty }
+        return previewMode ? .preview : .edit
+    }
+
+    /// The keys that matter where the focus is, most useful first.
+    private func hints(_ context: FocusContext) -> [(String, String)] {
+        switch context {
+        case .search:
+            let open: [(String, String)] = hits.isEmpty && !query.isEmpty ? [("Create", "↵")] : [("Open", "↵"), ("Move", "↑↓")]
+            return open + [("New note", "⇧↵"), (query.isEmpty ? "Back" : "Clear", "esc")]
+        case .title: return [("Start writing", "↵"), ("Close", "esc")]
+        case .find: return [("Next", "⌘G"), ("Previous", "⇧⌘G"), ("Close", "esc")]
+        case .edit: return [("Notes", "⌘P"), ("Preview", "⌘E"), ("New", "⌘N"), ("Find", "⌘F"), ("Task", "⌘L"),
+                            ("Link", "⌥↵"), ("Back", "⌘["), ("Next", "⌥⌘↓")]
+        case .preview: return [("Notes", "⌘P"), ("Edit", "⌘E"), ("Scroll", "↑↓"), ("Find", "⌘F"), ("New", "⌘N"),
+                               ("Back", "⌘["), ("Next", "⌥⌘↓")]
+        case .empty: return [("New", "⌘N"), ("Notes", "⌘P")]
+        }
+    }
+
+    /// Fills the footer with as many hints as fit; "All keys ⌘/" always stays.
+    private func updateFooter() {
+        let available = (footer.superview?.bounds.width ?? panel.frame.width) - sidebarWidth.constant - 1 - 30 - 16
+        var items = hints(focusContext)
+        func build(_ items: [(String, String)]) -> NSAttributedString {
+            let s = NSMutableAttributedString()
+            for (i, (title, keys)) in (items + [("All keys", "⌘/")]).enumerated() {
+                if i > 0 { s.append(NSAttributedString(string: "   ", attributes: [.font: Theme.meta])) }
+                s.append(Keycap.label(title, keys: keys))
+            }
+            return s
+        }
+        var text = build(items)
+        while !items.isEmpty && text.size().width > available {
+            items.removeLast()
+            text = build(items)
+        }
+        footer.attributedStringValue = text
+    }
 
     // MARK: - Listing
 
@@ -330,6 +389,7 @@ final class NotesController: NSObject, NSWindowDelegate, NSTableViewDataSource, 
         editorScroll.isHidden = on || scanError != nil
         updateHeader()
         if focus { focusEditor() }
+        updateFooter()
     }
 
     /// A click on a task box in the preview edits the note (undoable, saved like typing).
@@ -529,6 +589,7 @@ final class NotesController: NSObject, NSWindowDelegate, NSTableViewDataSource, 
     // MARK: - Header and messages
 
     private func updateHeader(meta: String? = nil) {
+        defer { updateFooter() }
         switch current {
         case .draft:
             folderLabel.attributedStringValue = Theme.labelString("\(config.newNoteFolder.isEmpty ? root.lastPathComponent : config.newNoteFolder) · new", color: Palette.notes)
@@ -613,6 +674,7 @@ final class NotesController: NSObject, NSWindowDelegate, NSTableViewDataSource, 
         let sender = NSMenuItem()
         sender.tag = action.rawValue
         (previewMode ? preview : textView).performTextFinderAction(sender)
+        DispatchQueue.main.async { [weak self] in self?.updateFooter() }
     }
 
     private func handleKey(_ event: NSEvent) -> Bool {
@@ -748,6 +810,7 @@ final class NotesController: NSObject, NSWindowDelegate, NSTableViewDataSource, 
     func controlTextDidChange(_ obj: Notification) {
         guard obj.object as? NSTextField === searchField else { return }
         refilter()
+        updateFooter()
         if !query.isEmpty, let first = hits.first { preview(first.note) }
     }
 
@@ -776,7 +839,9 @@ final class NotesController: NSObject, NSWindowDelegate, NSTableViewDataSource, 
 
     #if DEBUG
     func debugSearch(_ text: String) {
+        focusSearch()
         searchField.stringValue = text
+        searchField.currentEditor()?.moveToEndOfDocument(nil)
         refilter()
         if let first = hits.first { open(first.note) }
     }
@@ -800,6 +865,7 @@ final class NotesController: NSObject, NSWindowDelegate, NSTableViewDataSource, 
         sidebar.isHidden = hidden
         sidebarWidth.constant = hidden ? 0 : 250
         if hidden && searchFocused { focusEditor() }
+        updateFooter()
     }
 
     private func buildViews() {
@@ -897,12 +963,6 @@ final class NotesController: NSObject, NSWindowDelegate, NSTableViewDataSource, 
         messageLabel.alignment = .center
         messageLabel.isHidden = true
 
-        let hints = NSMutableAttributedString()
-        for (i, (title, keys)) in [("Notes", "⌘P"), ("Find", "⌘F"), ("New", "⌘N"), ("Preview", "⌘E"), ("Link", "⌥↵"), ("Keys", "⌘/")].enumerated() {
-            if i > 0 { hints.append(NSAttributedString(string: "     ")) }
-            hints.append(Keycap.label(title, keys: keys))
-        }
-        footer.attributedStringValue = hints
         footer.lineBreakMode = .byClipping
         let footerRule = NSView()
         footerRule.wantsLayer = true
