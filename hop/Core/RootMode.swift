@@ -37,7 +37,7 @@ final class RootMode: Mode {
         commandIDs = Set(cmds.map(\.id))
         var newItems: [Item] = cmds
         var newCandidates = cmds.map {
-            RankCandidate(id: $0.id, title: $0.title, subtitle: $0.subtitle, typeWeight: TypeWeight.command)
+            RankCandidate(id: $0.id, title: $0.title, alternateTitles: $0.aliases, subtitle: $0.subtitle, typeWeight: TypeWeight.command)
         }
         for entry in apps.entries {
             newItems.append(item(for: entry))

@@ -76,11 +76,26 @@ nonisolated struct HopConfig: Decodable, Equatable, Sendable {
         var downloadsFolder = "~/Downloads"
     }
 
+    /// A link searchable from the root, opened in the default browser.
+    nonisolated struct Bookmark: Decodable, Equatable, Sendable {
+        var name = ""
+        var url = ""
+        /// Other names that find it, e.g. "hass" for Home Assistant.
+        var aliases: [String] = []
+        /// Image file (absolute, ~/ or relative to the config folder), SF Symbol name or emoji.
+        var icon = ""
+        /// Tile colour for an SF Symbol icon, "#rrggbb".
+        var color = ""
+        /// Shown next to the name; defaults to the URL without its scheme.
+        var subtitle = ""
+    }
+
     var general = General()
     var hyperKey = HyperKey()
     var wireguard = WireGuard()
     var keepass = KeePass()
     var system = System()
+    var bookmarks: [Bookmark] = []
 
     init() {}
 }
@@ -94,7 +109,7 @@ nonisolated private extension KeyedDecodingContainer {
 }
 
 nonisolated extension HopConfig {
-    private enum Keys: String, CodingKey { case general, hyperKey, wireguard, keepass, system }
+    private enum Keys: String, CodingKey { case general, hyperKey, wireguard, keepass, system, bookmarks }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: Keys.self)
         general = try c.value(.general, General())
@@ -102,6 +117,7 @@ nonisolated extension HopConfig {
         wireguard = try c.value(.wireguard, WireGuard())
         keepass = try c.value(.keepass, KeePass())
         system = try c.value(.system, System())
+        bookmarks = try c.value(.bookmarks, [])
     }
 }
 
@@ -169,6 +185,19 @@ nonisolated extension HopConfig.System {
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: Keys.self), d = Self()
         downloadsFolder = try c.value(.downloadsFolder, d.downloadsFolder)
+    }
+}
+
+nonisolated extension HopConfig.Bookmark {
+    private enum Keys: String, CodingKey { case name, url, aliases, icon, color, subtitle }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: Keys.self), d = Self()
+        name = try c.value(.name, d.name)
+        url = try c.value(.url, d.url)
+        aliases = try c.value(.aliases, d.aliases)
+        icon = try c.value(.icon, d.icon)
+        color = try c.value(.color, d.color)
+        subtitle = try c.value(.subtitle, d.subtitle)
     }
 }
 
@@ -339,6 +368,20 @@ final class AppSettings {
         // Folder emptied by "Clear Downloads"
         downloadsFolder: "~/Downloads",
       },
+
+      // Links you can search from hop; ↵ opens them in the default browser.
+      bookmarks: [
+        // {
+        //   name: "Home Assistant",
+        //   url: "http://homeassistant.local:8123",
+        //   // Other names that find it
+        //   aliases: ["hass", "ha"],
+        //   // Image file (relative to this folder, ~/ or absolute), SF Symbol name or emoji
+        //   icon: "icons/home-assistant.svg",
+        //   // Tile colour when icon is an SF Symbol
+        //   color: "#18bcf2",
+        // },
+      ],
     }
 
     """

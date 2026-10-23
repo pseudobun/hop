@@ -1,7 +1,10 @@
 import AppKit
 
 enum ItemIcon {
+    /// The Finder icon of a file or app.
     case file(String)
+    /// An image file's own contents (svg, png, …).
+    case imageFile(String)
     case symbol(String, tint: NSColor? = nil)
     case image(NSImage)
     case emoji(String)
@@ -106,6 +109,8 @@ struct Item {
     let id: String
     var title: String
     var subtitle: String?
+    /// Other names root search matches like the title, e.g. "hass".
+    var aliases: [String] = []
     var icon: ItemIcon?
     /// Short right-aligned text, e.g. "Application".
     var accessory: String?

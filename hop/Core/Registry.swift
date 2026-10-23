@@ -33,6 +33,7 @@ enum Registry {
         items += SystemCommands.items(services)
         items += WireGuardCommands.items(services)
         items += KeePassCommands.items(services)
+        items += BookmarkCommands.items(services)
         items += [
             Item(id: "hop.config", title: "Open hop Config", subtitle: "~/.config/hop/config.json5",
                  icon: .tile("gearshape.fill", Palette.neutral), accessory: "Command",

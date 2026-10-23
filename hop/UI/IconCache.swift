@@ -20,6 +20,19 @@ final class IconCache {
             let img = Self.bitmap(NSWorkspace.shared.icon(forFile: path), size: size)
             cache.setObject(img, forKey: key)
             return img
+        case .imageFile(let path):
+            let key = "image:\(path)" as NSString
+            if let hit = cache.object(forKey: key) { return hit }
+            guard let file = NSImage(contentsOfFile: path), file.size.width > 0, file.size.height > 0 else { return nil }
+            let fitted = NSImage(size: NSSize(width: size, height: size), flipped: false) { rect in
+                let s = min(rect.width / file.size.width, rect.height / file.size.height)
+                let w = file.size.width * s, h = file.size.height * s
+                file.draw(in: NSRect(x: (rect.width - w) / 2, y: (rect.height - h) / 2, width: w, height: h))
+                return true
+            }
+            let img = Self.bitmap(fitted, size: size)
+            cache.setObject(img, forKey: key)
+            return img
         case .symbol(let name, _):
             let key = "sym:\(name)" as NSString
             if let hit = cache.object(forKey: key) { return hit }

@@ -15,6 +15,7 @@ A tiny native macOS launcher. Pure Swift + AppKit, no WebKit. ~3 MB binary, ~15 
 - Caps Lock as Hyper key (⌃⌥⌘⇧), optional tap-for-Escape
 - WireGuard: connect, disconnect, disconnect all (WireGuard.app tunnels)
 - KeePassXC: several databases (⌘D to switch, or search all), paste or copy password / username / TOTP / URL, favicons, pins, folder filter, auto-lock
+- Bookmarks from the config: name, URL, aliases ("hass") and an icon (image file, SF Symbol or emoji); ↵ opens in the default browser
 - Permissions screen: every macOS permission hop needs, with the system prompts (opens on first launch)
 - `hop` CLI for scripts and agents
 
