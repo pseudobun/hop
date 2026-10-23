@@ -67,8 +67,10 @@ final class RootMode: Mode {
         let results = order.map { items[$0] }
         var sections: [ResultSection] = []
         let lower = query.lowercased()
-        if let value = Calculator.evaluateIfExpression(query),
-           !results.contains(where: { $0.title.lowercased().hasPrefix(lower) }) {
+        if let c = Converter.convert(query) {
+            sections.append(ResultSection(title: "Conversion", items: [conversionItem(c)]))
+        } else if let value = Calculator.evaluateIfExpression(query),
+                  !results.contains(where: { $0.title.lowercased().hasPrefix(lower) }) {
             sections.append(ResultSection(title: "Calculator", items: [calculatorItem(query, value)]))
         }
         sections.append(ResultSection(title: "Results", items: results))
@@ -117,6 +119,30 @@ final class RootMode: Mode {
              }], tracksFrecency: false)
     }
 
+    private func conversionItem(_ c: Converter.Conversion) -> Item {
+        let value = Converter.format(c.result)
+        let withUnit = "\(value) \(c.to)"
+        let expression = "\(Converter.format(c.value)) \(c.from)"
+        return Item(id: "convert", title: withUnit, subtitle: expression,
+                    actions: [
+                        Action(title: "Copy Answer") {
+                            Pasteboard.copy(value)
+                            return .dismissWithHUD("Copied \(value)")
+                        },
+                        Action(title: "Copy with Unit", shortcut: .cmd("c", .shift)) {
+                            Pasteboard.copy(withUnit)
+                            return .dismissWithHUD("Copied \(withUnit)")
+                        },
+                        Action(title: "Paste Answer", shortcut: .ret(.command)) { [weak self] in
+                            self?.context?.dismiss()
+                            if !(await Pasteboard.paste(value, concealed: false)) {
+                                HUD.shared.show("Copied. Allow hop in Accessibility to paste")
+                            }
+                            return .stay
+                        },
+                    ], tracksFrecency: false, calculation: (expression, withUnit, c.fromName, c.toName))
+    }
+
     private func calculatorItem(_ query: String, _ value: Decimal) -> Item {
         let text = Calculator.format(value)
         let expression = Calculator.pretty(query)
@@ -137,7 +163,7 @@ final class RootMode: Mode {
                             }
                             return .stay
                         },
-                    ], tracksFrecency: false, calculation: (expression, text))
+                    ], tracksFrecency: false, calculation: (expression, text, "Expression", "Result"))
     }
 
     private func item(for entry: AppEntry) -> Item {

@@ -120,7 +120,7 @@ struct Item {
     /// Title is a value (a number), set in mono.
     var monoTitle = false
     /// Large two-sided calculator card instead of a normal row.
-    var calculation: (expression: String, result: String)?
+    var calculation: (expression: String, result: String, left: String, right: String)?
 }
 
 struct ResultSection {

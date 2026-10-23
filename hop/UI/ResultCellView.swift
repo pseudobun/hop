@@ -149,6 +149,8 @@ final class CalculationCellView: NSTableCellView {
 
     private let expression = NSTextField(labelWithString: "")
     private let result = NSTextField(labelWithString: "")
+    private let leftLabel = NSTextField(labelWithString: "")
+    private let rightLabel = NSTextField(labelWithString: "")
     private let arrow = NSImageView()
 
     override init(frame: NSRect) {
@@ -167,8 +169,8 @@ final class CalculationCellView: NSTableCellView {
             .withSymbolConfiguration(.init(pointSize: 16, weight: .medium))
         arrow.contentTintColor = Theme.mutedForeground
 
-        let left = Self.column(expression, label: "Expression")
-        let right = Self.column(result, label: "Result")
+        let left = Self.column(expression, label: leftLabel)
+        let right = Self.column(result, label: rightLabel)
         for v in [left, arrow, right] {
             v.translatesAutoresizingMaskIntoConstraints = false
             addSubview(v)
@@ -188,9 +190,7 @@ final class CalculationCellView: NSTableCellView {
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError() }
 
-    private static func column(_ value: NSTextField, label text: String) -> NSStackView {
-        let label = NSTextField(labelWithString: "")
-        label.attributedStringValue = Theme.labelString(text)
+    private static func column(_ value: NSTextField, label: NSTextField) -> NSStackView {
         label.alignment = .center
         let stack = NSStackView(views: [value, label])
         stack.orientation = .vertical
@@ -199,8 +199,10 @@ final class CalculationCellView: NSTableCellView {
         return stack
     }
 
-    func configure(_ expression: String, _ result: String) {
+    func configure(_ expression: String, _ result: String, left: String, right: String) {
         self.expression.stringValue = expression
         self.result.stringValue = result
+        leftLabel.attributedStringValue = Theme.labelString(left)
+        rightLabel.attributedStringValue = Theme.labelString(right)
     }
 }

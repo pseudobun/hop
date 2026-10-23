@@ -348,7 +348,8 @@ final class LauncherController: NSObject, LauncherContext, NSTableViewDataSource
         case .item(let item) where item.calculation != nil:
             let v = tableView.makeView(withIdentifier: CalculationCellView.identifier, owner: nil) as? CalculationCellView
                 ?? CalculationCellView(frame: .zero)
-            v.configure(item.calculation!.expression, item.calculation!.result)
+            let c = item.calculation!
+            v.configure(c.expression, c.result, left: c.left, right: c.right)
             return v
         case .item(let item):
             let v = tableView.makeView(withIdentifier: ResultCellView.identifier, owner: nil) as? ResultCellView

@@ -11,6 +11,7 @@ enum CLI {
         "apps": apps,
         "open": openApp,
         "calc": calc,
+        "convert": convert,
         "uninstall": uninstall,
         "downloads": downloads,
         "trash": trash,
@@ -43,6 +44,7 @@ enum CLI {
           apps [query] [--json]               List apps, ranked like the launcher
           open <query>                        Open the best-matching app
           calc <expression>                   Evaluate an expression
+          convert <query> [--json]            Convert units: "734h to min", "1 sq mile = km2"
           uninstall <app> [--yes] [--json]    Remove an app and its ~/Library leftovers
           downloads clear [--yes] [--json]    Move everything in Downloads to the Trash
           trash count | empty [--yes]         Count or empty the Trash
@@ -95,6 +97,19 @@ enum CLI {
         } catch {
             return Output.fail("cannot evaluate: \(expr)")
         }
+    }
+
+    static func convert(_ a: Args) async -> Int32 {
+        let q = a.positional.joined(separator: " ")
+        guard let c = Converter.convert(q) else { return Output.fail("cannot convert: \(q)") }
+        let posix = Locale(identifier: "en_US_POSIX")
+        let result = Converter.format(c.result, locale: posix)
+        if a.json {
+            Output.json(["value": c.value, "from": c.from, "result": c.result, "to": c.to, "formatted": "\(result) \(c.to)"])
+        } else {
+            print("\(result) \(c.to)")
+        }
+        return 0
     }
 
     static func uninstall(_ a: Args) async -> Int32 {
