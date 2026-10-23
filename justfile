@@ -22,6 +22,8 @@ test:
 install: (build "Release")
     scripts/verify-binary.sh build/Build/Products/Release/hop.app
     -pkill -x hop
+    @# hop restores the Caps Lock mapping before it exits; `open` fails (-600) while it is still going
+    @for i in $(seq 1 50); do pgrep -x hop >/dev/null || break; sleep 0.1; done
     rm -rf "{{app_dir}}/hop.app"
     cp -R build/Build/Products/Release/hop.app "{{app_dir}}/hop.app"
     ln -sf "{{app_dir}}/hop.app/Contents/MacOS/hop" "{{cli_link}}"
