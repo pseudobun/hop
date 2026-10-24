@@ -135,6 +135,8 @@ nonisolated struct HopConfig: Decodable, Equatable, Sendable {
     var bookmarks: [Bookmark] = []
     var notes = Notes()
     var clipboard = Clipboard()
+    /// Global hotkeys for any command or app: { "Empty Trash": "hyper+t", "Safari": "hyper+s" }.
+    var hotkeys: [String: String] = [:]
 
     init() {}
 }
@@ -148,7 +150,7 @@ nonisolated private extension KeyedDecodingContainer {
 }
 
 nonisolated extension HopConfig {
-    private enum Keys: String, CodingKey { case general, hyperKey, wireguard, keepass, system, bookmarks, notes, clipboard }
+    private enum Keys: String, CodingKey { case general, hyperKey, wireguard, keepass, system, bookmarks, notes, clipboard, hotkeys }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: Keys.self)
         general = try c.value(.general, General())
@@ -159,6 +161,7 @@ nonisolated extension HopConfig {
         bookmarks = try c.value(.bookmarks, [])
         notes = try c.value(.notes, Notes())
         clipboard = try c.value(.clipboard, Clipboard())
+        hotkeys = try c.value(.hotkeys, [:])
     }
 }
 
@@ -388,6 +391,15 @@ final class AppSettings {
         popToRootSeconds: 90,
         openAtLogin: true,
         menuBarIcon: true,
+      },
+
+      // Global hotkeys for any command or app, on top of general.hotkey, notes.hotkey and
+      // clipboard.hotkey. Key: a command title ("Empty Trash"), an app name ("Safari"),
+      // a command id or "app:" + bundle id; `hop hotkeys` lists them. Value: e.g. "hyper+t".
+      hotkeys: {
+        // "Empty Trash": "hyper+t",
+        // "Safari": "hyper+s",
+        // "WireGuard": "hyper+w",
       },
 
       hyperKey: {

@@ -144,3 +144,24 @@ struct ClipboardStoreTests {
         #expect(ClipboardMonitor.skipTypes.contains("org.nspasteboard.ConcealedType"))
     }
 }
+
+struct HotkeyBindingTests {
+    @Test func looksUpByIdTitleOrBundle() {
+        let map = ["system.emptyTrash": "hyper+t", "safari": "hyper+s", "app:com.apple.Notes": "hyper+n", "WireGuard": "hyper+w"]
+        #expect(HotkeyLookup.binding(id: "system.emptyTrash", title: "Empty Trash", in: map) == "hyper+t")
+        #expect(HotkeyLookup.binding(id: "app:com.apple.Safari", title: "Safari", bundleID: "com.apple.Safari", in: map) == "hyper+s")
+        #expect(HotkeyLookup.binding(id: "app:com.apple.Notes", title: "Notes", bundleID: "com.apple.Notes", in: map) == "hyper+n")
+        #expect(HotkeyLookup.binding(id: "wireguard.tunnels", title: "WireGuard", in: map) == "hyper+w")
+        #expect(HotkeyLookup.binding(id: "hop.quit", title: "Quit hop", in: map) == nil)
+    }
+
+    @Test func configHotkeysSection() throws {
+        let decoder = JSONDecoder()
+        decoder.allowsJSON5 = true
+        let c = try decoder.decode(HopConfig.self, from: Data(#"{ hotkeys: { "Empty Trash": "hyper+t" } }"#.utf8))
+        #expect(c.hotkeys == ["Empty Trash": "hyper+t"])
+        #expect(try decoder.decode(HopConfig.self, from: Data(AppSettings.template.utf8)).hotkeys.isEmpty)
+        #expect(NotesCommands.display("hyper+t") == "✦T")
+        #expect(HotkeySpec.parse("hyper+t") != nil && HotkeySpec.parse("hyper+") == nil)
+    }
+}

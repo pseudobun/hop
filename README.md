@@ -72,6 +72,18 @@ Notes are keyboard-first; ⌘/ shows every shortcut.
 
 Clipboard history lives in `~/Library/Application Support/dev.hop.app/Clipboard` (folder 0700, files 0600). Copies marked concealed or transient (KeePassXC, 1Password, hop's own password pastes) and copies from `clipboard.ignoreApps` are never recorded. Unpinned entries go after `clipboard.keepDays` or beyond `clipboard.maxItems`. Deleting everything takes ⌃⇧X twice.
 
+Every global hotkey is configurable: `general.hotkey` (⌘Space), `notes.hotkey` (⌥.), `clipboard.hotkey` (⇧⌥C), plus a `hotkeys` section that binds any command or app:
+
+```json5
+hotkeys: {
+  "Empty Trash": "hyper+t",      // a command title (or its id, e.g. "system.emptyTrash")
+  "Safari": "hyper+s",           // an app name (or "app:com.apple.Safari"); pressed again while in front, it hides
+  "Clipboard History": "hyper+v",
+},
+```
+
+`hop hotkeys` lists every command you can bind. Bindings show next to their command in the launcher; a binding that clashes with hop's own hotkeys, another app or macOS shows up under Setup.
+
 ## Permissions
 
 Run **hop Permissions** (it opens by itself on first launch); ↵ shows each macOS prompt, **Grant All** asks for all of them.
@@ -107,6 +119,7 @@ hop notes new "Call Mojca" "about the flat"   # or pipe the text in
 echo "- [ ] renew domain" | hop notes append TODOs
 hop clip list ssh --json       # clipboard history; needs clipboard.cliAccess: true
 hop clip copy 3                # put entry 3 back on the clipboard
+hop hotkeys                    # hop's hotkeys, the hotkeys section, every bindable command
 hop config path | check | show
 ```
 

@@ -1,7 +1,7 @@
 import Carbon.HIToolbox
 
 /// Parses hotkeys like "cmd+space", "alt+space", "hyper+k", "ctrl+shift+f5".
-nonisolated struct HotkeySpec: Equatable, Sendable {
+nonisolated struct HotkeySpec: Hashable, Sendable {
     let keyCode: UInt32
     let modifiers: UInt32
 

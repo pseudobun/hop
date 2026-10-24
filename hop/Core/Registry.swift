@@ -60,6 +60,14 @@ enum Registry {
             Item(id: "hop.quit", title: "Quit hop", icon: .tile("power", Theme.chart5), accessory: "Command",
                  actions: [HopApp.quitAction()], tracksFrecency: false),
         ]
+        let bindings = services.settings.data.hotkeys
+        if !bindings.isEmpty {
+            items = items.map { item in
+                var item = item
+                if let h = HotkeyLookup.binding(id: item.id, title: item.title, in: bindings) { item.accessory = NotesCommands.display(h) }
+                return item
+            }
+        }
         return items
     }
 }

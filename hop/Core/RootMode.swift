@@ -14,6 +14,8 @@ final class RootMode: Mode {
     var prefixModes: [(prefix: String, make: () -> Mode)] = []
     weak var context: LauncherContext?
     var hyperError: (() -> String?)?
+    /// Hotkeys from the config that could not be set up.
+    var hotkeyProblems: (() -> [String])?
     var permissionsMode: (() -> Mode)?
 
     private var items: [Item] = []
@@ -112,6 +114,15 @@ final class RootMode: Mode {
         var sections: [ResultSection] = []
         var setup: [Item] = []
         if let error = settings.error { setup.append(configErrorItem(error)) }
+        if let problems = hotkeyProblems?(), !problems.isEmpty {
+            let url = settings.url
+            setup.append(Item(id: "setup.hotkeys", title: "Hotkeys need attention", subtitle: problems.joined(separator: " · "),
+                              icon: .tile("keyboard", Theme.warn), accessory: "Setup",
+                              actions: [Action(title: "Open Config") {
+                                  NSWorkspace.shared.open(url)
+                                  return .dismiss
+                              }], tracksFrecency: false))
+        }
         checkPermissions()
         let missing = missingPermissions
         if !missing.isEmpty, let make = permissionsMode {
@@ -199,10 +210,12 @@ final class RootMode: Mode {
 
     private func item(for entry: AppEntry) -> Item {
         let iconPath = entry.kind == .settingsPane ? "/System/Applications/System Settings.app" : entry.path
-        let accessory = switch entry.kind {
+        let kindName = switch entry.kind {
         case .application: entry.isGame ? "Game" : "Application"
         case .settingsPane, .preferencePane: "System Settings"
         }
+        let accessory = HotkeyLookup.binding(id: entry.id, title: entry.name, bundleID: entry.bundleID, in: settings.data.hotkeys)
+            .map(NotesCommands.display) ?? kindName
         var actions = [
             Action(title: entry.kind == .application ? "Open Application" : "Open Settings") {
                 NSWorkspace.shared.open(entry.openURL)

@@ -23,6 +23,7 @@ enum CLI {
         "kill": killProcess,
         "notes": notes,
         "clip": clip,
+        "hotkeys": hotkeys,
     ]
 
     /// Runs a CLI command and exits if argv names one; otherwise returns.
@@ -57,6 +58,7 @@ enum CLI {
           notes new <title> [text]            Create a note in notes.newNoteFolder (text or stdin)
           notes append <name> [text]          Append text (or stdin) to a note
           notes path                          Print the notes folder
+          hotkeys [--json]                    hop's hotkeys, the hotkeys section, and every command you can bind
           clip count                          How many entries the clipboard history holds
           clip [list] [query] [--json] [--limit=N]   Clipboard history, newest first (needs clipboard.cliAccess)
           clip show <n|query> [--json]        Print entry n (1 = newest) or the best match; images print their PNG path
@@ -448,6 +450,41 @@ enum CLI {
             }
             return 0
         }
+    }
+
+    static func hotkeys(_ a: Args) async -> Int32 {
+        let settings = AppSettings()
+        let c = settings.data
+        let services = Services(settings: settings, frecency: FrecencyStore(store: JSONStore(url: AppPaths.file("frecency.json"))),
+                                apps: AppIndex())
+        var commands = Registry.commands(services).map { (id: $0.id, title: $0.title) }
+        let windows = [("launcher", "hop launcher"), ("notes.open", "Notes"), ("notes.new", "New Note"),
+                       ("clipboard.history", "Clipboard History"), ("keepass.search", "KeePassXC")]
+        for w in windows where !commands.contains(where: { $0.id == w.0 }) { commands.append(w) }
+        let own = [("general.hotkey", c.general.hotkey), ("notes.hotkey", c.notes.enabled ? c.notes.hotkey : "off"),
+                   ("clipboard.hotkey", c.clipboard.enabled ? c.clipboard.hotkey : "off")]
+        if a.json {
+            Output.json([
+                "own": Dictionary(uniqueKeysWithValues: own),
+                "hotkeys": c.hotkeys,
+                "commands": commands.map { cmd -> [String: String] in
+                    var row = ["id": cmd.id, "title": cmd.title]
+                    if let h = HotkeyLookup.binding(id: cmd.id, title: cmd.title, in: c.hotkeys) { row["hotkey"] = h }
+                    return row
+                },
+            ])
+            return 0
+        }
+        print("hop's own")
+        for (k, v) in own { print("  \(k)\t\(v)") }
+        print("\nhotkeys\(c.hotkeys.isEmpty ? " (none yet)" : "")")
+        for (k, v) in c.hotkeys.sorted(by: { $0.key < $1.key }) { print("  \(k)\t\(v)") }
+        print("\ncommands: bind by title or id; apps by name or app:<bundle id>")
+        for cmd in commands {
+            let h = HotkeyLookup.binding(id: cmd.id, title: cmd.title, in: c.hotkeys).map { "\t" + $0 } ?? ""
+            print("  \(cmd.id)\t\(cmd.title)\(h)")
+        }
+        return 0
     }
 
     static func clip(_ a: Args) async -> Int32 {

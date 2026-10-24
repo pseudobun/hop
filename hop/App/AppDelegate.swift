@@ -23,6 +23,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var clipboardMonitor: ClipboardMonitor!
     private var clipboard: ClipboardController!
     private var clipboardHotkey: GlobalHotkey!
+    private let bindings = HotkeyBindings()
     private var statusItem: StatusItem?
     #if DEBUG
     private var debugBackdrop: NSWindow?
@@ -63,6 +64,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             Registry.commands(services)
         }
         root.hyperError = { [weak self] in self?.hyper.lastError }
+        root.hotkeyProblems = { [weak self] in self?.bindings.problems ?? [] }
+        bindings.run = { [weak self] key in self?.runBinding(key) }
         root.prefixModes = [(prefix: "kp ", make: makeKeePass)]
         let makePermissions: () -> Mode = { PermissionsMode { settings.data } }
         root.permissionsMode = makePermissions
@@ -234,6 +237,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
+        if previous?.hotkeys != config.hotkeys || previous?.general.hotkey != config.general.hotkey
+            || previous?.notes.hotkey != config.notes.hotkey || previous?.notes.enabled != config.notes.enabled
+            || previous?.clipboard.hotkey != config.clipboard.hotkey || previous?.clipboard.enabled != config.clipboard.enabled {
+            var reserved = [(owner: "the hop hotkey", hotkey: config.general.hotkey)]
+            if config.notes.enabled { reserved.append((owner: "the notes hotkey", hotkey: config.notes.hotkey)) }
+            if config.clipboard.enabled { reserved.append((owner: "the clipboard hotkey", hotkey: config.clipboard.hotkey)) }
+            bindings.apply(config.hotkeys, reserved: reserved)
+            for p in bindings.problems { Log.app.error("hotkeys: \(p, privacy: .public)") }
+        }
+
         let loginEnabled = SMAppService.mainApp.status == .enabled
         if config.general.openAtLogin != loginEnabled {
             do {
@@ -256,6 +269,48 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if previous != nil {
             root.rebuild()
             if launcher.isVisible { launcher.reload() }
+        }
+    }
+
+    /// A `hotkeys` binding fired: run that command, or open (or hide) that app.
+    private func runBinding(_ key: String) {
+        let lower = key.lowercased()
+        switch lower {
+        case "launcher", "hop": launcher.toggle(); return
+        case "notes.open", "notes": notes.toggle(); return
+        case "notes.new", "new note": launcher.hide(); notes.show(newNote: true); return
+        case "clipboard.history", "clipboard history", "clipboard": launcher.hide(); clipboard.toggle(); return
+        default: break
+        }
+        let commands = Registry.commands(services)
+        let appKey = lower.hasPrefix("app:") ? String(key.dropFirst(4)) : key
+        if !lower.hasPrefix("app:"),
+           let item = commands.first(where: { $0.id == key }) ?? commands.first(where: { $0.title.caseInsensitiveCompare(key) == .orderedSame }),
+           let action = item.actions.first {
+            Task {
+                switch await action.perform() {
+                case .push(let mode):
+                    launcher.show()
+                    launcher.push(mode)
+                case .dismissWithHUD(let text), .stayWithHUD(let text):
+                    HUD.shared.show(text)
+                case .dismiss, .stay, .pop, .reload:
+                    break
+                }
+            }
+            return
+        }
+        let entries = services.apps.entries
+        guard let app = entries.first(where: { $0.bundleID == appKey || $0.path == appKey })
+            ?? entries.first(where: { $0.name.caseInsensitiveCompare(appKey) == .orderedSame }) else {
+            HUD.shared.show("No command or app “\(key)”", symbol: "exclamationmark.triangle.fill")
+            return
+        }
+        // Like Raycast's hotkey toggle: the app in front hides, otherwise it comes forward.
+        if let id = app.bundleID, let front = NSWorkspace.shared.frontmostApplication, front.bundleIdentifier == id {
+            front.hide()
+        } else {
+            NSWorkspace.shared.open(app.openURL)
         }
     }
 
