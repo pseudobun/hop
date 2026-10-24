@@ -281,6 +281,9 @@ final class LauncherController: NSObject, LauncherContext, NSTableViewDataSource
         case 53: // Esc
             if modes.count > 1 { pop() } else { hide() }
             return true
+        case 48 where current.complete(query) != nil: // Tab completes (paths)
+            setQuery(current.complete(query) ?? query)
+            return true
         case 48: // Tab
             if let item = selectedItem, let first = item.actions.first, item.pushesMode {
                 perform(first, of: item, index: 0)

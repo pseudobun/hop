@@ -89,7 +89,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         root.hyperError = { [weak self] in self?.hyper.lastError }
         root.hotkeyProblems = { [weak self] in self?.bindings.problems ?? [] }
         bindings.run = { [weak self] key in self?.runBinding(key) }
-        root.prefixModes = [(prefix: "kp ", make: makeKeePass)]
+        let makeFiles: () -> Mode = { FileSearchMode(settings: settings, frecency: frecency) }
+        root.prefixModes = [(prefix: "kp ", make: makeKeePass), (prefix: "f ", make: makeFiles)]
+        root.pathMode = makeFiles
         let makePermissions: () -> Mode = { PermissionsMode { settings.data } }
         root.permissionsMode = makePermissions
         services.permissionsMode = makePermissions

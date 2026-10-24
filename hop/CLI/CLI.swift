@@ -25,6 +25,7 @@ enum CLI {
         "clip": clip,
         "hotkeys": hotkeys,
         "snippets": snippets,
+        "files": files,
     ]
 
     /// Runs a CLI command and exits if argv names one; otherwise returns.
@@ -59,6 +60,7 @@ enum CLI {
           notes new <title> [text]            Create a note in notes.newNoteFolder (text or stdin)
           notes append <name> [text]          Append text (or stdin) to a note
           notes path                          Print the notes folder
+          files <query> [--content] [--json] [--limit=N]   Files by name (or by text with --content), via Spotlight
           snippets [list] [--json]            Snippets from snippets.json5 with their keywords
           snippets expand <name|keyword> [--arg=value…]   Print a snippet with its placeholders filled in
           snippets add <name> [text] [--keyword=;k]       Append a snippet (text or stdin)
@@ -454,6 +456,25 @@ enum CLI {
             }
             return 0
         }
+    }
+
+    static func files(_ a: Args) async -> Int32 {
+        let config = AppSettings().data.files
+        let words = a.positional
+        guard !words.isEmpty else { return Output.fail("usage: hop files <query> [--content] [--json]") }
+        let scopes = config.scopes.map(\.expandingTilde)
+        let query = a.flags.contains("content") ? Spotlight.contentQuery(words) : Spotlight.nameQuery(words, substring: true)
+        let now = Date()
+        let hits = Spotlight.run(query, scopes: scopes, limit: 1500)
+            .filter { !FilePaths.isExcluded($0.path, patterns: config.exclude, scopes: scopes) }
+            .sorted { FilePaths.recency($0, now: now) > FilePaths.recency($1, now: now) }
+            .prefix(a.option("limit").flatMap(Int.init) ?? 30)
+        if a.json {
+            Output.json(hits.map { ["path": $0.path, "folder": $0.isDirectory] as [String: Any] })
+        } else {
+            for h in hits { print(h.path) }
+        }
+        return hits.isEmpty ? 1 : 0
     }
 
     static func snippets(_ a: Args) async -> Int32 {

@@ -36,6 +36,8 @@ protocol Mode: AnyObject {
     func didExit()
     /// Called when ↵ is pressed with no items (e.g. submit a password).
     func submit(_ query: String) -> ActionResult?
+    /// Tab: a completed query (e.g. a path), or nil for the default Tab behaviour.
+    func complete(_ query: String) -> String?
 }
 
 extension Mode {
@@ -45,4 +47,5 @@ extension Mode {
     func didEnter(_ context: LauncherContext) {}
     func didExit() {}
     func submit(_ query: String) -> ActionResult? { nil }
+    func complete(_ query: String) -> String? { nil }
 }

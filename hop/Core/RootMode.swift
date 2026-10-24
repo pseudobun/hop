@@ -17,6 +17,8 @@ final class RootMode: Mode {
     /// Hotkeys from the config that could not be set up.
     var hotkeyProblems: (() -> [String])?
     var permissionsMode: (() -> Mode)?
+    /// A query that is a path (`~/…`, `/…`) opens this mode with the path kept.
+    var pathMode: (() -> Mode)?
 
     private var items: [Item] = []
     private var candidates: [RankCandidate] = []
@@ -73,6 +75,14 @@ final class RootMode: Mode {
     }
 
     func sections(for query: String) -> [ResultSection] {
+        if settings.data.files.enabled, let make = pathMode, query.hasPrefix("~/") || query.hasPrefix("/") {
+            let mode = make()
+            DispatchQueue.main.async { [weak self] in
+                self?.context?.push(mode)
+                self?.context?.setQuery(query)
+            }
+            return []
+        }
         if let (prefix, make) = prefixModes.first(where: { query.lowercased().hasPrefix($0.prefix) }) {
             let mode = make()
             let rest = String(query.dropFirst(prefix.count))

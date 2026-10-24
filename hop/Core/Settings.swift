@@ -138,6 +138,19 @@ nonisolated struct HopConfig: Decodable, Equatable, Sendable {
         var file = "~/.config/hop/snippets.json5"
     }
 
+    nonisolated struct Files: Decodable, Equatable, Sendable {
+        var enabled = true
+        /// Folders Spotlight searches.
+        var scopes = ["~"]
+        /// Path components that hide a result.
+        var exclude = ["node_modules", ".git", "Library", "DerivedData", ".Trash", ".cache", "Caches"]
+        /// Also list files whose text matches (Spotlight's content index).
+        var contentSearch = true
+        var maxResults = 60
+        /// Show dotfiles when browsing a path.
+        var showHidden = false
+    }
+
     var general = General()
     var hyperKey = HyperKey()
     var wireguard = WireGuard()
@@ -147,6 +160,7 @@ nonisolated struct HopConfig: Decodable, Equatable, Sendable {
     var notes = Notes()
     var clipboard = Clipboard()
     var snippets = Snippets()
+    var files = Files()
     /// Global hotkeys for any command or app: { "Empty Trash": "hyper+t", "Safari": "hyper+s" }.
     var hotkeys: [String: String] = [:]
 
@@ -162,7 +176,7 @@ nonisolated private extension KeyedDecodingContainer {
 }
 
 nonisolated extension HopConfig {
-    private enum Keys: String, CodingKey { case general, hyperKey, wireguard, keepass, system, bookmarks, notes, clipboard, snippets, hotkeys }
+    private enum Keys: String, CodingKey { case general, hyperKey, wireguard, keepass, system, bookmarks, notes, clipboard, snippets, files, hotkeys }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: Keys.self)
         general = try c.value(.general, General())
@@ -174,6 +188,7 @@ nonisolated extension HopConfig {
         notes = try c.value(.notes, Notes())
         clipboard = try c.value(.clipboard, Clipboard())
         snippets = try c.value(.snippets, Snippets())
+        files = try c.value(.files, Files())
         hotkeys = try c.value(.hotkeys, [:])
     }
 }
@@ -256,6 +271,19 @@ nonisolated extension HopConfig.Bookmark {
         icon = try c.value(.icon, d.icon)
         color = try c.value(.color, d.color)
         subtitle = try c.value(.subtitle, d.subtitle)
+    }
+}
+
+nonisolated extension HopConfig.Files {
+    private enum Keys: String, CodingKey { case enabled, scopes, exclude, contentSearch, maxResults, showHidden }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: Keys.self), d = Self()
+        enabled = try c.value(.enabled, d.enabled)
+        scopes = try c.value(.scopes, d.scopes)
+        exclude = try c.value(.exclude, d.exclude)
+        contentSearch = try c.value(.contentSearch, d.contentSearch)
+        maxResults = try c.value(.maxResults, d.maxResults)
+        showHidden = try c.value(.showHidden, d.showHidden)
     }
 }
 
@@ -506,6 +534,19 @@ final class AppSettings {
         template: "---\\ntitle: {{title}}\\ntags: [inbox]\\ntype: note\\nstatus: stub\\nupdated: {{date}}\\n---\\n\\n",
         // Set an existing `updated:` date in the frontmatter to today when you edit a note
         bumpUpdated: true,
+      },
+
+      files: {
+        enabled: true,
+        // Folders searched (Spotlight's index, so results are always current)
+        scopes: ["~"],
+        // Results with one of these folders in their path are hidden
+        exclude: ["node_modules", ".git", "Library", "DerivedData", ".Trash", ".cache", "Caches"],
+        // Also find files by the text inside them
+        contentSearch: true,
+        maxResults: 60,
+        // Show dotfiles when browsing a path (~/…)
+        showHidden: false,
       },
 
       snippets: {
