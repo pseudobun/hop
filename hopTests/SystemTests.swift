@@ -91,7 +91,8 @@ struct HotkeySpecTests {
     @Test func parses() {
         #expect(HotkeySpec.parse("cmd+space") == HotkeySpec(keyCode: 49, modifiers: 256))
         #expect(HotkeySpec.parse("Alt + Space") == HotkeySpec(keyCode: 49, modifiers: 2048))
-        #expect(HotkeySpec.parse("hyper+k")?.modifiers == 256 | 512 | 2048 | 4096)
+        let hyper = UInt32(256 | 512 | 2048 | 4096) // ⌘ ⇧ ⌥ ⌃
+        #expect(HotkeySpec.parse("hyper+k")?.modifiers == hyper)
         #expect(HotkeySpec.parse("f13") != nil)
         #expect(HotkeySpec.parse("space") == nil)
         #expect(HotkeySpec.parse("cmd+nope") == nil)

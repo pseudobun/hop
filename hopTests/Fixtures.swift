@@ -15,4 +15,5 @@ nonisolated enum Fixtures {
 
     static var search: [String: Any] { json("search_golden.json") }
     static var frecency: [String: Any] { json("frecency_golden.json") }
+    static var placeholders: [String: Any] { json("placeholders_golden.json") }
 }

@@ -127,6 +127,17 @@ nonisolated struct HopConfig: Decodable, Equatable, Sendable {
         var cliAccess = false
     }
 
+    nonisolated struct Snippets: Decodable, Equatable, Sendable {
+        var enabled = true
+        /// Replace a snippet's keyword with the snippet as soon as it is typed (Accessibility).
+        var expand = true
+        /// Also expand keywords typed in the middle of a word.
+        var expandWithinWords = false
+        /// Apps where keywords never expand (bundle identifiers).
+        var disabledApps: [String] = []
+        var file = "~/.config/hop/snippets.json5"
+    }
+
     var general = General()
     var hyperKey = HyperKey()
     var wireguard = WireGuard()
@@ -135,6 +146,7 @@ nonisolated struct HopConfig: Decodable, Equatable, Sendable {
     var bookmarks: [Bookmark] = []
     var notes = Notes()
     var clipboard = Clipboard()
+    var snippets = Snippets()
     /// Global hotkeys for any command or app: { "Empty Trash": "hyper+t", "Safari": "hyper+s" }.
     var hotkeys: [String: String] = [:]
 
@@ -150,7 +162,7 @@ nonisolated private extension KeyedDecodingContainer {
 }
 
 nonisolated extension HopConfig {
-    private enum Keys: String, CodingKey { case general, hyperKey, wireguard, keepass, system, bookmarks, notes, clipboard, hotkeys }
+    private enum Keys: String, CodingKey { case general, hyperKey, wireguard, keepass, system, bookmarks, notes, clipboard, snippets, hotkeys }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: Keys.self)
         general = try c.value(.general, General())
@@ -161,6 +173,7 @@ nonisolated extension HopConfig {
         bookmarks = try c.value(.bookmarks, [])
         notes = try c.value(.notes, Notes())
         clipboard = try c.value(.clipboard, Clipboard())
+        snippets = try c.value(.snippets, Snippets())
         hotkeys = try c.value(.hotkeys, [:])
     }
 }
@@ -243,6 +256,18 @@ nonisolated extension HopConfig.Bookmark {
         icon = try c.value(.icon, d.icon)
         color = try c.value(.color, d.color)
         subtitle = try c.value(.subtitle, d.subtitle)
+    }
+}
+
+nonisolated extension HopConfig.Snippets {
+    private enum Keys: String, CodingKey { case enabled, expand, expandWithinWords, disabledApps, file }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: Keys.self), d = Self()
+        enabled = try c.value(.enabled, d.enabled)
+        expand = try c.value(.expand, d.expand)
+        expandWithinWords = try c.value(.expandWithinWords, d.expandWithinWords)
+        disabledApps = try c.value(.disabledApps, d.disabledApps)
+        file = try c.value(.file, d.file)
     }
 }
 
@@ -481,6 +506,18 @@ final class AppSettings {
         template: "---\\ntitle: {{title}}\\ntags: [inbox]\\ntype: note\\nstatus: stub\\nupdated: {{date}}\\n---\\n\\n",
         // Set an existing `updated:` date in the frontmatter to today when you edit a note
         bumpUpdated: true,
+      },
+
+      snippets: {
+        enabled: true,
+        // Type a snippet's keyword anywhere and it becomes the snippet (needs Accessibility)
+        expand: true,
+        // Also expand keywords typed in the middle of a word
+        expandWithinWords: false,
+        // Apps where keywords never expand (bundle identifiers)
+        disabledApps: [],
+        // The snippets themselves (JSON5); "Edit Snippets" in hop opens it
+        file: "~/.config/hop/snippets.json5",
       },
 
       clipboard: {

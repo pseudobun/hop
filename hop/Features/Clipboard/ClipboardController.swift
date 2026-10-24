@@ -70,6 +70,8 @@ final class ClipboardController: NSObject, NSWindowDelegate, NSTableViewDataSour
     private var filter: ClipboardFilter = .all
     private var deleteAllArmedUntil: Date?
     private let thumbnails = NSCache<NSString, NSImage>()
+    /// Adds text to the snippets file; false when it could not.
+    var saveSnippet: ((String) -> Bool)?
     private static let frameName = "hop.clipboard"
 
     // Views
@@ -259,6 +261,14 @@ final class ClipboardController: NSObject, NSWindowDelegate, NSTableViewDataSour
             }
         case .text:
             break
+        }
+        if item.kind != .image && item.kind != .file, let saveSnippet {
+            list.append(Action(title: "Save as Snippet", symbol: "text.badge.plus", shortcut: .cmd("s")) { [weak self] in
+                self?.hide()
+                HUD.shared.show(saveSnippet(item.text) ? "Saved as a snippet" : "Could not write the snippets file",
+                                symbol: "checkmark.circle.fill")
+                return .stay
+            })
         }
         list.append(Action(title: item.pinned ? "Unpin" : "Pin", symbol: item.pinned ? "pin.slash" : "pin", shortcut: .cmd("p", .shift)) { [weak self] in
             self?.store.togglePin(item.id)

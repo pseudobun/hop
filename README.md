@@ -16,6 +16,7 @@ A tiny native macOS launcher. Pure Swift + AppKit, no WebKit. ~5.5 MB binary, ~4
 - WireGuard: connect, disconnect, disconnect all (WireGuard.app tunnels)
 - Notes on ⌥. : a keyboard-first floating window over a folder of Markdown files (an Obsidian vault works as is). Search titles and text, live Markdown styling, ⌘E preview, tasks, `[[links]]`, back / forward, pinned notes on top, move to Trash, new notes saved straight into the vault
 - Clipboard History on ⇧⌥C, centred like the launcher: text, images, links, colours and files you copied, list on the left and a preview on the right (rendered Markdown, code, colour swatch with HEX / RGB / HSL, images), source app and stats. ↵ pastes into the app you were in, ⌘↵ copies, ⇧⌘P pins, ⌃X deletes, ⌘K for the rest, ⌘P filters by type
+- Snippets: type a keyword anywhere (`;mail`) and it becomes the snippet, or search them in hop. Raycast's placeholders (`{clipboard}`, `{date format="…" offset="+1d"}`, `{time}`, `{uuid}`, `{cursor}`, `{argument}`, `{snippet}`, `{calculator}`, `| trim | uppercase` …), checked against Raycast's own parser
 - KeePassXC: several databases (⌘D to switch, or search all), paste or copy password / username / TOTP / URL, favicons, pins, folder filter. Stays unlocked until ⌘L or quit (`keepass.autoLock` locks on sleep, screen lock and inactivity)
 - Bookmarks from the config: name, URL, aliases ("hass") and an icon (image file, SF Symbol or emoji); ↵ opens in the default browser
 - Permissions screen: every macOS permission hop needs, with the system prompts (opens on first launch)
@@ -84,13 +85,24 @@ hotkeys: {
 
 `hop hotkeys` lists every command you can bind. Bindings show next to their command in the launcher; a binding that clashes with hop's own hotkeys, another app or macOS shows up under Setup.
 
+Snippets live in `~/.config/hop/snippets.json5` (created on first launch, reloaded on save; `snippets.file` moves it):
+
+```json5
+[
+  { name: "Email", keyword: ";mail", text: "you@example.com" },
+  { name: "Meeting", keyword: ";mt", text: "Meeting with {argument name=\"who\"} on {date offset=\"+1d\"}, {cursor}" },
+]
+```
+
+A keyword expands as soon as it is typed (`snippets.expand`, Accessibility); a keyword that starts with a letter only expands as a whole word unless `snippets.expandWithinWords`. Snippets with `{argument}` ask for the values in hop first. Not in password fields, nor in `snippets.disabledApps`. "Save as Snippet" (⌘S) in the clipboard history adds an entry.
+
 ## Permissions
 
 Run **hop Permissions** (it opens by itself on first launch); ↵ shows each macOS prompt, **Grant All** asks for all of them.
 
 | Feature | Permission |
 |---|---|
-| Hyper key, paste into apps (KeePassXC, clipboard history) | Accessibility |
+| Hyper key, paste into apps (KeePassXC, clipboard history), snippet expansion | Accessibility |
 | Empty Trash, removing protected apps | Automation → Finder |
 | Clear Downloads | Downloads folder |
 | Notes in iCloud Drive | iCloud Drive access, if macOS asks |
@@ -119,6 +131,7 @@ hop notes new "Call Mojca" "about the flat"   # or pipe the text in
 echo "- [ ] renew domain" | hop notes append TODOs
 hop clip list ssh --json       # clipboard history; needs clipboard.cliAccess: true
 hop clip copy 3                # put entry 3 back on the clipboard
+hop snippets expand ";mt" --who=Mojca   # a snippet with its placeholders filled in
 hop hotkeys                    # hop's hotkeys, the hotkeys section, every bindable command
 hop config path | check | show
 ```

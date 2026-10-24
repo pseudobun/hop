@@ -24,6 +24,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var clipboard: ClipboardController!
     private var clipboardHotkey: GlobalHotkey!
     private let bindings = HotkeyBindings()
+    private var snippetService: SnippetService!
+    private let expander = SnippetExpander()
+    private var expanderRetry: Timer?
     private var statusItem: StatusItem?
     #if DEBUG
     private var debugBackdrop: NSWindow?
@@ -59,6 +62,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         clipboardMonitor = ClipboardMonitor(store: clipboardStore) { settings.data.clipboard }
         clipboard = ClipboardController(store: clipboardStore, monitor: clipboardMonitor, settings: settings)
         services.clipboard = clipboard
+        let snippetsFile = SnippetsFile(url: URL(fileURLWithPath: settings.data.snippets.file.expandingTilde))
+        snippetService = SnippetService(file: snippetsFile, clipboard: clipboardStore)
+        services.snippets = snippetService
+        snippetService.presentArguments = { [weak self] mode in
+            self?.launcher.show()
+            self?.launcher.push(mode)
+        }
+        clipboard.saveSnippet = { text in
+            let first = text.split(whereSeparator: \.isNewline).first.map(String.init) ?? text
+            return snippetsFile.append(Snippet(name: String(first.trimmingCharacters(in: .whitespaces).prefix(40)), text: text))
+        }
+        snippetsFile.onChange = { [weak self] in
+            self?.updateExpanderKeywords()
+            self?.root?.rebuild()
+        }
+        expander.onMatch = { [weak self] index, keyword in
+            guard let self, index < snippetService.snippets.count else { return }
+            snippetService.insert(snippetService.snippets[index], keyword: keyword)
+        }
+        snippetsFile.start()
 
         root = RootMode(apps: apps, frecency: frecency, settings: settings) { [unowned self] in
             Registry.commands(services)
@@ -219,6 +242,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         if previous != nil && previous?.notes.folder != config.notes.folder { notes.folderChanged() }
 
+        if previous?.snippets != config.snippets {
+            let url = URL(fileURLWithPath: config.snippets.file.expandingTilde)
+            if previous != nil && snippetService.file.url != url {
+                snippetService.file.url = url
+                snippetService.file.start()
+            }
+            expander.withinWords = config.snippets.expandWithinWords
+            expander.disabledApps = Set(config.snippets.disabledApps)
+            updateExpander(config.snippets)
+        }
+
         if previous?.clipboard != config.clipboard {
             if config.clipboard.enabled {
                 clipboardMonitor.start()
@@ -272,6 +306,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    private func updateExpanderKeywords() {
+        expander.keywords = snippetService.snippets.enumerated().compactMap { i, s in s.keyword.map { ($0, i) } }
+    }
+
+    /// Starts the expander when wanted; without Accessibility it retries until granted.
+    private func updateExpander(_ config: HopConfig.Snippets) {
+        expanderRetry?.invalidate()
+        expanderRetry = nil
+        guard config.enabled && config.expand else {
+            expander.stop()
+            return
+        }
+        updateExpanderKeywords()
+        if expander.start() { return }
+        Log.app.notice("snippets: expansion waits for Accessibility")
+        expanderRetry = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, AXIsProcessTrusted(), self.expander.start() else { return }
+                self.expanderRetry?.invalidate()
+                self.expanderRetry = nil
+            }
+        }
+    }
+
     /// A `hotkeys` binding fired: run that command, or open (or hide) that app.
     private func runBinding(_ key: String) {
         let lower = key.lowercased()
@@ -318,6 +376,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         notes?.saveNow()
         clipboardStore?.saveNow()
         hyper.stop()
+        expander.stop()
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {

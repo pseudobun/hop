@@ -11,6 +11,7 @@ final class Services {
     var permissionsMode: (() -> Mode)?
     var notes: NotesController?
     var clipboard: ClipboardController?
+    var snippets: SnippetService?
     /// Opens the config file in the user's editor.
     func openConfig() {
         let url = settings.url
@@ -38,6 +39,7 @@ enum Registry {
         items += BookmarkCommands.items(services)
         items += NotesCommands.items(services)
         items += ClipboardCommands.items(services)
+        items += SnippetCommands.items(services)
         items += [
             Item(id: "hop.config", title: "Open hop Config", subtitle: "~/.config/hop/config.json5",
                  icon: .tile("gearshape.fill", Palette.neutral), accessory: "Command",

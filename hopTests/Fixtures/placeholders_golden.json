@@ -1,0 +1,792 @@
+{
+ "source": "backend CY parser @4741390 (extracted copy), feature flags all false",
+ "cases": [
+  {
+   "consumer": "snippet",
+   "text": "{clipboard offset=2 | trim}",
+   "results": [
+    {
+     "range": {
+      "start": 0,
+      "end": 27
+     },
+     "value": {
+      "type": "clipboard",
+      "offset": 2,
+      "modifiers": [
+       "trim"
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "consumer": "snippet",
+   "text": "{clipboard|trim uppercase}",
+   "results": []
+  },
+  {
+   "consumer": "snippet",
+   "text": "{clipboard | trim | uppercase}",
+   "results": [
+    {
+     "range": {
+      "start": 0,
+      "end": 30
+     },
+     "value": {
+      "type": "clipboard",
+      "offset": 0,
+      "modifiers": [
+       "trim",
+       "uppercase"
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "consumer": "snippet",
+   "text": "{clipboard|percent-encode|json-stringify}",
+   "results": [
+    {
+     "range": {
+      "start": 0,
+      "end": 41
+     },
+     "value": {
+      "type": "clipboard",
+      "offset": 0,
+      "modifiers": [
+       "percent-encode",
+       "json-stringify"
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "consumer": "snippet",
+   "text": "{clipboard | foo}",
+   "results": [
+    {
+     "range": {
+      "start": 0,
+      "end": 17
+     },
+     "error": "Unknown \"foo\" modifier"
+    }
+   ]
+  },
+  {
+   "consumer": "snippet",
+   "text": "{date format=\"yyyy-MM-dd\" offset=\"+1d -2h\"}",
+   "results": [
+    {
+     "range": {
+      "start": 0,
+      "end": 43
+     },
+     "value": {
+      "type": "date",
+      "unit": "date",
+      "format": "yyyy-MM-dd",
+      "dateModifiers": [
+       {
+        "duration": "d",
+        "difference": 1
+       },
+       {
+        "duration": "h",
+        "difference": -2
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "consumer": "snippet",
+   "text": "{date \"dd.MM.\" +3d}",
+   "results": [
+    {
+     "range": {
+      "start": 0,
+      "end": 19
+     },
+     "value": {
+      "type": "date",
+      "unit": "date",
+      "format": "dd.MM.",
+      "dateModifiers": [
+       {
+        "duration": "d",
+        "difference": 3
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "consumer": "snippet",
+   "text": "{time locale=\"sl-SI\"}",
+   "results": [
+    {
+     "range": {
+      "start": 0,
+      "end": 21
+     },
+     "value": {
+      "type": "date",
+      "unit": "time",
+      "locale": "sl-SI",
+      "dateModifiers": []
+     }
+    }
+   ]
+  },
+  {
+   "consumer": "snippet",
+   "text": "{date format=\"x\" locale=\"de\"}",
+   "results": [
+    {
+     "range": {
+      "start": 0,
+      "end": 29
+     },
+     "error": "The \"format\" and \"locale\" options cannot be used together"
+    }
+   ]
+  },
+  {
+   "consumer": "snippet",
+   "text": "{date offset=\"1d\"}",
+   "results": [
+    {
+     "range": {
+      "start": 0,
+      "end": 18
+     },
+     "error": "Could not parse the offset option"
+    }
+   ]
+  },
+  {
+   "consumer": "snippet",
+   "text": "{datetime format=\"HH:mm\"}",
+   "results": [
+    {
+     "range": {
+      "start": 0,
+      "end": 25
+     },
+     "error": "Unknown \"format\" option"
+    }
+   ]
+  },
+  {
+   "consumer": "snippet",
+   "text": "{argument name=\"lang\" default=\"en\" options=\"en, sl, de\"}",
+   "results": [
+    {
+     "range": {
+      "start": 0,
+      "end": 56
+     },
+     "value": {
+      "type": "argument",
+      "position": 0,
+      "name": "lang",
+      "defaultValue": "en",
+      "options": [
+       {
+        "value": "en"
+       },
+       {
+        "value": "sl"
+       },
+       {
+        "value": "de"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "consumer": "snippet",
+   "text": "{argument name=x}{argument name=x}{argument}",
+   "results": [
+    {
+     "range": {
+      "start": 0,
+      "end": 17
+     },
+     "value": {
+      "type": "argument",
+      "position": 0,
+      "name": "x"
+     }
+    },
+    {
+     "range": {
+      "start": 17,
+      "end": 34
+     },
+     "value": {
+      "type": "argument",
+      "position": 0,
+      "name": "x"
+     }
+    },
+    {
+     "range": {
+      "start": 34,
+      "end": 44
+     },
+     "value": {
+      "type": "argument",
+      "position": 1
+     }
+    }
+   ]
+  },
+  {
+   "consumer": "snippet",
+   "text": "{argument}{argument}{argument}{argument}",
+   "results": [
+    {
+     "range": {
+      "start": 0,
+      "end": 10
+     },
+     "value": {
+      "type": "argument",
+      "position": 0
+     }
+    },
+    {
+     "range": {
+      "start": 10,
+      "end": 20
+     },
+     "value": {
+      "type": "argument",
+      "position": 1
+     }
+    },
+    {
+     "range": {
+      "start": 20,
+      "end": 30
+     },
+     "value": {
+      "type": "argument",
+      "position": 2
+     }
+    },
+    {
+     "range": {
+      "start": 30,
+      "end": 40
+     },
+     "error": "Only 3 different Arguments are allowed"
+    }
+   ]
+  },
+  {
+   "consumer": "snippet",
+   "text": "{argument options=\"a\\, b, c:d\"}",
+   "results": [
+    {
+     "range": {
+      "start": 0,
+      "end": 31
+     },
+     "value": {
+      "type": "argument",
+      "position": 0,
+      "options": [
+       {
+        "value": ", b"
+       },
+       {
+        "value": "c:d"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "consumer": "snippet",
+   "text": "{argument options=\"ab\\, c, d\"}",
+   "results": [
+    {
+     "range": {
+      "start": 0,
+      "end": 30
+     },
+     "value": {
+      "type": "argument",
+      "position": 0,
+      "options": [
+       {
+        "value": "ab, c"
+       },
+       {
+        "value": "d"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "consumer": "snippet",
+   "text": "{argument options=\"  \"}",
+   "results": [
+    {
+     "range": {
+      "start": 0,
+      "end": 23
+     },
+     "value": {
+      "type": "argument",
+      "position": 0,
+      "options": []
+     }
+    }
+   ]
+  },
+  {
+   "consumer": "snippet",
+   "text": "{cursor}",
+   "results": [
+    {
+     "range": {
+      "start": 0,
+      "end": 8
+     },
+     "value": {
+      "type": "cursor"
+     }
+    }
+   ]
+  },
+  {
+   "consumer": "snippet",
+   "text": "{cursor|uppercase}",
+   "results": [
+    {
+     "range": {
+      "start": 0,
+      "end": 18
+     },
+     "error": "The Cursor placeholder doesn't support any modifiers"
+    }
+   ]
+  },
+  {
+   "consumer": "snippet",
+   "text": "{cursor}{cursor}",
+   "results": [
+    {
+     "range": {
+      "start": 0,
+      "end": 8
+     },
+     "value": {
+      "type": "cursor"
+     }
+    },
+    {
+     "range": {
+      "start": 8,
+      "end": 16
+     },
+     "error": "Only one Cursor placeholder is allowed"
+    }
+   ]
+  },
+  {
+   "consumer": "snippet",
+   "text": "{uuid}",
+   "results": [
+    {
+     "range": {
+      "start": 0,
+      "end": 6
+     },
+     "value": {
+      "type": "uuid"
+     }
+    }
+   ]
+  },
+  {
+   "consumer": "aiChat",
+   "text": "{uuid}",
+   "results": [
+    {
+     "range": {
+      "start": 0,
+      "end": 6
+     },
+     "error": "The UUID placeholder isn't available in this context"
+    }
+   ]
+  },
+  {
+   "consumer": "snippet",
+   "text": "{selection}",
+   "results": [
+    {
+     "range": {
+      "start": 0,
+      "end": 11
+     },
+     "error": "The Selected Text placeholder isn't available in this context"
+    }
+   ]
+  },
+  {
+   "consumer": "aiCommand",
+   "text": "{selection}",
+   "results": [
+    {
+     "range": {
+      "start": 0,
+      "end": 11
+     },
+     "value": {
+      "type": "selection"
+     }
+    }
+   ]
+  },
+  {
+   "consumer": "snippet",
+   "text": "{snippet name=\"Sig\"}",
+   "results": [
+    {
+     "range": {
+      "start": 0,
+      "end": 20
+     },
+     "value": {
+      "type": "snippet",
+      "snippet": {
+       "id": "s1",
+       "title": "Sig",
+       "text": "Best, {clipboard}"
+      }
+     }
+    }
+   ]
+  },
+  {
+   "consumer": "snippet",
+   "text": "{snippet name=\"Bad\"}",
+   "results": [
+    {
+     "range": {
+      "start": 0,
+      "end": 20
+     },
+     "error": "Only snippets without {snippet}, {argument} or {ai} dynamic placeholders can be referenced"
+    }
+   ]
+  },
+  {
+   "consumer": "snippet",
+   "text": "{snippet name=\"Nope\"}",
+   "results": [
+    {
+     "range": {
+      "start": 0,
+      "end": 21
+     },
+     "error": "No Snippet named \"Nope\" found"
+    }
+   ]
+  },
+  {
+   "consumer": "snippet",
+   "text": "{calculator expression=\"2+2\"}",
+   "results": [
+    {
+     "range": {
+      "start": 0,
+      "end": 29
+     },
+     "value": {
+      "type": "calculator",
+      "expression": "2+2"
+     }
+    }
+   ]
+  },
+  {
+   "consumer": "snippet",
+   "text": "{browser-tab.url}",
+   "results": [
+    {
+     "range": {
+      "start": 0,
+      "end": 17
+     },
+     "error": "The Focused Browser Tab placeholder isn't available in this context"
+    }
+   ]
+  },
+  {
+   "consumer": "aiCommand",
+   "text": "{browser-tab.url}",
+   "results": [
+    {
+     "range": {
+      "start": 0,
+      "end": 17
+     },
+     "value": {
+      "type": "browser-tab",
+      "field": "url"
+     }
+    }
+   ]
+  },
+  {
+   "consumer": "aiCommand",
+   "text": "{browser-tab format=\"markdown\"}",
+   "results": [
+    {
+     "range": {
+      "start": 0,
+      "end": 31
+     },
+     "value": {
+      "type": "browser-tab",
+      "field": "all",
+      "format": "markdown"
+     }
+    }
+   ]
+  },
+  {
+   "consumer": "snippet",
+   "text": "{foo}",
+   "results": [
+    {
+     "range": {
+      "start": 0,
+      "end": 5
+     },
+     "error": "Unknown \"foo\" placeholder"
+    }
+   ]
+  },
+  {
+   "consumer": "quicklink",
+   "text": "{foo}",
+   "results": [
+    {
+     "range": {
+      "start": 0,
+      "end": 5
+     },
+     "value": {
+      "type": "argument",
+      "position": 0,
+      "name": "foo"
+     }
+    }
+   ]
+  },
+  {
+   "consumer": "quicklink",
+   "text": "{search term}",
+   "results": [
+    {
+     "range": {
+      "start": 0,
+      "end": 13
+     },
+     "value": {
+      "type": "argument",
+      "position": 0,
+      "name": "search term"
+     }
+    }
+   ]
+  },
+  {
+   "consumer": "quicklink",
+   "text": "{q:default}{q}{r}",
+   "results": [
+    {
+     "range": {
+      "start": 0,
+      "end": 11
+     },
+     "value": {
+      "type": "argument",
+      "position": 0,
+      "name": "q",
+      "defaultValue": "default"
+     }
+    },
+    {
+     "range": {
+      "start": 11,
+      "end": 14
+     },
+     "value": {
+      "type": "argument",
+      "position": 1,
+      "name": "q_2"
+     }
+    },
+    {
+     "range": {
+      "start": 14,
+      "end": 17
+     },
+     "value": {
+      "type": "argument",
+      "position": 2,
+      "name": "r"
+     }
+    }
+   ]
+  },
+  {
+   "consumer": "snippet",
+   "text": "{clipboard\n}",
+   "results": []
+  },
+  {
+   "consumer": "snippet",
+   "text": "{ clipboard }",
+   "results": [
+    {
+     "range": {
+      "start": 0,
+      "end": 13
+     },
+     "value": {
+      "type": "clipboard",
+      "offset": 0
+     }
+    }
+   ]
+  },
+  {
+   "consumer": "snippet",
+   "text": "{CLIPBOARD}",
+   "results": [
+    {
+     "range": {
+      "start": 0,
+      "end": 11
+     },
+     "value": {
+      "type": "clipboard",
+      "offset": 0
+     }
+    }
+   ]
+  },
+  {
+   "consumer": "snippet",
+   "text": "{argument name=“curly” default=‘x’}",
+   "results": [
+    {
+     "range": {
+      "start": 0,
+      "end": 35
+     },
+     "value": {
+      "type": "argument",
+      "position": 0,
+      "name": "curly",
+      "defaultValue": "x"
+     }
+    }
+   ]
+  },
+  {
+   "consumer": "snippet",
+   "text": "{argument default=\"a \\\"q\\\" b\"}",
+   "results": [
+    {
+     "range": {
+      "start": 0,
+      "end": 30
+     },
+     "value": {
+      "type": "argument",
+      "position": 0,
+      "defaultValue": "a \"q\" b"
+     }
+    }
+   ]
+  },
+  {
+   "consumer": "snippet",
+   "text": "text {not closed",
+   "results": []
+  },
+  {
+   "consumer": "snippet",
+   "text": "{argument default=\"{clipboard}\"",
+   "results": [
+    {
+     "range": {
+      "start": 19,
+      "end": 30
+     },
+     "value": {
+      "type": "clipboard",
+      "offset": 0
+     }
+    }
+   ]
+  },
+  {
+   "consumer": "snippet",
+   "text": "{clipboard ? selection}",
+   "results": []
+  },
+  {
+   "consumer": "snippet",
+   "text": "{ai prompt=\"hi\"}",
+   "results": [
+    {
+     "range": {
+      "start": 0,
+      "end": 16
+     },
+     "error": "Unknown \"ai\" placeholder"
+    }
+   ]
+  },
+  {
+   "consumer": "snippet",
+   "text": "{argument name=}",
+   "results": [
+    {
+     "range": {
+      "start": 0,
+      "end": 16
+     },
+     "value": {
+      "type": "argument",
+      "position": 0
+     }
+    }
+   ]
+  }
+ ]
+}
