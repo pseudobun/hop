@@ -41,8 +41,7 @@ final class SnippetsFile {
     private(set) var snippets: [Snippet] = []
     private(set) var error: String?
     var onChange: (() -> Void)?
-    private var watcher: DispatchSourceFileSystemObject?
-    private var reloadTask: Task<Void, Never>?
+    private var watcher: FileWatcher?
 
     var url: URL
 
@@ -93,22 +92,8 @@ final class SnippetsFile {
     }
 
     private func watch() {
-        let fd = open(url.deletingLastPathComponent().path, O_EVTONLY)
-        guard fd >= 0 else { return }
-        let source = DispatchSource.makeFileSystemObjectSource(fileDescriptor: fd, eventMask: [.write, .rename, .delete], queue: .main)
-        source.setEventHandler { [weak self] in
-            MainActor.assumeIsolated {
-                self?.reloadTask?.cancel()
-                self?.reloadTask = Task { [weak self] in
-                    try? await Task.sleep(for: .milliseconds(200))
-                    guard !Task.isCancelled else { return }
-                    self?.load()
-                }
-            }
-        }
-        source.setCancelHandler { close(fd) }
-        source.resume()
-        watcher = source
+        watcher?.stop()
+        watcher = FileWatcher(url: url) { [weak self] in self?.load() }
     }
 
     /// Adds a snippet before the closing `]`, keeping the file's comments and layout.

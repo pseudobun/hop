@@ -363,8 +363,7 @@ final class AppSettings {
 
     @ObservationIgnored var onChange: ((HopConfig, HopConfig) -> Void)?
     @ObservationIgnored let url: URL
-    @ObservationIgnored private var watcher: DispatchSourceFileSystemObject?
-    @ObservationIgnored private var reloadTask: Task<Void, Never>?
+    @ObservationIgnored private var watcher: FileWatcher?
 
     /// `$HOP_CONFIG` overrides the location (handy for tests and agents).
     static var defaultURL: URL {
@@ -409,23 +408,8 @@ final class AppSettings {
     }
 
     private func watch() {
-        let dir = url.deletingLastPathComponent().path
-        let fd = open(dir, O_EVTONLY)
-        guard fd >= 0 else { return }
-        let source = DispatchSource.makeFileSystemObjectSource(fileDescriptor: fd, eventMask: [.write, .rename, .delete], queue: .main)
-        source.setEventHandler { [weak self] in
-            MainActor.assumeIsolated {
-                self?.reloadTask?.cancel()
-                self?.reloadTask = Task { [weak self] in
-                    try? await Task.sleep(for: .milliseconds(200))
-                    guard !Task.isCancelled else { return }
-                    self?.load()
-                }
-            }
-        }
-        source.setCancelHandler { close(fd) }
-        source.resume()
-        watcher = source
+        watcher?.stop()
+        watcher = FileWatcher(url: url) { [weak self] in self?.load() }
     }
 
     private func writeTemplate() {
