@@ -2,7 +2,7 @@
 
 <h1>hop</h1>
 
-A tiny native macOS launcher. Pure Swift + AppKit, no WebKit. ~3 MB binary, ~15 MB RAM, 0 % idle CPU. Styled with the olympus dashboard design system (Outfit, Geist Mono, DS tokens).
+A tiny native macOS launcher. Pure Swift + AppKit, no WebKit. ~5.5 MB binary, ~40 MB RAM, 0 % idle CPU. Styled with the olympus dashboard design system (Outfit, Geist Mono, DS tokens).
 
 </div>
 
@@ -15,7 +15,7 @@ A tiny native macOS launcher. Pure Swift + AppKit, no WebKit. ~3 MB binary, ~15 
 - Caps Lock as Hyper key (⌃⌥⌘⇧), optional tap-for-Escape
 - WireGuard: connect, disconnect, disconnect all (WireGuard.app tunnels)
 - Notes on ⌥. : a keyboard-first floating window over a folder of Markdown files (an Obsidian vault works as is). Search titles and text, live Markdown styling, ⌘E preview, tasks, `[[links]]`, back / forward, pinned notes on top, move to Trash, new notes saved straight into the vault
-- Clipboard History on ⇧⌥C: text, images, links, colours and files you copied, list on the left and a preview on the right (rendered Markdown, code, colour swatch with HEX / RGB / HSL, images), source app and stats. ↵ pastes into the app you were in, ⌘↵ copies, ⇧⌘P pins, ⌃X deletes, ⌘K for the rest, ⌘P filters by type
+- Clipboard History on ⇧⌥C, centred like the launcher: text, images, links, colours and files you copied, list on the left and a preview on the right (rendered Markdown, code, colour swatch with HEX / RGB / HSL, images), source app and stats. ↵ pastes into the app you were in, ⌘↵ copies, ⇧⌘P pins, ⌃X deletes, ⌘K for the rest, ⌘P filters by type
 - KeePassXC: several databases (⌘D to switch, or search all), paste or copy password / username / TOTP / URL, favicons, pins, folder filter. Stays unlocked until ⌘L or quit (`keepass.autoLock` locks on sleep, screen lock and inactivity)
 - Bookmarks from the config: name, URL, aliases ("hass") and an icon (image file, SF Symbol or emoji); ↵ opens in the default browser
 - Permissions screen: every macOS permission hop needs, with the system prompts (opens on first launch)

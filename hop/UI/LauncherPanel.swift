@@ -36,19 +36,22 @@ final class LauncherPanel: NSPanel {
         if event.type == .keyDown, let keyHandler, keyHandler(event) { return }
         super.sendEvent(event)
     }
+}
 
-    /// Centre horizontally on the screen under the mouse, upper third vertically.
+extension NSWindow {
+    /// Centre horizontally on the screen under the mouse, upper third vertically; a window
+    /// bigger than that screen shrinks to fit.
     func positionOnMouseScreen() {
         let mouse = NSEvent.mouseLocation
         let screen = NSScreen.screens.first { NSMouseInRect(mouse, $0.frame, false) } ?? NSScreen.main
         guard let visible = screen?.visibleFrame else { return }
-        let x = visible.midX - frame.width / 2
-        let y = visible.minY + visible.height * 0.62 - frame.height / 2
-        setFrameOrigin(NSPoint(x: x.rounded(), y: min(y, visible.maxY - frame.height).rounded()))
+        let size = NSSize(width: min(frame.width, visible.width - 80), height: min(frame.height, visible.height - 80))
+        let x = visible.midX - size.width / 2
+        let y = visible.minY + visible.height * 0.62 - size.height / 2
+        setFrame(NSRect(x: x.rounded(), y: min(y, visible.maxY - size.height).rounded(), width: size.width, height: size.height),
+                 display: false)
     }
-}
 
-extension NSWindow {
     /// The frame's corner radius (16 on macOS 26), so the glass matches it exactly.
     var frameCornerRadius: CGFloat {
         let sel = NSSelectorFromString("_effectiveCornerRadius")

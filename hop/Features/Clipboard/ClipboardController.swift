@@ -117,7 +117,8 @@ final class ClipboardController: NSObject, NSWindowDelegate, NSTableViewDataSour
         deleteAllArmedUntil = nil
         closeActionPanel()
         reload(keepSelection: false)
-        if UserDefaults.standard.string(forKey: "NSWindow Frame \(Self.frameName)") == nil { position() }
+        // Centred like the launcher every time; only the size you leave it at is remembered.
+        panel.positionOnMouseScreen()
         panel.orderFrontRegardless()
         panel.makeKey()
         panel.makeFirstResponder(searchField)
@@ -132,16 +133,6 @@ final class ClipboardController: NSObject, NSWindowDelegate, NSTableViewDataSour
     func windowDidResignKey(_ notification: Notification) { hide() }
 
     func windowDidResize(_ notification: Notification) { updateFooter() }
-
-    private func position() {
-        let mouse = NSEvent.mouseLocation
-        let screen = NSScreen.screens.first { NSMouseInRect(mouse, $0.frame, false) } ?? NSScreen.main
-        guard let v = screen?.visibleFrame else { return }
-        let size = NSSize(width: min(880, v.width - 80), height: min(540, v.height - 80))
-        let y = v.minY + v.height * 0.6 - size.height / 2
-        panel.setFrame(NSRect(x: (v.midX - size.width / 2).rounded(), y: min(y, v.maxY - size.height).rounded(),
-                              width: size.width, height: size.height), display: false)
-    }
 
     // MARK: - Rows
 
