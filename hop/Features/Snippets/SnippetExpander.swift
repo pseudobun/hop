@@ -15,9 +15,8 @@ final class SnippetExpander {
     /// Called on the main thread with the index of the snippet to expand and its keyword.
     var onMatch: ((Int, String) -> Void)?
 
-    private let state = TapState()
+    private let state = SnippetTapState()
     private var tap: CFMachPort?
-    private var runLoop: CFRunLoop?
     private var thread: Thread?
     private var observers: [NSObjectProtocol] = []
 
@@ -30,7 +29,7 @@ final class SnippetExpander {
             | (1 << CGEventType.rightMouseDown.rawValue)
         let callback: CGEventTapCallBack = { _, type, event, info in
             guard let info else { return Unmanaged.passUnretained(event) }
-            let state = Unmanaged<TapState>.fromOpaque(info).takeUnretainedValue()
+            let state = Unmanaged<SnippetTapState>.fromOpaque(info).takeUnretainedValue()
             state.handle(type, event)
             return Unmanaged.passUnretained(event)
         }
@@ -40,15 +39,16 @@ final class SnippetExpander {
         else { return false }
         tap = port
         state.tap = port
-        state.onMatch = { [weak self] keyword in
-            DispatchQueue.main.async { self?.matched(keyword) }
+        // Both closures run on the tap thread, so they must not inherit the main actor.
+        state.onMatch = { @Sendable [weak self] keyword in
+            Task { @MainActor in self?.matched(keyword) }
         }
-        let t = Thread { [weak self] in
-            guard let tap = self?.tap else { return }
-            let source = CFMachPortCreateRunLoopSource(nil, tap, 0)
-            self?.runLoop = CFRunLoopGetCurrent()
+        let t = Thread { @Sendable [state] in
+            guard let port = state.tap else { return }
+            let source = CFMachPortCreateRunLoopSource(nil, port, 0)
+            state.runLoop = CFRunLoopGetCurrent()
             CFRunLoopAddSource(CFRunLoopGetCurrent(), source, .commonModes)
-            CGEvent.tapEnable(tap: tap, enable: true)
+            CGEvent.tapEnable(tap: port, enable: true)
             CFRunLoopRun()
         }
         t.name = "hop.snippet-tap"
@@ -65,13 +65,13 @@ final class SnippetExpander {
 
     func stop() {
         if let tap { CGEvent.tapEnable(tap: tap, enable: false); CFMachPortInvalidate(tap) }
-        if let runLoop { CFRunLoopStop(runLoop) }
+        if let runLoop = state.runLoop { CFRunLoopStop(runLoop) }
         observers.forEach { NSWorkspace.shared.notificationCenter.removeObserver($0) }
         observers = []
         tap = nil
-        runLoop = nil
         thread = nil
         state.tap = nil
+        state.runLoop = nil
     }
 
     private func matched(_ typed: String) {
@@ -111,10 +111,12 @@ final class SnippetExpander {
 }
 
 /// What the tap thread sees: the last characters typed, reset by anything that moves
-/// the caret elsewhere.
-private final class TapState: @unchecked Sendable {
+/// the caret elsewhere. Nonisolated: the event tap calls it on its own thread, and the
+/// app's default main-actor isolation traps there.
+nonisolated final class SnippetTapState: @unchecked Sendable {
     var tap: CFMachPort?
-    var onMatch: ((String) -> Void)?
+    var runLoop: CFRunLoop?
+    var onMatch: (@Sendable (String) -> Void)?
     private let lock = NSLock()
     private var buffer = ""
     private var lastCharacters: Set<Character> = []

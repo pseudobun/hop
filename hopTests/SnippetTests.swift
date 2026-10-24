@@ -1,3 +1,4 @@
+import CoreGraphics
 import Foundation
 import Testing
 @testable import hop
@@ -141,5 +142,34 @@ struct SnippetFileAndMatcherTests {
         let c = try decoder.decode(HopConfig.self, from: Data(AppSettings.template.utf8))
         #expect(c.snippets == HopConfig.Snippets())
         #expect(c.snippets.expand && !c.snippets.expandWithinWords)
+    }
+}
+
+struct SnippetTapStateTests {
+    nonisolated private final class Matches: @unchecked Sendable {
+        private let lock = NSLock()
+        private var values: [String] = []
+        func add(_ s: String) { lock.lock(); values.append(s); lock.unlock() }
+        var all: [String] { lock.lock(); defer { lock.unlock() }; return values }
+    }
+
+    /// The event tap calls the state on its own thread; main-actor code there traps.
+    @Test func handlesTypingOffTheMainThread() async {
+        let state = SnippetTapState()
+        state.setKeywords([";em"])
+        let matches = Matches()
+        state.onMatch = { @Sendable in matches.add($0) }
+        await withCheckedContinuation { (done: CheckedContinuation<Void, Never>) in
+            Thread { @Sendable in
+                for ch in ["x", ";", "e", "m"] {
+                    let e = CGEvent(keyboardEventSource: nil, virtualKey: 0, keyDown: true)!
+                    let units = Array(ch.utf16)
+                    e.keyboardSetUnicodeString(stringLength: units.count, unicodeString: units)
+                    state.handle(.keyDown, e)
+                }
+                done.resume()
+            }.start()
+        }
+        #expect(matches.all == ["x;em"])
     }
 }
