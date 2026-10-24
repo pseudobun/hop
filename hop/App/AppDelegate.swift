@@ -19,6 +19,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var hotkey: GlobalHotkey!
     private var notes: NotesController!
     private var notesHotkey: GlobalHotkey!
+    private var clipboardStore: ClipboardStore!
+    private var clipboardMonitor: ClipboardMonitor!
+    private var clipboard: ClipboardController!
+    private var clipboardHotkey: GlobalHotkey!
     private var statusItem: StatusItem?
     #if DEBUG
     private var debugBackdrop: NSWindow?
@@ -45,6 +49,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         notes = NotesController(settings: settings)
         notes.openConfig = { [weak self] in self?.services.openConfig() }
         services.notes = notes
+        var clipDir = AppPaths.file("Clipboard")
+        #if DEBUG
+        if let dir = UserDefaults.standard.string(forKey: "DebugClipboardDir") { clipDir = URL(fileURLWithPath: dir) }
+        #endif
+        clipboardStore = ClipboardStore(dir: clipDir)
+        clipboardStore.load()
+        clipboardMonitor = ClipboardMonitor(store: clipboardStore) { settings.data.clipboard }
+        clipboard = ClipboardController(store: clipboardStore, monitor: clipboardMonitor, settings: settings)
+        services.clipboard = clipboard
 
         root = RootMode(apps: apps, frecency: frecency, settings: settings) { [unowned self] in
             Registry.commands(services)
@@ -71,6 +84,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         RunningApps.shared.start()
         hotkey = GlobalHotkey { [weak self] in self?.launcher.toggle() }
+        clipboardHotkey = GlobalHotkey { [weak self] in
+            self?.launcher.hide()
+            self?.clipboard.toggle()
+        }
         notesHotkey = GlobalHotkey { [weak self] in
             self?.launcher.hide()
             self?.notes.toggle()
@@ -102,6 +119,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     ("root sections, empty query", { _ = root.sections(for: "") }),
                     ("root sections, \"saf\"", { _ = root.sections(for: "saf") }),
                 ])
+            }
+        }
+        if defaults.bool(forKey: "DebugClipboard") {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
+                guard let self else { return }
+                clipboard.show()
+                if let q = defaults.string(forKey: "DebugClipboardQuery") { clipboard.debugSearch(q) }
+                if defaults.object(forKey: "DebugClipboardSelect") != nil { clipboard.debugSelect(defaults.integer(forKey: "DebugClipboardSelect")) }
+                if defaults.bool(forKey: "DebugClipboardActions") { clipboard.debugOpenActions() }
+                if let path = defaults.string(forKey: "DebugSnapshotPath") {
+                    Task {
+                        try? await Task.sleep(for: .milliseconds(700))
+                        if self.debugBackdrop != nil {
+                            await DebugSnapshot.captureRegion(around: self.clipboard.panel, padding: 60, to: path)
+                        } else {
+                            await DebugSnapshot.capture(self.clipboard.panel, to: path)
+                        }
+                    }
+                }
             }
         }
         if defaults.bool(forKey: "DebugNotes") {
@@ -180,6 +216,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         if previous != nil && previous?.notes.folder != config.notes.folder { notes.folderChanged() }
 
+        if previous?.clipboard != config.clipboard {
+            if config.clipboard.enabled {
+                clipboardMonitor.start()
+                clipboardStore.prune(keepDays: config.clipboard.keepDays, maxItems: config.clipboard.maxItems)
+            } else {
+                clipboardMonitor.stop()
+                clipboard.hide()
+            }
+            if config.clipboard.enabled, let spec = HotkeySpec.parse(config.clipboard.hotkey) {
+                if !clipboardHotkey.register(keyCode: spec.keyCode, modifiers: spec.modifiers) {
+                    Log.app.error("Could not register clipboard hotkey \(config.clipboard.hotkey, privacy: .public)")
+                }
+            } else {
+                if config.clipboard.enabled { Log.app.error("Invalid clipboard hotkey \(config.clipboard.hotkey, privacy: .public)") }
+                clipboardHotkey.unregister()
+            }
+        }
+
         let loginEnabled = SMAppService.mainApp.status == .enabled
         if config.general.openAtLogin != loginEnabled {
             do {
@@ -192,6 +246,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if config.general.menuBarIcon && statusItem == nil {
             statusItem = StatusItem(onOpen: { [weak self] in self?.launcher.show() },
                                     onNotes: { [weak self] in self?.notes.show() },
+                                    onClipboard: { [weak self] in self?.clipboard.show() },
                                     onConfig: { [weak self] in self?.services.openConfig() })
         } else if !config.general.menuBarIcon, let item = statusItem {
             item.remove()
@@ -206,6 +261,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         notes?.saveNow()
+        clipboardStore?.saveNow()
         hyper.stop()
     }
 

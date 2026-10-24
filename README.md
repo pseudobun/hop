@@ -15,6 +15,7 @@ A tiny native macOS launcher. Pure Swift + AppKit, no WebKit. ~3 MB binary, ~15 
 - Caps Lock as Hyper key (⌃⌥⌘⇧), optional tap-for-Escape
 - WireGuard: connect, disconnect, disconnect all (WireGuard.app tunnels)
 - Notes on ⌥. : a keyboard-first floating window over a folder of Markdown files (an Obsidian vault works as is). Search titles and text, live Markdown styling, ⌘E preview, tasks, `[[links]]`, back / forward, pinned notes on top, move to Trash, new notes saved straight into the vault
+- Clipboard History on ⇧⌥C: text, images, links, colours and files you copied, list on the left and a preview on the right (rendered Markdown, code, colour swatch with HEX / RGB / HSL, images), source app and stats. ↵ pastes into the app you were in, ⌘↵ copies, ⇧⌘P pins, ⌃X deletes, ⌘K for the rest, ⌘P filters by type
 - KeePassXC: several databases (⌘D to switch, or search all), paste or copy password / username / TOTP / URL, favicons, pins, folder filter. Stays unlocked until ⌘L or quit (`keepass.autoLock` locks on sleep, screen lock and inactivity)
 - Bookmarks from the config: name, URL, aliases ("hass") and an icon (image file, SF Symbol or emoji); ↵ opens in the default browser
 - Permissions screen: every macOS permission hop needs, with the system prompts (opens on first launch)
@@ -69,13 +70,15 @@ Notes are keyboard-first; ⌘/ shows every shortcut.
 | ⇧⌘O | open in Obsidian |
 | Esc | close find, then search, then the window (it floats above other apps until then) |
 
+Clipboard history lives in `~/Library/Application Support/dev.hop.app/Clipboard` (folder 0700, files 0600). Copies marked concealed or transient (KeePassXC, 1Password, hop's own password pastes) and copies from `clipboard.ignoreApps` are never recorded. Unpinned entries go after `clipboard.keepDays` or beyond `clipboard.maxItems`. Deleting everything takes ⌃⇧X twice.
+
 ## Permissions
 
 Run **hop Permissions** (it opens by itself on first launch); ↵ shows each macOS prompt, **Grant All** asks for all of them.
 
 | Feature | Permission |
 |---|---|
-| Hyper key, paste into apps | Accessibility |
+| Hyper key, paste into apps (KeePassXC, clipboard history) | Accessibility |
 | Empty Trash, removing protected apps | Automation → Finder |
 | Clear Downloads | Downloads folder |
 | Notes in iCloud Drive | iCloud Drive access, if macOS asks |
@@ -102,6 +105,8 @@ hop notes list olympus --json  # title matches, then text matches
 hop notes show "Home"
 hop notes new "Call Mojca" "about the flat"   # or pipe the text in
 echo "- [ ] renew domain" | hop notes append TODOs
+hop clip list ssh --json       # clipboard history; needs clipboard.cliAccess: true
+hop clip copy 3                # put entry 3 back on the clipboard
 hop config path | check | show
 ```
 

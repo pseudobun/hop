@@ -23,7 +23,7 @@ nonisolated enum Permission: CaseIterable {
 
     var purpose: String {
         switch self {
-        case .accessibility: "Hyper Key and pasting from KeePassXC"
+        case .accessibility: "Hyper Key, pasting from KeePassXC and the clipboard history"
         case .finderAutomation: "Empty Trash and removing protected apps"
         case .downloads: "Clear Downloads"
         case .fullDiskAccess: "Optional: remove app data in ~/Library/Containers when uninstalling"
@@ -122,7 +122,7 @@ nonisolated enum Permission: CaseIterable {
     /// Permissions still missing for the features turned on in the config.
     static func missing(for config: HopConfig) -> [Permission] {
         var needed: [Permission] = [.finderAutomation, .downloads, .loginItem]
-        if config.hyperKey.enabled || config.keepass.enabled { needed.insert(.accessibility, at: 0) }
+        if config.hyperKey.enabled || config.keepass.enabled || config.clipboard.enabled { needed.insert(.accessibility, at: 0) }
         if !config.general.openAtLogin { needed.removeAll { $0 == .loginItem } }
         return needed.filter { $0.status() != .granted }
     }

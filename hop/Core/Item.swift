@@ -17,6 +17,7 @@ enum Palette {
     static var wireguard: NSColor { Theme.chart4 }
     static var keepass: NSColor { Theme.good }
     static var notes: NSColor { Theme.chart2 }
+    static var clipboard: NSColor { Theme.chart3 }
     static var neutral: NSColor { Theme.mutedForeground }
 }
 

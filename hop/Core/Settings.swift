@@ -108,6 +108,25 @@ nonisolated struct HopConfig: Decodable, Equatable, Sendable {
         var expandedFolder: String { folder.expandingTilde }
     }
 
+    nonisolated struct Clipboard: Decodable, Equatable, Sendable {
+        var enabled = true
+        var hotkey = "shift+alt+c"
+        /// Days to keep unpinned entries; -1 keeps them forever.
+        var keepDays = 90
+        var maxItems = 2000
+        /// Keep copied images (stored as PNG next to the history).
+        var images = true
+        /// Larger images are not kept.
+        var maxImageMB = 20
+        /// Apps whose copies are never recorded (bundle identifiers).
+        var ignoreApps = ["com.apple.keychainaccess", "com.apple.Passwords", "org.keepassxc.keepassxc",
+                          "com.1password.1password", "com.bitwarden.desktop"]
+        /// ↵ pastes into the app you were in; false only copies.
+        var pasteOnReturn = true
+        /// Let `hop clip` read the history (for agents); it can hold anything you copied.
+        var cliAccess = false
+    }
+
     var general = General()
     var hyperKey = HyperKey()
     var wireguard = WireGuard()
@@ -115,6 +134,7 @@ nonisolated struct HopConfig: Decodable, Equatable, Sendable {
     var system = System()
     var bookmarks: [Bookmark] = []
     var notes = Notes()
+    var clipboard = Clipboard()
 
     init() {}
 }
@@ -128,7 +148,7 @@ nonisolated private extension KeyedDecodingContainer {
 }
 
 nonisolated extension HopConfig {
-    private enum Keys: String, CodingKey { case general, hyperKey, wireguard, keepass, system, bookmarks, notes }
+    private enum Keys: String, CodingKey { case general, hyperKey, wireguard, keepass, system, bookmarks, notes, clipboard }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: Keys.self)
         general = try c.value(.general, General())
@@ -138,6 +158,7 @@ nonisolated extension HopConfig {
         system = try c.value(.system, System())
         bookmarks = try c.value(.bookmarks, [])
         notes = try c.value(.notes, Notes())
+        clipboard = try c.value(.clipboard, Clipboard())
     }
 }
 
@@ -219,6 +240,22 @@ nonisolated extension HopConfig.Bookmark {
         icon = try c.value(.icon, d.icon)
         color = try c.value(.color, d.color)
         subtitle = try c.value(.subtitle, d.subtitle)
+    }
+}
+
+nonisolated extension HopConfig.Clipboard {
+    private enum Keys: String, CodingKey { case enabled, hotkey, keepDays, maxItems, images, maxImageMB, ignoreApps, pasteOnReturn, cliAccess }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: Keys.self), d = Self()
+        enabled = try c.value(.enabled, d.enabled)
+        hotkey = try c.value(.hotkey, d.hotkey)
+        keepDays = try c.value(.keepDays, d.keepDays)
+        maxItems = try c.value(.maxItems, d.maxItems)
+        images = try c.value(.images, d.images)
+        maxImageMB = try c.value(.maxImageMB, d.maxImageMB)
+        ignoreApps = try c.value(.ignoreApps, d.ignoreApps)
+        pasteOnReturn = try c.value(.pasteOnReturn, d.pasteOnReturn)
+        cliAccess = try c.value(.cliAccess, d.cliAccess)
     }
 }
 
@@ -432,6 +469,26 @@ final class AppSettings {
         template: "---\\ntitle: {{title}}\\ntags: [inbox]\\ntype: note\\nstatus: stub\\nupdated: {{date}}\\n---\\n\\n",
         // Set an existing `updated:` date in the frontmatter to today when you edit a note
         bumpUpdated: true,
+      },
+
+      clipboard: {
+        enabled: true,
+        // Opens the clipboard history from anywhere
+        hotkey: "shift+alt+c",
+        // Days to keep unpinned entries (-1 forever) and how many at most
+        keepDays: 90,
+        maxItems: 2000,
+        // Keep copied images, up to this size
+        images: true,
+        maxImageMB: 20,
+        // Copies from these apps are never recorded; password managers that mark their
+        // copies as concealed (KeePassXC, 1Password, hop itself) are skipped anyway
+        ignoreApps: ["com.apple.keychainaccess", "com.apple.Passwords", "org.keepassxc.keepassxc",
+                     "com.1password.1password", "com.bitwarden.desktop"],
+        // ↵ pastes into the app you were in; false only copies
+        pasteOnReturn: true,
+        // Let `hop clip` read the history (e.g. for agents); it holds whatever you copied
+        cliAccess: false,
       },
     }
 

@@ -47,7 +47,7 @@ enum Pasteboard {
         return true
     }
 
-    private static func postCommandV() {
+    static func postCommandV() {
         let source = CGEventSource(stateID: .combinedSessionState)
         let vKey: CGKeyCode = 9
         let down = CGEvent(keyboardEventSource: source, virtualKey: vKey, keyDown: true)
