@@ -103,11 +103,9 @@ final class RootMode: Mode {
         var sections: [ResultSection] = []
         let lower = query.lowercased()
         let startsATitle = results.contains { $0.title.lowercased().hasPrefix(lower) }
-        // A conversion with no typed target ("2 min") must not push aside an app that starts that way.
-        if let c = Converter.convert(query), !(c.implicitTarget && startsATitle) {
-            sections.append(ResultSection(title: "Conversion", items: [conversionItem(c)]))
-        } else if let value = Calculator.evaluateIfExpression(query), !startsATitle {
-            sections.append(ResultSection(title: "Calculator", items: [calculatorItem(query, value)]))
+        // Loose answers (dates, arithmetic, "2 min") must not push aside an app that starts that way.
+        if let a = Answers.answer(for: query, config: settings.data, isAmbiguous: startsATitle) {
+            sections.append(ResultSection(title: a.kind, items: [answerItem(a)]))
         }
         sections.append(ResultSection(title: "Results", items: results))
         return sections
@@ -171,51 +169,36 @@ final class RootMode: Mode {
              }], tracksFrecency: false)
     }
 
-    private func conversionItem(_ c: Converter.Conversion) -> Item {
-        let value = Converter.format(c.result)
-        let withUnit = "\(value) \(c.to)"
-        let expression = "\(Converter.format(c.value)) \(c.from)"
-        return Item(id: "convert", title: withUnit, subtitle: expression,
-                    actions: [
-                        Action(title: "Copy Answer") {
-                            Pasteboard.copy(value)
-                            return .dismissWithHUD("Copied \(value)")
-                        },
-                        Action(title: "Copy with Unit", shortcut: .cmd("c", .shift)) {
-                            Pasteboard.copy(withUnit)
-                            return .dismissWithHUD("Copied \(withUnit)")
-                        },
-                        Action(title: "Paste Answer", shortcut: .ret(.command)) { [weak self] in
-                            self?.context?.dismiss()
-                            if !(await Pasteboard.paste(value, concealed: false)) {
-                                HUD.shared.show("Copied. Allow hop in Accessibility to paste")
-                            }
-                            return .stay
-                        },
-                    ], tracksFrecency: false, calculation: (expression, withUnit, c.fromName, c.toName))
-    }
-
-    private func calculatorItem(_ query: String, _ value: Decimal) -> Item {
-        let text = Calculator.format(value)
-        let expression = Calculator.pretty(query)
-        return Item(id: "calc", title: text, subtitle: expression,
-                    actions: [
-                        Action(title: "Copy Answer") {
-                            Pasteboard.copy(text)
-                            return .dismissWithHUD("Copied \(text)")
-                        },
-                        Action(title: "Copy Expression", shortcut: .cmd("c", .shift)) {
-                            Pasteboard.copy("\(expression) = \(text)")
-                            return .dismissWithHUD("Copied \(expression) = \(text)")
-                        },
-                        Action(title: "Paste Answer", shortcut: .ret(.command)) { [weak self] in
-                            self?.context?.dismiss()
-                            if !(await Pasteboard.paste(text, concealed: false)) {
-                                HUD.shared.show("Copied. Allow hop in Accessibility to paste")
-                            }
-                            return .stay
-                        },
-                    ], tracksFrecency: false, calculation: (expression, text, "Expression", "Result"))
+    /// The answer card: ↵ copies the result, ⌘↵ pastes it, ⇧⌘C copies it with its unit.
+    private func answerItem(_ a: SmartAnswer) -> Item {
+        let record = { CalculatorHistory.shared.record(a) }
+        var actions = [
+            Action(title: "Copy Answer") {
+                record()
+                Pasteboard.copy(a.result)
+                return .dismissWithHUD("Copied \(a.result)")
+            },
+            Action(title: "Paste Answer", shortcut: .ret(.command)) { [weak self] in
+                record()
+                self?.context?.dismiss()
+                if !(await Pasteboard.paste(a.result, concealed: false)) {
+                    HUD.shared.show("Copied. Allow hop in Accessibility to paste")
+                }
+                return .stay
+            },
+        ]
+        if let unit = a.resultWithUnit, unit != a.result {
+            actions.insert(Action(title: "Copy with Unit", shortcut: .cmd("c", .shift)) {
+                record()
+                Pasteboard.copy(unit)
+                return .dismissWithHUD("Copied \(unit)")
+            }, at: 1)
+        }
+        actions += a.extraActions
+        var item = Item(id: "answer", title: a.display ?? a.result, subtitle: a.expression, actions: actions, tracksFrecency: false,
+                        calculation: (a.expression, a.display ?? a.result, a.left, a.right))
+        item.swatch = a.swatch
+        return item
     }
 
     private func item(for entry: AppEntry) -> Item {

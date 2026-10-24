@@ -9,7 +9,13 @@ A tiny native macOS launcher. Pure Swift + AppKit, no WebKit. ~5.5 MB binary, ~4
 ## Features
 
 - App launcher on ⌘Space with frecency ranking (Raycast-compatible scorer)
-- Inline calculator and unit conversion in plain language: "5 km to mi", "how many cm is 5 ft", "1h 30min in min", "half an hour in s", "100 mbps to MB/s", "koliko minut je 2 uri". Leave the target out ("2 min =", "30c") for the usual counterpart unit, or type part of it ("to sec")
+- Inline answers, each a card you copy (↵), paste (⌘↵) or copy with its unit (⇧⌘C):
+  - calculator and unit conversion (`734h to min`, `1 sq mile = km2`)
+  - currencies: `100 usd to eur`, `€50 in gbp`, `1.5k rsd v eur` (open.er-api.com rates, fetched only after you type a currency, at most twice a day; `calculator.currency` is where amounts go without a target)
+  - time zones: `time in tokyo`, `5pm london in ljubljana`, `14:00 cet to pst`, `3pm tokyo`
+  - dates: `tomorrow`, `in 3 weeks`, `next friday`, `24.12. + 30 days`, `days until christmas`, `days since 1.1.2026`, `week number`, a few in Slovenian (`jutri`, `čez 2 dni`)
+  - colours: `#7c5cff`, `rgb(…) to hsl` with a swatch; ⌘K copies HEX, RGB, HSL or a SwiftUI Color
+  - Calculator History keeps what you copied or pasted (⌘E calculates it again)
 - Uninstall app (with `~/Library` leftovers, `brew uninstall --cask` when it applies), Clear Downloads, Empty Trash
 - Kill Process: search running processes, quit, force kill or kill as administrator
 - Caps Lock as Hyper key (⌃⌥⌘⇧), optional tap-for-Escape

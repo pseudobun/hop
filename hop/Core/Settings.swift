@@ -151,6 +151,13 @@ nonisolated struct HopConfig: Decodable, Equatable, Sendable {
         var showHidden = false
     }
 
+    nonisolated struct CalculatorSettings: Decodable, Equatable, Sendable {
+        /// Convert currencies; rates come from open.er-api.com, only once you type one.
+        var currencies = true
+        /// The currency an amount converts to when no target is typed.
+        var currency = "EUR"
+    }
+
     var general = General()
     var hyperKey = HyperKey()
     var wireguard = WireGuard()
@@ -161,6 +168,7 @@ nonisolated struct HopConfig: Decodable, Equatable, Sendable {
     var clipboard = Clipboard()
     var snippets = Snippets()
     var files = Files()
+    var calculator = CalculatorSettings()
     /// Global hotkeys for any command or app: { "Empty Trash": "hyper+t", "Safari": "hyper+s" }.
     var hotkeys: [String: String] = [:]
 
@@ -176,7 +184,7 @@ nonisolated private extension KeyedDecodingContainer {
 }
 
 nonisolated extension HopConfig {
-    private enum Keys: String, CodingKey { case general, hyperKey, wireguard, keepass, system, bookmarks, notes, clipboard, snippets, files, hotkeys }
+    private enum Keys: String, CodingKey { case general, hyperKey, wireguard, keepass, system, bookmarks, notes, clipboard, snippets, files, calculator, hotkeys }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: Keys.self)
         general = try c.value(.general, General())
@@ -189,6 +197,7 @@ nonisolated extension HopConfig {
         clipboard = try c.value(.clipboard, Clipboard())
         snippets = try c.value(.snippets, Snippets())
         files = try c.value(.files, Files())
+        calculator = try c.value(.calculator, CalculatorSettings())
         hotkeys = try c.value(.hotkeys, [:])
     }
 }
@@ -271,6 +280,15 @@ nonisolated extension HopConfig.Bookmark {
         icon = try c.value(.icon, d.icon)
         color = try c.value(.color, d.color)
         subtitle = try c.value(.subtitle, d.subtitle)
+    }
+}
+
+nonisolated extension HopConfig.CalculatorSettings {
+    private enum Keys: String, CodingKey { case currencies, currency }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: Keys.self), d = Self()
+        currencies = try c.value(.currencies, d.currencies)
+        currency = try c.value(.currency, d.currency)
     }
 }
 
@@ -534,6 +552,14 @@ final class AppSettings {
         template: "---\\ntitle: {{title}}\\ntags: [inbox]\\ntype: note\\nstatus: stub\\nupdated: {{date}}\\n---\\n\\n",
         // Set an existing `updated:` date in the frontmatter to today when you edit a note
         bumpUpdated: true,
+      },
+
+      calculator: {
+        // Currency conversion ("100 usd to eur", "€50 in gbp"); rates come from
+        // open.er-api.com, fetched only after you type a currency, at most twice a day
+        currencies: true,
+        // Where an amount goes when you type no target ("50 usd")
+        currency: "EUR",
       },
 
       files: {

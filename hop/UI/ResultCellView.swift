@@ -193,6 +193,7 @@ final class CalculationCellView: NSTableCellView {
     private let leftLabel = NSTextField(labelWithString: "")
     private let rightLabel = NSTextField(labelWithString: "")
     private let arrow = NSImageView()
+    private let swatch = NSView()
 
     override init(frame: NSRect) {
         super.init(frame: frame)
@@ -210,7 +211,17 @@ final class CalculationCellView: NSTableCellView {
             .withSymbolConfiguration(.init(pointSize: 16, weight: .medium))
         arrow.contentTintColor = Theme.mutedForeground
 
-        let left = Self.column(expression, label: leftLabel)
+        swatch.wantsLayer = true
+        swatch.layer?.cornerRadius = 8
+        swatch.layer?.borderColor = NSColor.white.withAlphaComponent(0.2).cgColor
+        swatch.layer?.borderWidth = 1
+        swatch.isHidden = true
+        swatch.translatesAutoresizingMaskIntoConstraints = false
+        swatch.widthAnchor.constraint(equalToConstant: 26).isActive = true
+        swatch.heightAnchor.constraint(equalToConstant: 26).isActive = true
+        let leftValue = NSStackView(views: [swatch, expression])
+        leftValue.spacing = 10
+        let left = Self.column(leftValue, label: leftLabel)
         let right = Self.column(result, label: rightLabel)
         for v in [left, arrow, right] {
             v.translatesAutoresizingMaskIntoConstraints = false
@@ -231,7 +242,7 @@ final class CalculationCellView: NSTableCellView {
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError() }
 
-    private static func column(_ value: NSTextField, label: NSTextField) -> NSStackView {
+    private static func column(_ value: NSView, label: NSTextField) -> NSStackView {
         label.alignment = .center
         let stack = NSStackView(views: [value, label])
         stack.orientation = .vertical
@@ -240,7 +251,9 @@ final class CalculationCellView: NSTableCellView {
         return stack
     }
 
-    func configure(_ expression: String, _ result: String, left: String, right: String) {
+    func configure(_ expression: String, _ result: String, left: String, right: String, swatch color: NSColor? = nil) {
+        swatch.isHidden = color == nil
+        swatch.layer?.backgroundColor = color?.cgColor
         self.expression.stringValue = expression
         self.result.stringValue = result
         leftLabel.attributedStringValue = Theme.labelString(left)

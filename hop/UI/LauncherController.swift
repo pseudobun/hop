@@ -426,7 +426,7 @@ final class LauncherController: NSObject, LauncherContext, NSTableViewDataSource
         case .item(let item):
             if let c = item.calculation {
                 guard let v = view as? CalculationCellView else { return false }
-                v.configure(c.expression, c.result, left: c.left, right: c.right)
+                v.configure(c.expression, c.result, left: c.left, right: c.right, swatch: item.swatch)
             } else {
                 guard let v = view as? ResultCellView else { return false }
                 v.configure(item)

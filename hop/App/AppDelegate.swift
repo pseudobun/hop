@@ -111,6 +111,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             if self?.launcher.isVisible == true { self?.launcher.reload() }
         }
         RunningApps.shared.start()
+        ExchangeRates.shared.onUpdate = { [weak self] in
+            if self?.launcher.isVisible == true { self?.launcher.reload() }
+        }
         hotkey = GlobalHotkey { [weak self] in self?.launcher.toggle() }
         clipboardHotkey = GlobalHotkey { [weak self] in
             self?.launcher.hide()

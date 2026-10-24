@@ -132,6 +132,8 @@ struct Item {
     var monoTitle = false
     /// Large two-sided calculator card instead of a normal row.
     var calculation: (expression: String, result: String, left: String, right: String)?
+    /// A colour swatch on the calculation card.
+    var swatch: NSColor?
 }
 
 struct ResultSection {
