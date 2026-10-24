@@ -368,6 +368,7 @@
 		B0B00000000000000000001A /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ARCHS = arm64;
 				ASSETCATALOG_COMPILER_APPICON_NAME = Icon;
 				CODE_SIGN_ENTITLEMENTS = hop/Support/hop.entitlements;
 				CODE_SIGN_STYLE = Automatic;

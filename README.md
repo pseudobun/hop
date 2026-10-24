@@ -2,7 +2,7 @@
 
 <h1>hop</h1>
 
-A tiny native macOS launcher. Pure Swift + AppKit, no WebKit. ~5.5 MB binary, ~40 MB RAM, 0 % idle CPU. Styled with the olympus dashboard design system (Outfit, Geist Mono, DS tokens).
+A tiny native macOS launcher. Pure Swift + AppKit, no WebKit. ~3.5 MB binary, ~40 MB RAM, 0 % idle CPU. Styled with the olympus dashboard design system (Outfit, Geist Mono, DS tokens).
 
 </div>
 
@@ -29,7 +29,7 @@ A tiny native macOS launcher. Pure Swift + AppKit, no WebKit. ~5.5 MB binary, ~4
 - Permissions screen: every macOS permission hop needs, with the system prompts (opens on first launch)
 - `hop` CLI for scripts and agents
 
-Requires macOS 26.
+Requires macOS 26 on Apple Silicon (Release builds are arm64 only).
 
 ## Install
 
