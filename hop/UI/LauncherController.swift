@@ -115,7 +115,8 @@ final class LauncherController: NSObject, LauncherContext, NSTableViewDataSource
             select(nil)
         }
         if let initial { activeField.stringValue = initial }
-        refresh()
+        // Reopening within popToRootSeconds comes back to the same row, not the first one.
+        refresh(keepSelection: initial == nil)
         panel.positionOnMouseScreen()
         panel.orderFrontRegardless()
         panel.makeKey()
@@ -127,7 +128,7 @@ final class LauncherController: NSObject, LauncherContext, NSTableViewDataSource
     /// (or after the app list changed) does not create cells while the user waits.
     func prepare() {
         guard !panel.isVisible else { return }
-        refresh()
+        refresh(keepSelection: true)
         panel.contentView?.layoutSubtreeIfNeeded()
         guard !warmedUp else { return }
         // The first time a window is ordered in, the window server and the glass layers do
@@ -349,6 +350,7 @@ final class LauncherController: NSObject, LauncherContext, NSTableViewDataSource
 
     #if DEBUG
     func debugOpenActionPanel() { toggleActionPanel() }
+    var debugSelectedID: String? { selectedItem?.id }
     #endif
 
     private func toggleActionPanel() {
