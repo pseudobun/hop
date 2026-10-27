@@ -1,4 +1,4 @@
-import Foundation
+import AppKit
 import Testing
 @testable import hop
 
@@ -312,5 +312,107 @@ struct NoteSearchTests {
         let s = NoteStore.snippet(long, at: (long as NSString).range(of: "needle").location)
         #expect(s.hasPrefix("…") && s.hasSuffix("…") && s.contains("needle"))
         #expect(NoteStore.snippet("  - short line\nnext", at: 5) == "- short line")
+    }
+}
+
+struct MarkdownTableTests {
+    private func tables(_ source: String) -> [MarkdownTables.Table] {
+        MarkdownTables.parse(source, spans: MarkdownStyler.spans(source))
+    }
+
+    @Test func parsesAlignmentAndUnevenRows() throws {
+        let source = "Before\n\n| Name | Value | Status |\n| :--- | ---: | :---: |\n| Bunny | 42 |\n| Hop | 7 | ok | ignored |\n\nAfter"
+        let table = try #require(tables(source).first)
+        #expect(table.alignments == [.left, .right, .center])
+        #expect(table.rows == [["Name", "Value", "Status"], ["Bunny", "42", ""], ["Hop", "7", "ok"]])
+        #expect((source as NSString).substring(with: table.range).hasPrefix("| Name"))
+        #expect(MarkdownPreview.plain(source) == "Before\n\nName\tValue\tStatus\nBunny\t42\t\nHop\t7\tok\n\nAfter")
+    }
+
+    @Test func preservesWikiAliasesAndEscapedPipes() throws {
+        let source = #"""
+        Note | Code
+        --- | ---
+        [[Shop|the shop]] | `a\|b`
+        [[Other\|alias]] | x\|y
+        """#
+        let table = try #require(tables(source).first)
+        #expect(table.rows[1] == ["[[Shop|the shop]]", "`a|b`"])
+        #expect(table.rows[2] == ["[[Other|alias]]", "x|y"])
+        #expect(MarkdownPreview.plain(source) == "Note\tCode\nthe shop\ta|b\nalias\tx|y")
+    }
+
+    @Test func ignoresCodeMetadataAndMalformedTables() {
+        for source in ["```md\n| A | B |\n| --- | --- |\n```",
+                       "~~~\n| A | B |\n| --- | --- |\n~~~",
+                       "---\n| A | B |\n| --- | --- |\n---",
+                       "A | B\n--- | nope", "A | B\n--- | --- | ---", "text | only"] {
+            #expect(tables(source).isEmpty)
+        }
+    }
+
+    @Test @MainActor func rendersNativeTableWithFormattingAndLinks() throws {
+        let source = "😀 Intro\n\n| Name | Value |\n| :--- | ---: |\n| [[Shop|the shop]] | **42** |\n\n- [ ] after"
+        let rendered = NotesPreviewView.render(source)
+        #expect(!rendered.string.contains("|"))
+        #expect(!rendered.string.contains("---"))
+        let ns = rendered.string as NSString
+        let header = ns.range(of: "Name")
+        let body = ns.range(of: "the shop")
+        let number = ns.range(of: "42")
+        let headerStyle = try #require(rendered.attribute(.paragraphStyle, at: header.location, effectiveRange: nil) as? NSParagraphStyle)
+        let bodyStyle = try #require(rendered.attribute(.paragraphStyle, at: body.location, effectiveRange: nil) as? NSParagraphStyle)
+        let numberStyle = try #require(rendered.attribute(.paragraphStyle, at: number.location, effectiveRange: nil) as? NSParagraphStyle)
+        let headerBlock = try #require(headerStyle.textBlocks.first as? NSTextTableBlock)
+        let bodyBlock = try #require(bodyStyle.textBlocks.first as? NSTextTableBlock)
+        #expect(headerBlock.table === bodyBlock.table)
+        #expect(headerBlock.table.numberOfColumns == 2)
+        #expect(bodyBlock.startingRow == 1 && bodyBlock.startingColumn == 0)
+        #expect(numberStyle.alignment == .right)
+        #expect(rendered.attribute(.hopLink, at: body.location, effectiveRange: nil) as? String == "note:Shop|the shop")
+        let font = try #require(rendered.attribute(.font, at: number.location, effectiveRange: nil) as? NSFont)
+        #expect(NSFontManager.shared.traits(of: font).contains(.boldFontMask))
+        let task = ns.range(of: "\u{fffc}")
+        #expect(rendered.attribute(.hopTaskSource, at: task.location, effectiveRange: nil) as? Int == (source as NSString).range(of: "[ ]").location)
+        #expect(NotesPreviewView.make().textLayoutManager == nil)
+    }
+}
+
+@MainActor
+struct MarkdownTableLayoutTests {
+    private func bodyBackground(_ view: NSTextView, at index: Int) -> NSColor? {
+        let style = view.textStorage?.attribute(.paragraphStyle, at: index, effectiveRange: nil) as? NSParagraphStyle
+        return style?.textBlocks.first?.backgroundColor
+    }
+
+    @Test func wrapsCellsAndKeepsFollowingTextOutsideTable() throws {
+        let preview = NotesPreviewView.make()
+        preview.frame = NSRect(x: 0, y: 0, width: 520, height: 800)
+        preview.textContainer?.containerSize = NSSize(width: 468, height: CGFloat.greatestFiniteMagnitude)
+        preview.show("""
+        ## Table preview
+
+        | Item | Description | Count |
+        | :--- | :--- | ---: |
+        | [[Shop|the shop]] | A longer description that should wrap across multiple lines inside its cell. | **42** |
+        | `a\\|b` | Second row | 7 |
+
+        After the table.
+        """)
+        let lm = try #require(preview.layoutManager)
+        let container = try #require(preview.textContainer)
+        lm.ensureLayout(for: container)
+        let ns = preview.string as NSString
+        func rect(_ text: String) -> NSRect {
+            lm.boundingRect(forGlyphRange: lm.glyphRange(forCharacterRange: ns.range(of: text), actualCharacterRange: nil), in: container)
+        }
+        #expect(rect("Description").minX > rect("Item").maxX)
+        #expect(rect("Count").minX > rect("Description").maxX)
+        #expect(rect("After the table.").minY > rect("Second row").maxY)
+        let afterStyle = try #require(preview.textStorage?.attribute(.paragraphStyle, at: ns.range(of: "After").location, effectiveRange: nil) as? NSParagraphStyle)
+        #expect(afterStyle.textBlocks.isEmpty)
+        #expect(lm.usedRect(for: container).maxX <= container.containerSize.width + 1)
+        #expect(bodyBackground(preview, at: ns.range(of: "Second row").location)?.alphaComponent == 1)
+
     }
 }

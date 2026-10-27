@@ -339,8 +339,12 @@ final class NotesController: NSObject, NSWindowDelegate, NSTableViewDataSource, 
     /// the note's text is untouched).
     private func highlightMatches() {
         for view in [textView, preview] as [NSTextView] {
-            guard let lm = view.textLayoutManager, let tcm = lm.textContentManager else { continue }
-            lm.removeRenderingAttribute(.backgroundColor, for: tcm.documentRange)
+            let lm = view.textLayoutManager
+            let tcm = lm?.textContentManager
+            // The table preview uses TextKit 1; the source editor uses TextKit 2.
+            let legacy = lm == nil ? view.layoutManager : nil
+            if let lm, let tcm { lm.removeRenderingAttribute(.backgroundColor, for: tcm.documentRange) }
+            legacy?.removeTemporaryAttribute(.backgroundColor, forCharacterRange: NSRange(location: 0, length: view.string.utf16.count))
             let ns = view.string as NSString
             for term in matchTerms where !term.isEmpty {
                 var from = 0
@@ -348,11 +352,12 @@ final class NotesController: NSObject, NSWindowDelegate, NSTableViewDataSource, 
                     let r = ns.range(of: term, options: [.caseInsensitive, .diacriticInsensitive],
                                      range: NSRange(location: from, length: ns.length - from))
                     guard r.location != NSNotFound else { break }
-                    if let start = tcm.location(tcm.documentRange.location, offsetBy: r.location),
+                    if let lm, let tcm, let start = tcm.location(tcm.documentRange.location, offsetBy: r.location),
                        let end = tcm.location(start, offsetBy: r.length),
                        let range = NSTextRange(location: start, end: end) {
                         lm.addRenderingAttribute(.backgroundColor, value: Palette.notes.withAlphaComponent(0.32), for: range)
                     }
+                    legacy?.addTemporaryAttribute(.backgroundColor, value: Palette.notes.withAlphaComponent(0.32), forCharacterRange: r)
                     from = r.upperBound
                 }
             }

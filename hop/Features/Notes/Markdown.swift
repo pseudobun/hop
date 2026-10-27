@@ -202,6 +202,92 @@ nonisolated enum MarkdownEditing {
     }
 }
 
+/// Pipe tables used by Obsidian. Ranges remain in source UTF-16 coordinates.
+nonisolated enum MarkdownTables {
+    enum Alignment: Equatable { case left, center, right }
+    struct Table: Equatable {
+        let range: NSRange
+        let rows: [[String]]
+        let alignments: [Alignment]
+    }
+
+    /// Escaped pipes and Obsidian aliases belong to a cell, not to its boundary.
+    static func cells(_ line: String) -> [String]? {
+        let line = line.trimmingCharacters(in: .whitespacesAndNewlines)
+        var cells: [String] = [], cell = "", wiki = false, escaped = false
+        let chars = Array(line)
+        var i = 0, separators = 0
+        while i < chars.count {
+            let c = chars[i]
+            if escaped {
+                if c != "|" { cell.append("\\") }
+                cell.append(c)
+                escaped = false
+            } else if c == "\\" {
+                escaped = true
+            } else if i + 1 < chars.count && c == "[" && chars[i + 1] == "[" {
+                wiki = true
+                cell += "[["
+                i += 1
+            } else if i + 1 < chars.count && c == "]" && chars[i + 1] == "]" {
+                wiki = false
+                cell += "]]"
+                i += 1
+            } else if c == "|" && !wiki {
+                cells.append(cell.trimmingCharacters(in: .whitespaces))
+                cell = ""
+                separators += 1
+            } else {
+                cell.append(c)
+            }
+            i += 1
+        }
+        if escaped { cell.append("\\") }
+        guard separators > 0 else { return nil }
+        cells.append(cell.trimmingCharacters(in: .whitespaces))
+        if line.hasPrefix("|") { cells.removeFirst() }
+        if line.hasSuffix("|"), cell.isEmpty { cells.removeLast() }
+        return cells.isEmpty ? nil : cells
+    }
+
+    static func parse(_ source: String, spans: [StyledRange]) -> [Table] {
+        let ns = source as NSString
+        var lines: [(NSRange, String)] = [], offset = 0
+        while offset < ns.length {
+            let range = ns.lineRange(for: NSRange(location: offset, length: 0))
+            lines.append((range, ns.substring(with: range)))
+            offset = range.upperBound
+        }
+        let excluded = spans.filter { $0.span == .codeBlock || $0.span == .frontmatter }.map(\.range)
+        func available(_ i: Int) -> Bool {
+            !excluded.contains { NSIntersectionRange($0, lines[i].0).length > 0 }
+        }
+        var tables: [Table] = [], i = 0
+        while i + 1 < lines.count {
+            guard available(i), available(i + 1),
+                  let header = cells(lines[i].1), let delimiter = cells(lines[i + 1].1),
+                  header.count == delimiter.count,
+                  delimiter.allSatisfy({ $0.range(of: #"^:?-+:?$"#, options: .regularExpression) != nil }) else {
+                i += 1
+                continue
+            }
+            let alignments: [Alignment] = delimiter.map {
+                $0.hasSuffix(":") ? ($0.hasPrefix(":") ? .center : .right) : .left
+            }
+            var rows = [header], end = i + 2
+            while end < lines.count, available(end), let row = cells(lines[end].1) {
+                rows.append(Array((row + Array(repeating: "", count: header.count)).prefix(header.count)))
+                end += 1
+            }
+            tables.append(Table(range: NSRange(location: lines[i].0.location,
+                                               length: lines[end - 1].0.upperBound - lines[i].0.location),
+                                rows: rows, alignments: alignments))
+            i = end
+        }
+        return tables
+    }
+}
+
 /// Reading view: the same spans, with Markdown syntax removed or replaced.
 /// Edits are in source (UTF-16) coordinates and never overlap.
 nonisolated enum MarkdownPreview {
@@ -212,6 +298,7 @@ nonisolated enum MarkdownPreview {
         case task(done: Bool, source: Int)
         /// A callout type, e.g. "NOTE".
         case label(String)
+        case table(MarkdownTables.Table)
     }
 
     struct Edit: Equatable {
@@ -223,11 +310,13 @@ nonisolated enum MarkdownPreview {
 
     static func edits(_ text: String, spans: [StyledRange]? = nil) -> [Edit] {
         let ns = text as NSString
-        var out: [Edit] = []
+        let spans = spans ?? MarkdownStyler.spans(text)
+        let tables = MarkdownTables.parse(text, spans: spans)
+        var out = tables.map { Edit(range: $0.range, replacement: .table($0)) }
         func line(_ r: NSRange) -> NSRange { // the line plus its newline
             r.upperBound < ns.length && ns.character(at: r.upperBound) == 10 ? NSRange(location: r.location, length: r.length + 1) : r
         }
-        for s in spans ?? MarkdownStyler.spans(text) {
+        for s in spans where !tables.contains(where: { NSIntersectionRange($0.range, s.range).length > 0 }) {
             let r = s.range
             let piece = ns.substring(with: r)
             switch s.span {
@@ -274,6 +363,10 @@ nonisolated enum MarkdownPreview {
         return kept
     }
 
+    private static func nsHasNewline(_ text: String, range: NSRange) -> Bool {
+        (text as NSString).substring(with: range).hasSuffix("\n")
+    }
+
     /// Plain-text preview (tests, CLI).
     static func plain(_ text: String) -> String {
         let s = NSMutableString(string: text)
@@ -283,6 +376,9 @@ nonisolated enum MarkdownPreview {
             case .text(let t): t
             case .task(let done, _): done ? "☑" : "☐"
             case .label(let l): l + " "
+            case .table(let table):
+                table.rows.map { $0.map { plain($0) }.joined(separator: "\t") }.joined(separator: "\n")
+                    + (nsHasNewline(text, range: e.range) ? "\n" : "")
             }
             s.replaceCharacters(in: e.range, with: replacement)
         }

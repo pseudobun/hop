@@ -229,7 +229,8 @@ final class NotesPreviewView: NSTextView {
     var onToggleTask: ((Int) -> Void)?
 
     static func make() -> NotesPreviewView {
-        let view = NotesPreviewView(usingTextLayoutManager: true)
+        // NSTextTable uses the TextKit 1 layout engine.
+        let view = NotesPreviewView(usingTextLayoutManager: false)
         view.isEditable = false
         view.isSelectable = true
         view.isRichText = true
@@ -262,15 +263,13 @@ final class NotesPreviewView: NSTextView {
 
     override func resetCursorRects() {
         super.resetCursorRects()
-        guard let storage = textStorage, let lm = textLayoutManager, let tcm = lm.textContentManager else { return }
+        guard let storage = textStorage, let lm = layoutManager, let container = textContainer else { return }
         storage.enumerateAttributes(in: NSRange(location: 0, length: storage.length)) { attrs, range, _ in
-            guard attrs[.hopLink] != nil || attrs[.hopTaskSource] != nil,
-                  let start = tcm.location(tcm.documentRange.location, offsetBy: range.location),
-                  let end = tcm.location(start, offsetBy: range.length),
-                  let textRange = NSTextRange(location: start, end: end) else { return }
-            lm.enumerateTextSegments(in: textRange, type: .standard, options: []) { _, frame, _, _ in
-                addCursorRect(frame.offsetBy(dx: textContainerOrigin.x, dy: textContainerOrigin.y), cursor: .pointingHand)
-                return true
+            guard attrs[.hopLink] != nil || attrs[.hopTaskSource] != nil else { return }
+            let glyphs = lm.glyphRange(forCharacterRange: range, actualCharacterRange: nil)
+            lm.enumerateEnclosingRects(forGlyphRange: glyphs, withinSelectedGlyphRange: NSRange(location: NSNotFound, length: 0),
+                                      in: container) { rect, _ in
+                self.addCursorRect(rect.offsetBy(dx: self.textContainerOrigin.x, dy: self.textContainerOrigin.y), cursor: .pointingHand)
             }
         }
     }
@@ -303,10 +302,53 @@ final class NotesPreviewView: NSTextView {
                 let box = NSMutableAttributedString(attachment: checkbox(done))
                 box.addAttributes([.hopTaskSource: location], range: NSRange(location: 0, length: box.length))
                 out.replaceCharacters(in: e.range, with: box)
+            case .table(let table):
+                out.replaceCharacters(in: e.range, with: renderTable(table))
             case .label(let l):
                 out.replaceCharacters(in: e.range, with: NSAttributedString(string: l + "  ", attributes: [
                     .font: Theme.label, .foregroundColor: Theme.info, .kern: 11 * 0.18,
                 ]))
+            }
+        }
+        return out
+    }
+
+    private static func renderTable(_ parsed: MarkdownTables.Table) -> NSAttributedString {
+        let table = NSTextTable()
+        table.numberOfColumns = parsed.alignments.count
+        table.layoutAlgorithm = .automaticLayoutAlgorithm
+        table.collapsesBorders = true
+        table.setValue(100, type: .percentageValueType, for: .width)
+        let out = NSMutableAttributedString(string: "")
+        for (row, cells) in parsed.rows.enumerated() {
+            for (column, source) in cells.enumerated() {
+                let block = NSTextTableBlock(table: table, startingRow: row, rowSpan: 1,
+                                             startingColumn: column, columnSpan: 1)
+                block.setWidth(8, type: .absoluteValueType, for: .padding)
+                block.setWidth(0.5, type: .absoluteValueType, for: .border)
+                block.setBorderColor(Theme.background.blended(withFraction: 0.1, of: .white) ?? Theme.muted)
+                // AppKit table backgrounds need opaque colors (clear can render white).
+                block.backgroundColor = row == 0 ? Theme.card
+                    : row % 2 == 0 ? Theme.background.blended(withFraction: 0.025, of: .white) : Theme.background
+                block.verticalAlignment = .topAlignment
+                let cell = NSMutableAttributedString(attributedString: render(source))
+                cell.append(NSAttributedString(string: "\n", attributes: MarkdownTheme.base))
+                let paragraph = MarkdownTheme.paragraph.mutableCopy() as! NSMutableParagraphStyle
+                paragraph.textBlocks = [block]
+                paragraph.alignment = switch parsed.alignments[column] {
+                case .left: .left
+                case .center: .center
+                case .right: .right
+                }
+                cell.addAttribute(.paragraphStyle, value: paragraph, range: NSRange(location: 0, length: cell.length))
+                if row == 0 {
+                    cell.enumerateAttribute(.font, in: NSRange(location: 0, length: cell.length)) { value, range, _ in
+                        if let font = value as? NSFont {
+                            cell.addAttribute(.font, value: NSFontManager.shared.convert(font, toHaveTrait: .boldFontMask), range: range)
+                        }
+                    }
+                }
+                out.append(cell)
             }
         }
         return out
