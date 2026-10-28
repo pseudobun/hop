@@ -34,9 +34,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var debugBackdrop: NSWindow?
     #endif
     private let hyper = HyperKeyController()
+    private let startupIndicator = StartupIndicator()
+    private var signalSources: [DispatchSourceSignal] = []
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         guard !AppPaths.isRunningTests else { return }
+        installSignalHandlers()
         Theme.registerFonts()
 
         let settings = AppSettings()
@@ -140,6 +143,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         root.rebuild()
         apps.start()
+        startupIndicator.start()
 
         if !PermissionLog.onboarded && !ProcessInfo.processInfo.arguments.contains("-DebugShowOnLaunch") {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
@@ -453,7 +457,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    private func installSignalHandlers() {
+        guard signalSources.isEmpty else { return }
+        for sig in [SIGTERM, SIGINT, SIGHUP] {
+            signal(sig, SIG_IGN)
+            let s = DispatchSource.makeSignalSource(signal: sig, queue: .main)
+            s.setEventHandler {
+                NSApplication.shared.terminate(nil)
+            }
+            s.resume()
+            signalSources.append(s)
+        }
+    }
+
     func applicationWillTerminate(_ notification: Notification) {
+        startupIndicator.stop()
         notes?.saveNow()
         clipboardStore?.saveNow()
         shelves?.saveNow()

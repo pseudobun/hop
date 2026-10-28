@@ -19,6 +19,7 @@ A tiny native macOS launcher. Pure Swift + AppKit, no WebKit. ~3.5 MB binary, ~4
 - Uninstall app (with `~/Library` leftovers, `brew uninstall --cask` when it applies), Clear Downloads, Empty Trash
 - Kill Process: search running processes, quit, force kill or kill as administrator
 - Caps Lock as Hyper key (⌃⌥⌘⇧), optional tap-for-Escape
+- Five gentle Caps Lock LED blinks on launch/restart (where macOS supports the LED override), without changing Caps Lock's typing state
 - WireGuard: connect, disconnect, disconnect all (WireGuard.app tunnels)
 - Notes on ⌥. : a keyboard-first floating window over a folder of Markdown files (an Obsidian vault works as is). Search titles and text, live Markdown styling, ⌘E preview with tables, tasks, `[[links]]`, back / forward, pinned notes on top, move to Trash, new notes saved straight into the vault
 - Clipboard History on ⇧⌥C, centred like the launcher: text, images, links, colours and files you copied, list on the left and a preview on the right (rendered Markdown, code, colour swatch with HEX / RGB / HSL, images), source app and stats. ↵ pastes into the app you were in, ⌘↵ copies, ⇧⌘P pins, ⌃X deletes, ⌘K for the rest, ⌘P filters by type

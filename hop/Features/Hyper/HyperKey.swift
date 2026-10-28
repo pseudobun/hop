@@ -180,7 +180,6 @@ final class HyperKeyController {
     private var tap: HyperEventTap?
     private var notifyPort: IONotificationPortRef?
     private var iterator: io_iterator_t = 0
-    private var signalSources: [DispatchSourceSignal] = []
 
     var statusText: String {
         if let lastError { return lastError }
@@ -207,7 +206,6 @@ final class HyperKeyController {
         lastError = nil
         Task { await HyperKeyMapping.apply() }
         watchKeyboards()
-        installSignalHandlers()
     }
 
     func stop() {
@@ -238,17 +236,4 @@ final class HyperKeyController {
         while case let obj = IOIteratorNext(iterator), obj != 0 { IOObjectRelease(obj) } // arm the notification
     }
 
-    private func installSignalHandlers() {
-        guard signalSources.isEmpty else { return }
-        for sig in [SIGTERM, SIGINT, SIGHUP] {
-            signal(sig, SIG_IGN)
-            let s = DispatchSource.makeSignalSource(signal: sig, queue: .main)
-            s.setEventHandler {
-                HyperKeyMapping.restoreBlocking()
-                exit(0)
-            }
-            s.resume()
-            signalSources.append(s)
-        }
-    }
 }
