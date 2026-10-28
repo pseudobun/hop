@@ -19,8 +19,9 @@ args=(
 )
 
 if [ "$action" = "test" ]; then
+  set +e
   xcodebuild "${args[@]}" test 2>&1 \
-    | grep -E 'error:|✘|✔ Test run|recorded an issue|TEST (SUCCEEDED|FAILED)' || true
+    | grep -E 'error:|✘|✔ Test run|recorded an issue|TEST (SUCCEEDED|FAILED)'
   exit "${PIPESTATUS[0]}"
 fi
 
