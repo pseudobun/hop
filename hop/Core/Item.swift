@@ -20,6 +20,7 @@ enum Palette {
     static var clipboard: NSColor { Theme.chart3 }
     static var snippets: NSColor { Theme.chart5 }
     static var files: NSColor { Theme.chart1 }
+    static var shelf: NSColor { Theme.info }
     static var neutral: NSColor { Theme.mutedForeground }
 }
 

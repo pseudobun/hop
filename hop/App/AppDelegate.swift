@@ -23,6 +23,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var clipboardMonitor: ClipboardMonitor!
     private var clipboard: ClipboardController!
     private var clipboardHotkey: GlobalHotkey!
+    private var shelves: ShelfController!
+    private var shelfHotkeys: [GlobalHotkey] = []
     private let bindings = HotkeyBindings()
     private var snippetService: SnippetService!
     private let expander = SnippetExpander()
@@ -62,6 +64,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         clipboardMonitor = ClipboardMonitor(store: clipboardStore) { settings.data.clipboard }
         clipboard = ClipboardController(store: clipboardStore, monitor: clipboardMonitor, settings: settings)
         services.clipboard = clipboard
+        shelves = ShelfController(settings: settings)
+        shelves.onChange = { [weak self] in self?.root?.rebuild() }
+        services.shelves = shelves
+        shelfHotkeys = [
+            GlobalHotkey { [weak self] in self?.shelves.newShelf() },
+            GlobalHotkey { [weak self] in self?.shelves.newShelfFromClipboard() },
+            GlobalHotkey { [weak self] in self?.shelves.reopenLast() },
+        ]
         let snippetsFile = SnippetsFile(url: URL(fileURLWithPath: settings.data.snippets.file.expandingTilde))
         snippetService = SnippetService(file: snippetsFile, clipboard: clipboardStore)
         services.snippets = snippetService
@@ -194,6 +204,39 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 }
             }
         }
+        if let paths = defaults.string(forKey: "DebugShelf") {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
+                guard let self else { return }
+                let items = paths.split(separator: ",").map { ShelfItem.classify(String($0)).kind == .link ? ShelfItem.link(String($0)) : ShelfItem.file(String($0)) }
+                let main = NSScreen.main?.frame ?? .zero
+                let shelf = shelves.newShelf(items, at: NSPoint(x: main.midX, y: main.midY))
+                if let path = defaults.string(forKey: "DebugShelfRender") {
+                    // Draws the view tree without the window server (no Screen Recording needed).
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+                        guard let view = (shelf.panel.contentView as? NSGlassEffectView)?.contentView, let layer = view.layer,
+                              let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: Int(view.bounds.width * 2), pixelsHigh: Int(view.bounds.height * 2),
+                                                         bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+                                                         colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0),
+                              let ctx = NSGraphicsContext(bitmapImageRep: rep) else { return }
+                        ctx.cgContext.setFillColor(NSColor(srgbRed: 0.2, green: 0.25, blue: 0.4, alpha: 1).cgColor)
+                        ctx.cgContext.fill(CGRect(x: 0, y: 0, width: rep.pixelsWide, height: rep.pixelsHigh))
+                        ctx.cgContext.scaleBy(x: 2, y: 2)
+                        layer.render(in: ctx.cgContext)
+                        try? rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: path))
+                    }
+                }
+                if let path = defaults.string(forKey: "DebugSnapshotPath") {
+                    Task {
+                        try? await Task.sleep(for: .milliseconds(900))
+                        if self.debugBackdrop != nil {
+                            await DebugSnapshot.captureRegion(around: shelf.panel, padding: 60, to: path)
+                        } else {
+                            await DebugSnapshot.capture(shelf.panel, to: path)
+                        }
+                    }
+                }
+            }
+        }
         if defaults.bool(forKey: "DebugShowOnLaunch") {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
                 guard let self else { return }
@@ -276,12 +319,38 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
+        if previous?.shelf != config.shelf {
+            shelves.apply(config.shelf)
+            let specs = [config.shelf.hotkey, config.shelf.clipboardHotkey, config.shelf.reopenHotkey]
+            for (hotkey, spec) in zip(shelfHotkeys, specs) {
+                guard config.shelf.enabled, !spec.isEmpty else {
+                    hotkey.unregister()
+                    continue
+                }
+                if let parsed = HotkeySpec.parse(spec) {
+                    if !hotkey.register(keyCode: parsed.keyCode, modifiers: parsed.modifiers) {
+                        Log.app.error("Could not register shelf hotkey \(spec, privacy: .public)")
+                    }
+                } else {
+                    Log.app.error("Invalid shelf hotkey \(spec, privacy: .public)")
+                    hotkey.unregister()
+                }
+            }
+        }
+
         if previous?.hotkeys != config.hotkeys || previous?.general.hotkey != config.general.hotkey
             || previous?.notes.hotkey != config.notes.hotkey || previous?.notes.enabled != config.notes.enabled
-            || previous?.clipboard.hotkey != config.clipboard.hotkey || previous?.clipboard.enabled != config.clipboard.enabled {
+            || previous?.clipboard.hotkey != config.clipboard.hotkey || previous?.clipboard.enabled != config.clipboard.enabled
+            || previous?.shelf != config.shelf {
             var reserved = [(owner: "the hop hotkey", hotkey: config.general.hotkey)]
             if config.notes.enabled { reserved.append((owner: "the notes hotkey", hotkey: config.notes.hotkey)) }
             if config.clipboard.enabled { reserved.append((owner: "the clipboard hotkey", hotkey: config.clipboard.hotkey)) }
+            if config.shelf.enabled {
+                for (owner, spec) in [("shelf.hotkey", config.shelf.hotkey), ("shelf.clipboardHotkey", config.shelf.clipboardHotkey),
+                                      ("shelf.reopenHotkey", config.shelf.reopenHotkey)] where !spec.isEmpty {
+                    reserved.append((owner: owner, hotkey: spec))
+                }
+            }
             bindings.apply(config.hotkeys, reserved: reserved)
             for p in bindings.problems { Log.app.error("hotkeys: \(p, privacy: .public)") }
         }
@@ -343,6 +412,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case "notes.open", "notes": notes.toggle(); return
         case "notes.new", "new note": launcher.hide(); notes.show(newNote: true); return
         case "clipboard.history", "clipboard history", "clipboard": launcher.hide(); clipboard.toggle(); return
+        case "shelf.new", "new shelf", "shelf": shelves.newShelf(); return
+        case "shelf.clipboard", "new shelf from clipboard": shelves.newShelfFromClipboard(); return
+        case "shelf.reopen", "reopen shelf": shelves.reopenLast(); return
         default: break
         }
         let commands = Registry.commands(services)
@@ -380,6 +452,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillTerminate(_ notification: Notification) {
         notes?.saveNow()
         clipboardStore?.saveNow()
+        shelves?.saveNow()
         hyper.stop()
         expander.stop()
     }

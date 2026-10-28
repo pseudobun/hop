@@ -151,6 +151,23 @@ nonisolated struct HopConfig: Decodable, Equatable, Sendable {
         var showHidden = false
     }
 
+    nonisolated struct Shelf: Decodable, Equatable, Sendable {
+        var enabled = true
+        /// Shake the pointer while dragging to open a shelf under it.
+        var shake = true
+        var shakeSensitivity: ShakeDetector.Sensitivity = .medium
+        /// Hold exactly these modifiers while dragging to open a shelf; "" turns it off.
+        var modifier = "shift"
+        /// New empty shelf, new shelf from the clipboard, reopen the last closed shelf.
+        var hotkey = ""
+        var clipboardHotkey = ""
+        var reopenHotkey = ""
+        /// Dragged-out items stay on the shelf.
+        var keepAfterDragOut = false
+        /// Drags that start in these apps never open a shelf (bundle identifiers).
+        var ignoreApps: [String] = []
+    }
+
     nonisolated struct CalculatorSettings: Decodable, Equatable, Sendable {
         /// Convert currencies; rates come from open.er-api.com, only once you type one.
         var currencies = true
@@ -169,6 +186,7 @@ nonisolated struct HopConfig: Decodable, Equatable, Sendable {
     var snippets = Snippets()
     var files = Files()
     var calculator = CalculatorSettings()
+    var shelf = Shelf()
     /// Global hotkeys for any command or app: { "Empty Trash": "hyper+t", "Safari": "hyper+s" }.
     var hotkeys: [String: String] = [:]
 
@@ -184,7 +202,7 @@ nonisolated private extension KeyedDecodingContainer {
 }
 
 nonisolated extension HopConfig {
-    private enum Keys: String, CodingKey { case general, hyperKey, wireguard, keepass, system, bookmarks, notes, clipboard, snippets, files, calculator, hotkeys }
+    private enum Keys: String, CodingKey { case general, hyperKey, wireguard, keepass, system, bookmarks, notes, clipboard, snippets, files, calculator, shelf, hotkeys }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: Keys.self)
         general = try c.value(.general, General())
@@ -198,6 +216,7 @@ nonisolated extension HopConfig {
         snippets = try c.value(.snippets, Snippets())
         files = try c.value(.files, Files())
         calculator = try c.value(.calculator, CalculatorSettings())
+        shelf = try c.value(.shelf, Shelf())
         hotkeys = try c.value(.hotkeys, [:])
     }
 }
@@ -289,6 +308,22 @@ nonisolated extension HopConfig.CalculatorSettings {
         let c = try decoder.container(keyedBy: Keys.self), d = Self()
         currencies = try c.value(.currencies, d.currencies)
         currency = try c.value(.currency, d.currency)
+    }
+}
+
+nonisolated extension HopConfig.Shelf {
+    private enum Keys: String, CodingKey { case enabled, shake, shakeSensitivity, modifier, hotkey, clipboardHotkey, reopenHotkey, keepAfterDragOut, ignoreApps }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: Keys.self), d = Self()
+        enabled = try c.value(.enabled, d.enabled)
+        shake = try c.value(.shake, d.shake)
+        shakeSensitivity = try c.value(.shakeSensitivity, d.shakeSensitivity)
+        modifier = try c.value(.modifier, d.modifier)
+        hotkey = try c.value(.hotkey, d.hotkey)
+        clipboardHotkey = try c.value(.clipboardHotkey, d.clipboardHotkey)
+        reopenHotkey = try c.value(.reopenHotkey, d.reopenHotkey)
+        keepAfterDragOut = try c.value(.keepAfterDragOut, d.keepAfterDragOut)
+        ignoreApps = try c.value(.ignoreApps, d.ignoreApps)
     }
 }
 
@@ -557,6 +592,25 @@ final class AppSettings {
         maxResults: 60,
         // Show dotfiles when browsing a path (~/…)
         showHidden: false,
+      },
+
+      shelf: {
+        // Floating shelves to park files, links, images and text while you drag
+        enabled: true,
+        // Shake the pointer while dragging something to open a shelf under it
+        shake: true,
+        // "low", "medium" or "high": how small a shake counts
+        shakeSensitivity: "medium",
+        // Hold this while dragging to open a shelf ("shift", "alt", "ctrl+alt", "" off)
+        modifier: "shift",
+        // Global hotkeys: new empty shelf, new shelf from the clipboard, reopen the last one
+        hotkey: "",
+        clipboardHotkey: "",
+        reopenHotkey: "",
+        // Keep items on the shelf after you drag them out
+        keepAfterDragOut: false,
+        // Drags from these apps never open a shelf (bundle identifiers)
+        ignoreApps: [],
       },
 
       snippets: {

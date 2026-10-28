@@ -26,6 +26,7 @@ enum CLI {
         "hotkeys": hotkeys,
         "snippets": snippets,
         "files": files,
+        "shelf": shelf,
     ]
 
     /// Runs a CLI command and exits if argv names one; otherwise returns.
@@ -61,6 +62,7 @@ enum CLI {
           notes append <name> [text]          Append text (or stdin) to a note
           notes path                          Print the notes folder
           files <query> [--content] [--json] [--limit=N]   Files by name (or by text with --content), via Spotlight
+          shelf <path…>                       Put files on a shelf in the running hop (paths or stdin, one per line)
           snippets [list] [--json]            Snippets from snippets.json5 with their keywords
           snippets expand <name|keyword> [--arg=value…]   Print a snippet with its placeholders filled in
           snippets add <name> [text] [--keyword=;k]       Append a snippet (text or stdin)
@@ -626,6 +628,25 @@ enum CLI {
     }
 
     /// Piped input, or nil when stdin is a terminal.
+    static func shelf(_ a: Args) async -> Int32 {
+        let raw = a.positional.isEmpty
+            ? (stdinText() ?? "").split(whereSeparator: \.isNewline).map(String.init)
+            : a.positional
+        let cwd = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
+        let paths = raw.map { URL(fileURLWithPath: $0.expandingTilde, relativeTo: cwd).standardizedFileURL.path }
+        guard !paths.isEmpty else { return Output.fail("usage: hop shelf <path…>") }
+        let missing = paths.filter { !FileManager.default.fileExists(atPath: $0) }
+        guard missing.isEmpty else { return Output.fail("no such file: \(missing.joined(separator: ", "))") }
+        // Run through the /opt/homebrew/bin symlink, Bundle.main is not the app bundle.
+        let id = Bundle.main.bundleIdentifier ?? "dev.hop.app"
+        guard !NSRunningApplication.runningApplications(withBundleIdentifier: id).isEmpty else {
+            return Output.fail("hop is not running")
+        }
+        DistributedNotificationCenter.default().postNotificationName(ShelfController.addNotification, object: nil,
+                                                                     userInfo: ["paths": paths], deliverImmediately: true)
+        return 0
+    }
+
     private static func stdinText() -> String? {
         guard isatty(STDIN_FILENO) == 0 else { return nil }
         return String(decoding: FileHandle.standardInput.readDataToEndOfFile(), as: UTF8.self)
