@@ -255,7 +255,7 @@ final class UninstallMode: Mode {
                                context?.setLoading(true)
                                let result = await plan.execute()
                                context?.setLoading(false)
-                               return result.ok ? .dismissWithHUD(result.message) : .stayWithHUD(result.message)
+                               return result.ok ? .dismissWithHUD(result.message) : .failWithHUD(result.message)
                            }], tracksFrecency: false)
         var files = [Item(id: "f.bundle", title: (app.path as NSString).lastPathComponent,
                           subtitle: (app.path as NSString).deletingLastPathComponent, icon: .file(app.path),

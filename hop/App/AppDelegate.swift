@@ -429,6 +429,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     launcher.push(mode)
                 case .dismissWithHUD(let text), .stayWithHUD(let text):
                     HUD.shared.show(text)
+                case .failWithHUD(let text):
+                    HUD.shared.fail(text)
+                case .warnWithHUD(let text):
+                    HUD.shared.warn(text)
                 case .dismiss, .stay, .pop, .reload:
                     break
                 }
@@ -438,7 +442,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let entries = services.apps.entries
         guard let app = entries.first(where: { $0.bundleID == appKey || $0.path == appKey })
             ?? entries.first(where: { $0.name.caseInsensitiveCompare(appKey) == .orderedSame }) else {
-            HUD.shared.show("No command or app “\(key)”", symbol: "exclamationmark.triangle.fill")
+            HUD.shared.fail("No command or app “\(key)”")
             return
         }
         // Like Raycast's hotkey toggle: the app in front hides, otherwise it comes forward.

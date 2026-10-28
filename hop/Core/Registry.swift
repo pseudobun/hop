@@ -81,7 +81,7 @@ enum Registry {
 /// Quitting and restarting hop itself.
 enum HopApp {
     static func restartAction() -> Action {
-        Action(title: "Restart hop") { restart() ? .dismiss : .stayWithHUD("Could not restart hop") }
+        Action(title: "Restart hop") { restart() ? .dismiss : .failWithHUD("Could not restart hop") }
     }
 
     static func quitAction(shortcut: KeyCombo? = nil) -> Action {

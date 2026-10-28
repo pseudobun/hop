@@ -110,7 +110,7 @@ final class WireGuardMode: Mode {
                  actions: [Action(title: t.isConnected ? "Disconnect" : "Connect") { [weak self] in
                      let ok = await WireGuard.setConnected(t, !t.isConnected)
                      self?.refresh(after: .seconds(1))
-                     guard ok else { return .stayWithHUD("scutil could not \(t.isConnected ? "stop" : "start") \(t.name)") }
+                     guard ok else { return .failWithHUD("scutil could not \(t.isConnected ? "stop" : "start") \(t.name)") }
                      return .dismissWithHUD("\(t.name) is \(t.isConnected ? "disconnected" : "connecting")")
                  }], tracksFrecency: false, chip: t.isConnected ? Chip(text: "Connected", tone: .good) : nil)
         }

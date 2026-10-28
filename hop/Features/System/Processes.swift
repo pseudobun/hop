@@ -117,7 +117,7 @@ final class KillProcessMode: Mode {
                     let ok = await Processes.killAsAdmin(p.pid)
                     self?.context?.suppressAutoHide = false
                     self?.reloadList(after: .milliseconds(400))
-                    return ok ? .stayWithHUD("Killed \(p.name)") : .stayWithHUD("Could not kill \(p.name)")
+                    return ok ? .stayWithHUD("Killed \(p.name)") : .failWithHUD("Could not kill \(p.name)")
                 })
             }
             return Item(id: "proc.\(p.pid)", title: displayName(p), subtitle: "PID \(p.pid)",
@@ -133,9 +133,9 @@ final class KillProcessMode: Mode {
         reloadList(after: .milliseconds(400))
         switch result {
         case .ok: return .stayWithHUD("\(force ? "Force killed" : "Killed") \(displayName(p))")
-        case .gone: return .stayWithHUD("\(displayName(p)) already exited")
-        case .notPermitted: return .stayWithHUD("Not permitted. Use Force Kill as Administrator (⇧⌥↵)")
-        case .failed: return .stayWithHUD("Could not kill \(displayName(p))")
+        case .gone: return .warnWithHUD("\(displayName(p)) already exited")
+        case .notPermitted: return .failWithHUD("Not permitted. Use Force Kill as Administrator (⇧⌥↵)")
+        case .failed: return .failWithHUD("Could not kill \(displayName(p))")
         }
     }
 }

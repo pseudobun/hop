@@ -68,7 +68,16 @@ final class HUD {
     private var panel: NSPanel?
     private var hideTask: Task<Void, Never>?
 
-    func show(_ text: String, symbol: String = "checkmark.circle.fill") {
+    enum Tone { case success, warning, failure }
+
+    /// Red cross: something did not work.
+    func fail(_ text: String) { show(text, symbol: "xmark.octagon.fill", tone: .failure) }
+
+    /// Amber triangle: nothing went wrong, but nothing happened either.
+    func warn(_ text: String) { show(text, symbol: "exclamationmark.triangle.fill", tone: .warning) }
+
+    /// Without a tone, a checkmark is a success and any other symbol a notice.
+    func show(_ text: String, symbol: String = "checkmark.circle.fill", tone: Tone? = nil) {
         let panel = self.panel ?? makePanel()
         self.panel = panel
         guard let glass = panel.contentView as? NSGlassEffectView,
@@ -77,7 +86,11 @@ final class HUD {
               let label = stack.arrangedSubviews.last as? NSTextField
         else { return }
         image.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)
-        image.contentTintColor = symbol.contains("checkmark") ? Theme.good : Theme.warn
+        switch tone ?? (symbol.contains("checkmark") ? .success : .warning) {
+        case .success: image.contentTintColor = Theme.good
+        case .warning: image.contentTintColor = Theme.warn
+        case .failure: image.contentTintColor = Theme.destructive
+        }
         label.stringValue = text
         let size = stack.fittingSize
         let frame = NSRect(x: 0, y: 0, width: max(size.width + 40, 140), height: 40)

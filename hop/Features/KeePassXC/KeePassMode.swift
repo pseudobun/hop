@@ -167,12 +167,12 @@ final class KeePassMode: NSObject, Mode {
                 if status != errSecSuccess {
                     let reason = SecCopyErrorMessageString(status, nil) as String? ?? "error \(status)"
                     Log.app.error("keepass: Keychain save failed: \(status) \(reason, privacy: .public)")
-                    return .stayWithHUD("Unlocked, but the Keychain did not keep the password: \(reason)")
+                    return .warnWithHUD("Unlocked, but the Keychain did not keep the password: \(reason)")
                 }
             }
             return .stay
         } catch let e as KeePassError {
-            return .stayWithHUD(e.message)
+            return .failWithHUD(e.message)
         } catch {
             return .stay
         }
@@ -310,7 +310,7 @@ final class KeePassMode: NSObject, Mode {
             copy("Copy TOTP", .cmd("t"), concealed: true, totp),
             copy("Copy URL", .cmd("u"), concealed: false) { e.url.isEmpty ? nil : value(e.url) },
             Action(title: "Open URL", shortcut: .cmd("u", .shift)) {
-                guard let url = URL(string: value(e.url)), url.scheme != nil else { return .stayWithHUD("No URL set") }
+                guard let url = URL(string: value(e.url)), url.scheme != nil else { return .warnWithHUD("No URL set") }
                 NSWorkspace.shared.open(url)
                 return .dismiss
             },
@@ -328,7 +328,7 @@ final class KeePassMode: NSObject, Mode {
 
     private func paste(_ title: String, _ key: KeyCombo, concealed: Bool, _ get: @escaping () -> String?) -> Action {
         Action(title: title, shortcut: key) { [weak self] in
-            guard let text = get() else { return .stayWithHUD("Nothing to paste") }
+            guard let text = get() else { return .warnWithHUD("Nothing to paste") }
             self?.context?.dismiss()
             let pasted = await Pasteboard.paste(text, concealed: concealed)
             if !pasted {
@@ -341,7 +341,7 @@ final class KeePassMode: NSObject, Mode {
 
     private func copy(_ title: String, _ key: KeyCombo, concealed: Bool, _ get: @escaping () -> String?) -> Action {
         Action(title: title, shortcut: key) {
-            guard let text = get() else { return .stayWithHUD("Nothing to copy") }
+            guard let text = get() else { return .warnWithHUD("Nothing to copy") }
             Pasteboard.copy(text, concealed: concealed)
             if concealed {
                 Pasteboard.clearLater(after: 30)

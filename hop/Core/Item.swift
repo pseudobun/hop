@@ -75,6 +75,10 @@ enum ActionResult {
     case stay
     /// Keep the launcher open and flash a HUD.
     case stayWithHUD(String)
+    /// Keep the launcher open and flash a red HUD: the action failed.
+    case failWithHUD(String)
+    /// Keep the launcher open and flash an amber HUD: nothing to do, e.g. no URL set.
+    case warnWithHUD(String)
     /// Enter a sub-mode.
     case push(Mode)
     /// Leave the current sub-mode.

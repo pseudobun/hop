@@ -33,7 +33,7 @@ enum SystemCommands {
                     },
                     confirm: {
                         let r = try? await AppleScript.run(#"tell application "Finder" to empty trash"#)
-                        return r?.ok == true ? .dismissWithHUD("Trash emptied") : .stayWithHUD("Could not empty the Trash")
+                        return r?.ok == true ? .dismissWithHUD("Trash emptied") : .failWithHUD("Could not empty the Trash")
                     })
     }
 
@@ -52,7 +52,7 @@ enum SystemCommands {
                                guard !items.isEmpty else { return .pop }
                                let failed = await DownloadsScanner.trash(items)
                                return failed == 0 ? .dismissWithHUD("Downloads cleared")
-                                   : .dismissWithHUD("\(failed) item\(failed == 1 ? "" : "s") could not be moved")
+                                   : .failWithHUD("\(failed) item\(failed == 1 ? "" : "s") could not be moved")
                            })
     }
 }

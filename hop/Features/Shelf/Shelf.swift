@@ -464,7 +464,7 @@ final class Shelf: NSObject, NSWindowDelegate, NSDraggingSource {
         let objects = list.map(\.shareObject)
         guard !objects.isEmpty else { return }
         guard let service = NSSharingService(named: .sendViaAirDrop), service.canPerform(withItems: objects) else {
-            HUD.shared.show("AirDrop can't send these", symbol: "exclamationmark.triangle.fill")
+            HUD.shared.fail("AirDrop can't send these")
             return
         }
         NSApp.activate()

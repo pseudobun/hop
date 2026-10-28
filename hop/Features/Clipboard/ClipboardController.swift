@@ -265,8 +265,7 @@ final class ClipboardController: NSObject, NSWindowDelegate, NSTableViewDataSour
         if item.kind != .image && item.kind != .file, let saveSnippet {
             list.append(Action(title: "Save as Snippet", symbol: "text.badge.plus", shortcut: .cmd("s")) { [weak self] in
                 self?.hide()
-                HUD.shared.show(saveSnippet(item.text) ? "Saved as a snippet" : "Could not write the snippets file",
-                                symbol: "checkmark.circle.fill")
+                if saveSnippet(item.text) { HUD.shared.show("Saved as a snippet") } else { HUD.shared.fail("Could not write the snippets file") }
                 return .stay
             })
         }

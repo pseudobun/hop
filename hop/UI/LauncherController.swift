@@ -342,6 +342,8 @@ final class LauncherController: NSObject, LauncherContext, NSTableViewDataSource
         case .dismissWithHUD(let t): hide(); HUD.shared.show(t)
         case .stay: break
         case .stayWithHUD(let t): HUD.shared.show(t)
+        case .failWithHUD(let t): HUD.shared.fail(t)
+        case .warnWithHUD(let t): HUD.shared.warn(t)
         case .push(let m): push(m)
         case .pop: pop()
         case .reload: refresh(keepSelection: true)

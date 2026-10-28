@@ -58,7 +58,7 @@ final class SnippetService {
                 }
             }
         } catch Placeholders.ExpansionError.placeholder(let message) {
-            HUD.shared.show("\(snippet.name): \(message)", symbol: "exclamationmark.triangle.fill")
+            HUD.shared.fail("\(snippet.name): \(message)")
         } catch {}
     }
 }
@@ -115,7 +115,7 @@ final class SnippetsMode: Mode {
                                     Pasteboard.copy(try service.expand(s).text)
                                     return .dismissWithHUD("Copied \(s.name)")
                                 } catch Placeholders.ExpansionError.placeholder(let m) {
-                                    return .stayWithHUD(m)
+                                    return .failWithHUD(m)
                                 } catch { return .stay }
                             },
                             Action(title: "Copy Raw Text", symbol: "curlybraces", shortcut: .cmd("c", .shift)) {
@@ -192,7 +192,7 @@ final class SnippetArgumentsMode: Mode {
             Task { await SnippetExpander.insert(e.text, caretBack: e.charactersAfterCursor) }
             return .stay
         } catch Placeholders.ExpansionError.placeholder(let m) {
-            return .stayWithHUD(m)
+            return .failWithHUD(m)
         } catch {
             return .stay
         }

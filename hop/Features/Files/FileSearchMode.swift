@@ -155,7 +155,7 @@ final class FileSearchMode: Mode {
             Action(title: "Move to Trash", symbol: "trash", shortcut: KeyCombo(key: .delete, modifiers: [.command]), style: .destructive) {
                 .push(ConfirmMode(title: "Move to Trash", message: "Move \(hit.name) to the Trash?", confirmTitle: "Move to Trash",
                                   symbol: "trash.fill", tint: Theme.destructive) {
-                    await Trash.move(url) ? .dismissWithHUD("Moved \(hit.name) to the Trash") : .stayWithHUD("Could not move \(hit.name)")
+                    await Trash.move(url) ? .dismissWithHUD("Moved \(hit.name) to the Trash") : .failWithHUD("Could not move \(hit.name)")
                 })
             },
         ]
