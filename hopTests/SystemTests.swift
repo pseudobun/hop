@@ -38,6 +38,50 @@ struct LeftoverScannerTests {
         ])
     }
 
+    @Test func findsHelperIDsAppNameAndSystemLeftovers() throws {
+        let root = FileManager.default.temporaryDirectory.appending(path: "hop-uninstall-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let fm = FileManager.default
+        let make: (String) throws -> Void = { rel in
+            let url = root.appending(path: rel)
+            try fm.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            if rel.hasSuffix("/") { try fm.createDirectory(at: url, withIntermediateDirectories: true) }
+            else { try Data().write(to: url) }
+        }
+        let plist = { (id: String) in
+            "<?xml version=\"1.0\"?><plist version=\"1.0\"><dict><key>CFBundleIdentifier</key><string>\(id)</string></dict></plist>"
+        }
+        let app = root.appending(path: "Apps/Acme.app")
+        try make("Apps/Acme.app/Contents/Library/LoginItems/Acme Launcher.app/Contents/")
+        try plist("com.acme.app").write(to: app.appending(path: "Contents/Info.plist"), atomically: true, encoding: .utf8)
+        try plist("de.acme.launcher").write(to: app.appending(path: "Contents/Library/LoginItems/Acme Launcher.app/Contents/Info.plist"),
+                                            atomically: true, encoding: .utf8)
+        try make("Apps/Acme.app/Contents/Library/LaunchServices/de.acme.privileged")
+        #expect(LeftoverScanner.bundleIDs(of: app) == ["com.acme.app", "de.acme.launcher", "de.acme.privileged"])
+
+        try make("home/Library/Containers/de.acme.launcher/")
+        try make("home/Library/Application Scripts/com.acme.app/")
+        try make("home/Library/Preferences/ByHost/com.acme.app.0123-4567.plist")
+        try make("home/Library/Application Support/Acme/")
+        try make("system/Library/LaunchDaemons/de.acme.privileged.plist")
+        try make("system/Library/PrivilegedHelperTools/de.acme.privileged")
+        // Must not match: the name only counts in Application Support, Caches and Logs.
+        try make("home/Library/Preferences/Acme/")
+        try make("home/Library/Application Support/Acme Other/")
+
+        let found = LeftoverScanner.scan(bundleIDs: LeftoverScanner.bundleIDs(of: app), appName: "Acme",
+                                         home: root.appending(path: "home"), systemRoot: root.appending(path: "system"))
+            .map { $0.path.replacingOccurrences(of: root.path + "/", with: "") }
+        #expect(found == [
+            "home/Library/Application Scripts/com.acme.app",
+            "home/Library/Application Support/Acme",
+            "home/Library/Containers/de.acme.launcher",
+            "home/Library/Preferences/ByHost/com.acme.app.0123-4567.plist",
+            "system/Library/LaunchDaemons/de.acme.privileged.plist",
+            "system/Library/PrivilegedHelperTools/de.acme.privileged",
+        ])
+    }
+
     @Test func systemAppsAreNotRemovable() {
         #expect(!UninstallMode.isRemovable("/System/Applications/Mail.app"))
         #expect(UninstallMode.isRemovable("/Applications/Slack.app"))

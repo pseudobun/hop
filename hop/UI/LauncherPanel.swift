@@ -72,7 +72,7 @@ final class HUD {
         let panel = self.panel ?? makePanel()
         self.panel = panel
         guard let glass = panel.contentView as? NSGlassEffectView,
-              let stack = glass.contentView as? NSStackView,
+              let stack = glass.contentView?.subviews.first as? NSStackView,
               let image = stack.arrangedSubviews.first as? NSImageView,
               let label = stack.arrangedSubviews.last as? NSTextField
         else { return }
@@ -80,7 +80,7 @@ final class HUD {
         image.contentTintColor = symbol.contains("checkmark") ? Theme.good : Theme.warn
         label.stringValue = text
         let size = stack.fittingSize
-        let frame = NSRect(x: 0, y: 0, width: max(size.width + 32, 120), height: 40)
+        let frame = NSRect(x: 0, y: 0, width: max(size.width + 40, 140), height: 40)
         panel.setContentSize(frame.size)
         let mouse = NSEvent.mouseLocation
         let screen = NSScreen.screens.first { NSMouseInRect(mouse, $0.frame, false) } ?? NSScreen.main
@@ -91,7 +91,8 @@ final class HUD {
         panel.orderFrontRegardless()
         hideTask?.cancel()
         hideTask = Task {
-            try? await Task.sleep(for: .milliseconds(1300))
+            // Long enough to read: 2.2 s, plus a little for longer messages.
+            try? await Task.sleep(for: .milliseconds(min(4000, 2200 + max(0, text.count - 30) * 40)))
             guard !Task.isCancelled else { return }
             await NSAnimationContext.runAnimationGroup { ctx in
                 ctx.duration = 0.2
@@ -123,8 +124,15 @@ final class HUD {
         label.textColor = Theme.foreground
         let stack = NSStackView(views: [image, label])
         stack.spacing = 8
-        stack.edgeInsets = NSEdgeInsets(top: 0, left: 16, bottom: 0, right: 16)
-        glass.contentView = stack
+        // Centred in the glass; a stack filling it would hug its leading edge.
+        let container = NSView()
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(stack)
+        NSLayoutConstraint.activate([
+            stack.centerXAnchor.constraint(equalTo: container.centerXAnchor),
+            stack.centerYAnchor.constraint(equalTo: container.centerYAnchor),
+        ])
+        glass.contentView = container
         p.contentView = glass
         return p
     }

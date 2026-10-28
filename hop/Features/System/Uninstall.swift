@@ -1,12 +1,20 @@
 import AppKit
 
-/// Finds app leftovers in ~/Library by bundle id (and app group ids).
+/// Finds app leftovers in ~/Library (and /Library) by the bundle ids of the app and the
+/// helpers, extensions and login items inside it, its app group ids and its name.
 nonisolated enum LeftoverScanner {
     static let directories = [
-        "Library/Application Support", "Library/Caches", "Library/Preferences", "Library/Containers",
-        "Library/Group Containers", "Library/Saved Application State", "Library/HTTPStorages",
-        "Library/LaunchAgents", "Library/Logs", "Library/WebKit",
+        "Library/Application Support", "Library/Application Scripts", "Library/Caches", "Library/Preferences",
+        "Library/Preferences/ByHost", "Library/Containers", "Library/Group Containers", "Library/Saved Application State",
+        "Library/HTTPStorages", "Library/Cookies", "Library/LaunchAgents", "Library/Logs", "Library/WebKit",
     ]
+    /// Under / instead of the home folder; Finder asks for a password to remove these.
+    static let systemDirectories = [
+        "Library/Application Support", "Library/Caches", "Library/Preferences", "Library/LaunchAgents",
+        "Library/LaunchDaemons", "Library/PrivilegedHelperTools", "Library/Logs",
+    ]
+    /// Apps that are not sandboxed often name these folders after themselves.
+    static let nameDirectories: Set<String> = ["Library/Application Support", "Library/Caches", "Library/Logs"]
 
     static func matches(_ name: String, bundleID: String, groups: [String]) -> Bool {
         let n = name.lowercased(), bid = bundleID.lowercased()
@@ -15,17 +23,48 @@ nonisolated enum LeftoverScanner {
         return false
     }
 
-    static func scan(bundleID: String, groups: [String] = [], home: URL) -> [URL] {
+    /// `appName` also matches a folder of exactly that name in `nameDirectories`.
+    static func scan(bundleIDs: [String], groups: [String] = [], appName: String? = nil, home: URL,
+                     systemRoot: URL? = URL(fileURLWithPath: "/")) -> [URL] {
         let fm = FileManager.default
-        var found: [URL] = []
-        for dir in directories {
-            let base = home.appending(path: dir, directoryHint: .isDirectory)
-            guard let names = try? fm.contentsOfDirectory(atPath: base.path) else { continue }
-            for name in names where matches(name, bundleID: bundleID, groups: groups) {
-                found.append(base.appending(path: name))
+        let name = appName.flatMap { $0.count >= 3 ? $0.lowercased() : nil }
+        var found: Set<URL> = []
+        let roots = [(home, directories)] + (systemRoot.map { [($0, systemDirectories)] } ?? [])
+        for (root, dirs) in roots {
+            for dir in dirs {
+                let base = root.appending(path: dir, directoryHint: .isDirectory)
+                guard let names = try? fm.contentsOfDirectory(atPath: base.path) else { continue }
+                for entry in names {
+                    let byID = bundleIDs.contains { matches(entry, bundleID: $0, groups: groups) }
+                    let byName = name != nil && nameDirectories.contains(dir) && entry.lowercased() == name
+                    if byID || byName { found.insert(base.appending(path: entry)) }
+                }
             }
         }
         return found.sorted { $0.path < $1.path }
+    }
+
+    static func scan(bundleID: String, groups: [String] = [], home: URL) -> [URL] {
+        scan(bundleIDs: [bundleID], groups: groups, home: home, systemRoot: nil)
+    }
+
+    /// Bundle ids of the app and everything nested in it: login items, extensions, XPC
+    /// services, helper apps and privileged helpers (named after their id).
+    static func bundleIDs(of app: URL) -> [String] {
+        var ids: [String] = Bundle(url: app)?.bundleIdentifier.map { [$0] } ?? []
+        let contents = app.appending(path: "Contents", directoryHint: .isDirectory)
+        let fm = FileManager.default
+        for dir in ["Library/LoginItems", "PlugIns", "XPCServices", "Helpers", "Library/Helpers", "Frameworks"] {
+            guard let names = try? fm.contentsOfDirectory(atPath: contents.appending(path: dir).path) else { continue }
+            for name in names where [".app", ".appex", ".xpc"].contains(where: name.hasSuffix) {
+                if let id = Bundle(url: contents.appending(path: "\(dir)/\(name)"))?.bundleIdentifier { ids.append(id) }
+            }
+        }
+        if let names = try? fm.contentsOfDirectory(atPath: contents.appending(path: "Library/LaunchServices").path) {
+            ids += names.filter { $0.contains(".") && !$0.hasPrefix(".") }
+        }
+        var seen: Set<String> = []
+        return ids.filter { seen.insert($0.lowercased()).inserted }
     }
 
     /// App group identifiers from the bundle's code-signing entitlements.
@@ -131,9 +170,11 @@ struct UninstallPlan {
         let url = URL(fileURLWithPath: app.path)
         let home = FileManager.default.homeDirectoryForCurrentUser
         var found: [(URL, Int64)] = []
-        if let bid = app.bundleID {
+        let ids = LeftoverScanner.bundleIDs(of: url)
+        if !ids.isEmpty {
             let groups = LeftoverScanner.appGroups(of: url)
-            found = LeftoverScanner.scan(bundleID: bid, groups: groups, home: home).map { ($0, FileSize.allocated($0)) }
+            found = LeftoverScanner.scan(bundleIDs: ids, groups: groups, appName: url.deletingPathExtension().lastPathComponent, home: home)
+                .map { ($0, FileSize.allocated($0)) }
         }
         let cask = app.path.hasPrefix("/Applications/") ? BrewCask.token(forApp: url.deletingPathExtension().lastPathComponent) : nil
         return (found, FileSize.allocated(url), cask)
@@ -141,11 +182,7 @@ struct UninstallPlan {
 
     /// Quits the app, removes it (brew cask or Trash) and trashes the leftovers.
     func execute() async -> (ok: Bool, message: String) {
-        if let bid = app.bundleID, let running = NSRunningApplication.runningApplications(withBundleIdentifier: bid).first {
-            running.terminate()
-            for _ in 0..<50 where !running.isTerminated { try? await Task.sleep(for: .milliseconds(100)) }
-            if !running.isTerminated { return (false, "\(app.name) is still running. Quit it and try again") }
-        }
+        if !(await Self.quit(app)) { return (false, "\(app.name) is still running. Quit it and try again") }
         var removed = false
         if let cask { removed = await BrewCask.uninstall(cask) }
         if !removed { removed = await Trash.move(URL(fileURLWithPath: app.path)) }
@@ -155,6 +192,25 @@ struct UninstallPlan {
             if !(await Trash.move(l.url)) { failed += 1 }
         }
         return (true, failed == 0 ? "Uninstalled \(app.name)" : "Uninstalled \(app.name), \(failed) leftovers kept")
+    }
+
+    /// Quits the app and every helper running from inside its bundle (a login item would
+    /// start it again); what ignores Quit for 5 s is force quit.
+    private static func quit(_ app: AppEntry) async -> Bool {
+        let inside = app.path.hasSuffix("/") ? app.path : app.path + "/"
+        let running = {
+            NSWorkspace.shared.runningApplications.filter { r in
+                (r.bundleURL?.path).map { $0 == app.path || $0.hasPrefix(inside) } == true
+                    || (app.bundleID != nil && r.bundleIdentifier == app.bundleID)
+            }
+        }
+        let apps = running()
+        guard !apps.isEmpty else { return true }
+        apps.forEach { $0.terminate() }
+        for _ in 0..<50 where apps.contains(where: { !$0.isTerminated }) { try? await Task.sleep(for: .milliseconds(100)) }
+        apps.filter { !$0.isTerminated }.forEach { $0.forceTerminate() }
+        for _ in 0..<20 where !running().isEmpty { try? await Task.sleep(for: .milliseconds(100)) }
+        return running().isEmpty
     }
 }
 
