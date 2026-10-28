@@ -286,6 +286,12 @@ final class NotesPreviewView: NSTextView {
         let spans = MarkdownStyler.spans(source)
         let out = NSMutableAttributedString(string: source)
         MarkdownTheme.apply(spans, to: out)
+        // Attributes follow their heading through preview deletions and replacements.
+        for span in spans {
+            if case .heading = span.span {
+                out.addAttribute(.hopHeadingSource, value: span.range.location, range: span.range)
+            }
+        }
         for s in spans where s.span == .quote {
             let p = MarkdownTheme.paragraph.mutableCopy() as! NSMutableParagraphStyle
             p.firstLineHeadIndent = 14
@@ -332,6 +338,7 @@ final class NotesPreviewView: NSTextView {
                     : row % 2 == 0 ? Theme.background.blended(withFraction: 0.025, of: .white) : Theme.background
                 block.verticalAlignment = .topAlignment
                 let cell = NSMutableAttributedString(attributedString: render(source))
+                cell.removeAttribute(.hopHeadingSource, range: NSRange(location: 0, length: cell.length))
                 cell.append(NSAttributedString(string: "\n", attributes: MarkdownTheme.base))
                 let paragraph = MarkdownTheme.paragraph.mutableCopy() as! NSMutableParagraphStyle
                 paragraph.textBlocks = [block]

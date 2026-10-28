@@ -187,7 +187,7 @@ nonisolated enum NoteStore {
         // Titles first, ranked like the launcher.
         let cands = passing.map { RankCandidate(id: notes[$0].relativePath, title: notes[$0].title, subtitle: notes[$0].folder, typeWeight: 1) }
         let titled = RootRanker.rank(cands, query: SearchQuery(q.titleText), sensitivity: sensitivity).map { passing[$0] }
-        var hits = titled.map { i -> NoteHit in
+        let hits = titled.map { i -> NoteHit in
             var h = NoteHit(note: notes[i], terms: q.terms)
             if let text = contents[notes[i].relativePath] { (h.matches, h.matchLocation) = Self.matchInfo(text, terms: q.terms) }
             return h
@@ -251,7 +251,7 @@ nonisolated enum NoteStore {
         return (start > 0 ? "…" : "") + piece + (start + width < line.length ? "…" : "")
     }
 
-    private nonisolated(unsafe) static let inlineTag = try! NSRegularExpression(pattern: #"(?<![\w#/&])#([\p{L}_][\p{L}\p{N}_/-]*)"#)
+    private nonisolated static let inlineTag = try! NSRegularExpression(pattern: #"(?<![\w#/&])#([\p{L}_][\p{L}\p{N}_/-]*)"#)
 
     /// Tags of a note, lower-cased without `#`: frontmatter `tags:` (inline list or
     /// YAML list) plus inline `#tags` in the body.

@@ -26,21 +26,21 @@ nonisolated struct StyledRange: Equatable, Sendable {
 nonisolated enum MarkdownStyler {
     private static func re(_ p: String) -> NSRegularExpression { try! NSRegularExpression(pattern: p) }
 
-    private nonisolated(unsafe) static let heading = re(#"^(#{1,6})[ \t]+"#)
-    private nonisolated(unsafe) static let rule = re(#"^[ \t]*([-*_])(?:[ \t]*\1){2,}[ \t]*$"#)
-    private nonisolated(unsafe) static let quote = re(#"^[ \t]*(?:>[ \t]?)+"#)
-    private nonisolated(unsafe) static let bullet = re(#"^[ \t]*(?:[-*+]|\d+[.)])[ \t]+"#)
-    private nonisolated(unsafe) static let task = re(#"\G\[([ xX])\](?=[ \t]|$)"#)
-    private nonisolated(unsafe) static let inlineCode = re(#"(`+)(?!`)(.+?)(?<!`)\1(?!`)"#)
-    private nonisolated(unsafe) static let wikiLink = re(#"!?\[\[([^\[\]\n]+?)\]\]"#)
-    private nonisolated(unsafe) static let mdLink = re(#"!?\[([^\[\]\n]+)\]\(([^()\s]+)\)"#)
-    private nonisolated(unsafe) static let url = re(#"https?://[^\s<>()\[\]`]+[^\s<>()\[\]`.,;:!?'"]"#)
-    private nonisolated(unsafe) static let bold = re(#"(\*\*|__)(?=\S)(.+?)(?<=\S)\1"#)
-    private nonisolated(unsafe) static let italicStar = re(#"(?<![*\w])\*(?=[^\s*])(.+?)(?<=[^\s*])\*(?![*\w])"#)
-    private nonisolated(unsafe) static let italicUnderscore = re(#"(?<![_\w])_(?=[^\s_])(.+?)(?<=[^\s_])_(?![_\w])"#)
-    private nonisolated(unsafe) static let strike = re(#"~~(?=\S)(.+?)(?<=\S)~~"#)
-    private nonisolated(unsafe) static let highlight = re(#"==(?=\S)(.+?)(?<=\S)=="#)
-    private nonisolated(unsafe) static let tag = re(#"(?<![\w#/&])#[\p{L}_][\p{L}\p{N}_/-]*"#)
+    private nonisolated static let heading = re(#"^(#{1,6})[ \t]+"#)
+    private nonisolated static let rule = re(#"^[ \t]*([-*_])(?:[ \t]*\1){2,}[ \t]*$"#)
+    private nonisolated static let quote = re(#"^[ \t]*(?:>[ \t]?)+"#)
+    private nonisolated static let bullet = re(#"^[ \t]*(?:[-*+]|\d+[.)])[ \t]+"#)
+    private nonisolated static let task = re(#"\G\[([ xX])\](?=[ \t]|$)"#)
+    private nonisolated static let inlineCode = re(#"(`+)(?!`)(.+?)(?<!`)\1(?!`)"#)
+    private nonisolated static let wikiLink = re(#"!?\[\[([^\[\]\n]+?)\]\]"#)
+    private nonisolated static let mdLink = re(#"!?\[([^\[\]\n]+)\]\(([^()\s]+)\)"#)
+    private nonisolated static let url = re(#"https?://[^\s<>()\[\]`]+[^\s<>()\[\]`.,;:!?'"]"#)
+    private nonisolated static let bold = re(#"(\*\*|__)(?=\S)(.+?)(?<=\S)\1"#)
+    private nonisolated static let italicStar = re(#"(?<![*\w])\*(?=[^\s*])(.+?)(?<=[^\s*])\*(?![*\w])"#)
+    private nonisolated static let italicUnderscore = re(#"(?<![_\w])_(?=[^\s_])(.+?)(?<=[^\s_])_(?![_\w])"#)
+    private nonisolated static let strike = re(#"~~(?=\S)(.+?)(?<=\S)~~"#)
+    private nonisolated static let highlight = re(#"==(?=\S)(.+?)(?<=\S)=="#)
+    private nonisolated static let tag = re(#"(?<![\w#/&])#[\p{L}_][\p{L}\p{N}_/-]*"#)
 
     static func spans(_ text: String) -> [StyledRange] {
         let ns = text as NSString
@@ -164,7 +164,7 @@ nonisolated enum MarkdownEditing {
         case endList(bulletLength: Int)
     }
 
-    private nonisolated(unsafe) static let item = try! NSRegularExpression(
+    private nonisolated static let item = try! NSRegularExpression(
         pattern: #"^([ \t]*(?:>[ \t]?)*)([-*+]|(\d+)([.)]))([ \t]+)(\[[ xX]\][ \t]+)?"#)
 
     /// What ↵ at the end of `line` should do; nil when the line is not a list item.
@@ -306,7 +306,7 @@ nonisolated enum MarkdownPreview {
         let replacement: Replacement
     }
 
-    private nonisolated(unsafe) static let callout = try! NSRegularExpression(pattern: #"\[!([A-Za-z-]+)\][+-]?[ \t]*"#)
+    private nonisolated static let callout = try! NSRegularExpression(pattern: #"\[!([A-Za-z-]+)\][+-]?[ \t]*"#)
 
     static func edits(_ text: String, spans: [StyledRange]? = nil) -> [Edit] {
         let ns = text as NSString

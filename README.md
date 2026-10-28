@@ -58,7 +58,7 @@ KeePassXC master password: never put it in the config. Choose `keepass.password`
 
 Notes are plain `.md` files in `notes.folder`; hop keeps no copy. ⌘N starts a note in `notes.newNoteFolder` from `notes.template` (`{{title}}`, `{{date}}`, `{{time}}`). It gets its file name from its title, or from its first line. With `notes.bumpUpdated`, saving an edit sets an existing `updated:` frontmatter date to today. If a file changed elsewhere while it had unsaved edits in hop, the other version is kept next to it as `<name> (conflict).md`.
 
-Notes are keyboard-first; ⌘/ shows every shortcut.
+Notes are keyboard-first; ⌘/ shows every shortcut. The right-hand “On this page” outline lists the current note's headings, with nested levels, click-to-jump and an animated indicator that follows scrolling or the editing caret. It works in both edit and preview modes, updates as you type, and hides for notes without headings or when the window is too narrow.
 
 | Notes key | |
 |---|---|

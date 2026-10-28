@@ -281,7 +281,7 @@ nonisolated enum Converter {
         var aliases: [(alias: String, info: UnitInfo)] = []
     }
 
-    nonisolated(unsafe) private static let tables: Tables = {
+    nonisolated private static let tables: Tables = {
         var t = Tables()
         func fold(_ alias: String, _ info: UnitInfo) {
             let key = normalize(alias)

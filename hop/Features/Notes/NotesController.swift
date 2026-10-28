@@ -107,6 +107,10 @@ final class NotesController: NSObject, NSWindowDelegate, NSTableViewDataSource, 
     private let messageLabel = NSTextField(wrappingLabelWithString: "")
     private let footer = NSTextField(labelWithString: "")
     private let shortcuts = NotesShortcutsView()
+    private let outline = NotesOutlineView()
+    private var outlineWidth: NSLayoutConstraint!
+    private var headings: [NoteHeading] = []
+
 
     init(settings: AppSettings) {
         self.settings = settings
@@ -118,6 +122,12 @@ final class NotesController: NSObject, NSWindowDelegate, NSTableViewDataSource, 
         panel.setFrameAutosaveName(Self.frameName)
         textView.onOpenLink = { [weak self] in self?.openLink($0) }
         preview.onOpenLink = { [weak self] in self?.openLink($0) }
+        outline.onSelect = { [weak self] in self?.jumpToHeading($0) }
+        for scroll in [editorScroll, previewScroll] {
+            scroll.contentView.postsBoundsChangedNotifications = true
+            NotificationCenter.default.addObserver(self, selector: #selector(outlineScrolled(_:)),
+                name: NSView.boundsDidChangeNotification, object: scroll.contentView)
+        }
         preview.onToggleTask = { [weak self] in self?.toggleTask(at: $0) }
         if UserDefaults.standard.bool(forKey: Self.previewKey) { setPreview(true, focus: false) }
         if UserDefaults.standard.bool(forKey: Self.sidebarHiddenKey) { setSidebar(hidden: true) }
@@ -185,7 +195,11 @@ final class NotesController: NSObject, NSWindowDelegate, NSTableViewDataSource, 
 
     func windowDidResignKey(_ notification: Notification) { flush(force: false) }
 
-    func windowDidResize(_ notification: Notification) { updateFooter() }
+    func windowDidResize(_ notification: Notification) {
+        updateFooter()
+        updateOutlineVisibility()
+        updateActiveHeading()
+    }
 
     // MARK: - Footer hints
 
@@ -468,6 +482,93 @@ final class NotesController: NSObject, NSWindowDelegate, NSTableViewDataSource, 
             preview.show(text)
             preview.scrollToBeginningOfDocument(nil)
         }
+        rebuildOutline()
+    }
+
+    // MARK: - Outline
+
+    private func rebuildOutline() {
+        let updated = NoteHeading.parse(textView.string)
+        if updated != headings {
+            headings = updated
+            outline.show(headings)
+        }
+        updateOutlineVisibility()
+        updateActiveHeading()
+    }
+
+    private func updateOutlineVisibility() {
+        let visible = !headings.isEmpty && scanError == nil && current != nil
+            && panel.frame.width - sidebarWidth.constant >= 520
+        outline.isHidden = !visible
+        outlineWidth.constant = visible ? 190 : 0
+    }
+
+    /// Source offsets stay unique even when two headings have the same title.
+    private func headingLocations() -> [(index: Int, location: Int)] {
+        guard previewMode, let storage = preview.textStorage else {
+            return headings.enumerated().map { ($0.offset, $0.element.range.location) }
+        }
+        let indices = Dictionary(uniqueKeysWithValues: headings.enumerated().map { ($0.element.range.location, $0.offset) })
+        var found: [(index: Int, location: Int)] = []
+        storage.enumerateAttribute(.hopHeadingSource, in: NSRange(location: 0, length: storage.length)) { value, range, _ in
+            if let source = value as? Int, let index = indices[source], found.last?.index != index {
+                found.append((index, range.location))
+            }
+        }
+        return found
+    }
+
+    @objc private func outlineScrolled(_ notification: Notification) {
+        guard notification.object as? NSClipView === (previewMode ? previewScroll : editorScroll).contentView else { return }
+        updateActiveHeading()
+    }
+
+    private func updateActiveHeading(caret: Bool = false) {
+        guard !outline.isHidden else { return }
+        let view: NSTextView = previewMode ? preview : textView
+        let visible = view.visibleRect
+        let location = caret && !previewMode ? textView.selectedRange().location
+            : view.characterIndexForInsertion(at: NSPoint(x: view.textContainerOrigin.x + 5, y: visible.minY + 24))
+        let locations = headingLocations()
+        let atBottom = !caret && visible.minY > 0 && visible.maxY >= view.bounds.maxY - 2
+        let active = atBottom ? locations.last?.index
+            : locations.last(where: { $0.location <= location })?.index ?? locations.first?.index
+        outline.select(active)
+    }
+
+    func textViewDidChangeSelection(_ notification: Notification) {
+        guard notification.object as? NotesTextView === textView else { return }
+        updateActiveHeading(caret: true)
+    }
+
+    private func jumpToHeading(_ index: Int) {
+        guard let target = headingLocations().first(where: { $0.index == index }) else { return }
+        let view: NSTextView = previewMode ? preview : textView
+        let range = NSRange(location: target.location, length: 0)
+        if !previewMode { view.setSelectedRange(range) }
+        panel.contentView?.layoutSubtreeIfNeeded()
+        var targetY: CGFloat?
+        if previewMode, let manager = preview.layoutManager, let container = preview.textContainer {
+            manager.ensureLayout(for: container)
+            let glyphs = manager.glyphRange(forCharacterRange: NSRange(location: target.location, length: 1), actualCharacterRange: nil)
+            targetY = manager.boundingRect(forGlyphRange: glyphs, in: container).minY + preview.textContainerOrigin.y
+        } else {
+            view.scrollRangeToVisible(range)
+            if let window = view.window {
+                let screenRect = view.firstRect(forCharacterRange: NSRange(location: target.location, length: 1), actualRange: nil)
+                targetY = view.convert(window.convertFromScreen(screenRect), from: nil).minY
+            }
+        }
+        if let targetY {
+            let scroll = previewMode ? previewScroll : editorScroll
+            let clip = scroll.contentView
+            let y = min(max(0, targetY - 20), max(0, view.bounds.height - clip.bounds.height))
+            clip.scroll(to: NSPoint(x: 0, y: y))
+            scroll.reflectScrolledClipView(clip)
+        }
+        outline.select(index)
+        focusEditor()
     }
 
     // MARK: - Preview
@@ -481,6 +582,7 @@ final class NotesController: NSObject, NSWindowDelegate, NSTableViewDataSource, 
         previewScroll.isHidden = !on
         editorScroll.isHidden = on || scanError != nil
         updateHeader()
+        updateActiveHeading()
         if focus { focusEditor() }
         updateFooter()
     }
@@ -733,7 +835,7 @@ final class NotesController: NSObject, NSWindowDelegate, NSTableViewDataSource, 
             materializeDraft(force: false)
             focusEditor()
         } else if title.isEmpty {
-            panel.makeFirstResponder(titleField)
+            _ = panel.makeFirstResponder(titleField)
         } else {
             focusEditor()
         }
@@ -774,6 +876,7 @@ final class NotesController: NSObject, NSWindowDelegate, NSTableViewDataSource, 
                             modified: NoteStore.modificationDate(url) ?? Date())
         current = .file(note)
         UserDefaults.standard.set(note.relativePath, forKey: Self.lastNoteKey)
+        rebuildOutline()
         loadedText = final
         loadedModified = note.modified
         dirty = false
@@ -783,7 +886,7 @@ final class NotesController: NSObject, NSWindowDelegate, NSTableViewDataSource, 
 
     private func discardDraft() {
         current = nil
-        textView.string = ""
+        setText("", caretAtBody: false)
         dirty = false
     }
 
@@ -795,6 +898,7 @@ final class NotesController: NSObject, NSWindowDelegate, NSTableViewDataSource, 
         textView.restyle()
         if previewMode { preview.show(textView.string) }
         if !matchTerms.isEmpty { highlightMatches() }
+        rebuildOutline()
         scheduleSave()
     }
 
@@ -895,6 +999,7 @@ final class NotesController: NSObject, NSWindowDelegate, NSTableViewDataSource, 
         messageLabel.isHidden = messageLabel.stringValue.isEmpty
         editorScroll.isHidden = scanError != nil || previewMode
         if scanError != nil { previewScroll.isHidden = true }
+        updateOutlineVisibility()
     }
 
     // MARK: - Keys
@@ -905,9 +1010,9 @@ final class NotesController: NSObject, NSWindowDelegate, NSTableViewDataSource, 
     /// Focuses the note: the editor, or the preview in reading mode.
     private func focusEditor() {
         if previewMode {
-            panel.makeFirstResponder(preview)
+            _ = panel.makeFirstResponder(preview)
         } else {
-            panel.makeFirstResponder(textView)
+            _ = panel.makeFirstResponder(textView)
             textView.scrollRangeToVisible(textView.selectedRange())
         }
     }
@@ -917,7 +1022,7 @@ final class NotesController: NSObject, NSWindowDelegate, NSTableViewDataSource, 
     private func focusSearch() {
         if UserDefaults.standard.bool(forKey: Self.sidebarHiddenKey) { setSidebar(hidden: false) }
         if findBarVisible { finderAction(.hideFindInterface) }
-        panel.makeFirstResponder(searchField)
+        _ = panel.makeFirstResponder(searchField)
         searchField.currentEditor()?.selectAll(nil)
     }
 
@@ -1152,6 +1257,7 @@ final class NotesController: NSObject, NSWindowDelegate, NSTableViewDataSource, 
         sidebar.isHidden = hidden
         sidebarWidth.constant = hidden ? 0 : 250
         if hidden && searchFocused { focusEditor() }
+        updateOutlineVisibility()
         updateFooter()
     }
 
@@ -1264,11 +1370,13 @@ final class NotesController: NSObject, NSWindowDelegate, NSTableViewDataSource, 
         }
         shortcuts.isHidden = true
         actionPanel.isHidden = true
-        for v in [sidebar, sidebarRule, folderLabel, titleField, metaLabel, editorScroll, previewScroll, messageLabel, footerRule, footer, actionPanel, shortcuts] as [NSView] {
+        for v in [sidebar, sidebarRule, folderLabel, titleField, metaLabel, editorScroll, previewScroll, outline, messageLabel, footerRule, footer, actionPanel, shortcuts] as [NSView] {
             v.translatesAutoresizingMaskIntoConstraints = false
             content.addSubview(v)
         }
         sidebarWidth = sidebar.widthAnchor.constraint(equalToConstant: 250)
+        outlineWidth = outline.widthAnchor.constraint(equalToConstant: 0)
+        outline.isHidden = true
         let editorLeading = sidebarRule.trailingAnchor
         actionPanelHeight = actionPanel.heightAnchor.constraint(equalToConstant: 100)
         NSLayoutConstraint.activate([
@@ -1310,7 +1418,11 @@ final class NotesController: NSObject, NSWindowDelegate, NSTableViewDataSource, 
             metaLabel.trailingAnchor.constraint(lessThanOrEqualTo: content.trailingAnchor, constant: -24),
             editorScroll.topAnchor.constraint(equalTo: metaLabel.bottomAnchor, constant: 8),
             editorScroll.leadingAnchor.constraint(equalTo: editorLeading),
-            editorScroll.trailingAnchor.constraint(equalTo: content.trailingAnchor),
+            editorScroll.trailingAnchor.constraint(equalTo: outline.leadingAnchor),
+            outline.trailingAnchor.constraint(equalTo: content.trailingAnchor),
+            outline.topAnchor.constraint(equalTo: editorScroll.topAnchor),
+            outline.bottomAnchor.constraint(equalTo: editorScroll.bottomAnchor),
+            outlineWidth,
             editorScroll.bottomAnchor.constraint(equalTo: footerRule.topAnchor),
             previewScroll.topAnchor.constraint(equalTo: editorScroll.topAnchor),
             previewScroll.leadingAnchor.constraint(equalTo: editorScroll.leadingAnchor),
