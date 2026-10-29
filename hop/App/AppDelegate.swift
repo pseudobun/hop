@@ -29,6 +29,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let messageWatcher = MessageCodeWatcher()
     private var messagesHotkey: GlobalHotkey!
     private let bindings = HotkeyBindings()
+    /// The sub-mode a command hotkey last opened, so pressing it again hides the launcher.
+    private weak var bindingMode: Mode?
+    private var bindingKey: String?
     private var snippetService: SnippetService!
     private let expander = SnippetExpander()
     private var expanderRetry: Timer?
@@ -486,11 +489,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if !lower.hasPrefix("app:"),
            let item = commands.first(where: { $0.id == key }) ?? commands.first(where: { $0.title.caseInsensitiveCompare(key) == .orderedSame }),
            let action = item.actions.first {
+            // Like the launcher hotkey: pressed again while its mode is in front, it hides.
+            if launcher.isVisible, bindingKey == key, let mode = bindingMode, launcher.isShowing(mode) {
+                launcher.hide()
+                return
+            }
             Task {
                 switch await action.perform() {
                 case .push(let mode):
                     launcher.show()
                     launcher.push(mode)
+                    bindingMode = mode
+                    bindingKey = key
                 case .dismissWithHUD(let text), .stayWithHUD(let text):
                     HUD.shared.show(text)
                 case .failWithHUD(let text):

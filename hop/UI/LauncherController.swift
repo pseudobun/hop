@@ -114,6 +114,9 @@ final class LauncherController: NSObject, LauncherContext, NSTableViewDataSource
 
     func toggle() { isVisible ? hide() : show() }
 
+    /// `mode` is the one in front.
+    func isShowing(_ mode: Mode) -> Bool { current === mode }
+
     func show(query initial: String? = nil) {
         onWillShow?()
         switch LauncherBehavior.reopen(elapsed: Date().timeIntervalSince(lastHidden), inSubMode: modes.count > 1,
