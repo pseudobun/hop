@@ -16,14 +16,9 @@ final class Services {
     var calendar: CalendarController?
     /// Hides the launcher, e.g. before pasting into the app behind it.
     var hideLauncher: (() -> Void)?
-    /// Opens the config file in the user's editor.
+    /// Opens the config file in the user's editor, at the parse error when there is one.
     func openConfig() {
-        let url = settings.url
-        if NSWorkspace.shared.urlForApplication(toOpen: url) != nil {
-            NSWorkspace.shared.open(url)
-        } else if let textEdit = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.apple.TextEdit") {
-            NSWorkspace.shared.open([url], withApplicationAt: textEdit, configuration: NSWorkspace.OpenConfiguration())
-        }
+        ConfigOpener.open(settings.url, at: settings.error)
     }
 
     init(settings: AppSettings, frecency: FrecencyStore, apps: AppIndex) {

@@ -231,7 +231,8 @@ enum CLI {
             print(settings.url.path)
             return 0
         case "check":
-            if let error = settings.error { return Output.fail(error) }
+            if let error = settings.error { return Output.fail(error.message) }
+            for warning in settings.warnings { print("warning: \(warning.message)") }
             print("ok")
             return 0
         case "show":

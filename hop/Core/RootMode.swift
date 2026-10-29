@@ -127,7 +127,14 @@ final class RootMode: Mode {
     private func emptySections() -> [ResultSection] {
         var sections: [ResultSection] = []
         var setup: [Item] = []
-        if let error = settings.error { setup.append(configErrorItem(error)) }
+        if let error = settings.error {
+            setup.append(configItem(id: "setup.configError", title: "Config has an error", issues: [error],
+                                    icon: .tile("exclamationmark.triangle.fill", Theme.warn)))
+        } else if !settings.warnings.isEmpty {
+            let n = settings.warnings.count
+            setup.append(configItem(id: "setup.configWarning", title: n == 1 ? "Config has an unknown key" : "Config has \(n) unknown keys",
+                                    issues: settings.warnings, icon: .tile("questionmark.circle.fill", Palette.neutral)))
+        }
         if let problems = hotkeyProblems?(), !problems.isEmpty {
             let url = settings.url
             setup.append(Item(id: "setup.hotkeys", title: "Hotkeys need attention", subtitle: problems.joined(separator: " · "),
@@ -166,14 +173,21 @@ final class RootMode: Mode {
         return sections
     }
 
-    private func configErrorItem(_ error: String) -> Item {
-        Item(id: "setup.configError", title: "Config has an error", subtitle: error,
-             icon: .tile("exclamationmark.triangle.fill", Theme.warn), accessory: "Setup",
-             actions: [Action(title: "Open Config") {
-                 let url = AppSettings.defaultURL
-                 NSWorkspace.shared.open(url)
-                 return .dismiss
-             }], tracksFrecency: false)
+    /// ↵ opens the config in the editor at the first issue's line, ⌘↵ shows it in Finder.
+    private func configItem(id: String, title: String, issues: [ConfigIssue], icon: ItemIcon) -> Item {
+        let url = settings.url, first = issues.first
+        return Item(id: id, title: title, subtitle: issues.map(\.message).joined(separator: " · "),
+                    icon: icon, accessory: "Setup",
+                    actions: [
+                        Action(title: first?.line.map { "Open Config at Line \($0)" } ?? "Open Config") {
+                            ConfigOpener.open(url, at: first)
+                            return .dismiss
+                        },
+                        Action(title: "Show in Finder", shortcut: .ret(.command)) {
+                            NSWorkspace.shared.activateFileViewerSelecting([url])
+                            return .dismiss
+                        },
+                    ], tracksFrecency: false)
     }
 
     /// The answer card: ↵ copies the result, ⌘↵ pastes it, ⇧⌘C copies it with its unit.

@@ -4,7 +4,7 @@ import AppKit
 /// succession. Only swings of at least `minTravel` points count, so ordinary wobble
 /// while dragging does not.
 nonisolated struct ShakeDetector: Sendable {
-    nonisolated enum Sensitivity: String, Decodable, Equatable, Sendable {
+    nonisolated enum Sensitivity: String, Decodable, Equatable, Sendable, CaseIterable {
         case low, medium, high
 
         /// Direction changes needed, the shortest swing that counts and the time they must fit in.
