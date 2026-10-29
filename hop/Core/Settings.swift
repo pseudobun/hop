@@ -204,10 +204,10 @@ nonisolated struct HopConfig: Decodable, Equatable, Sendable {
         var skinTone = "none"
         /// Ask OpenAI for emoji when the index finds little (needs a key: "Set OpenAI API Key").
         var ai = true
-        /// The cheapest model is plenty for picking emoji.
-        var aiModel = "gpt-5-nano"
-        /// reasoning_effort for reasoning models ("minimal" answers in about a second); "" omits it.
-        var aiReasoning = "minimal"
+        /// The cheapest current model is plenty for picking emoji.
+        var aiModel = "gpt-6-luna"
+        /// reasoning_effort ("none" answers in about 1.5 s); "" omits it.
+        var aiReasoning = "none"
     }
 
     nonisolated struct CalculatorSettings: Decodable, Equatable, Sendable {
@@ -747,9 +747,9 @@ final class AppSettings {
         // Suggestions from OpenAI for phrases the index can't place ("ko deploy faila v petek");
         // only with a key ("Set OpenAI API Key" in hop), only for those queries
         ai: true,
-        aiModel: "gpt-5-nano",
-        // reasoning_effort: "minimal" keeps gpt-5-nano at about a second ("none" for gpt-6-luna, "" to omit)
-        aiReasoning: "minimal",
+        aiModel: "gpt-6-luna",
+        // reasoning_effort: "none" keeps it at about 1.5 s ("" leaves it out)
+        aiReasoning: "none",
       },
 
       snippets: {

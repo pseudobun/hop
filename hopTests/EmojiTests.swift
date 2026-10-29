@@ -135,9 +135,9 @@ struct EmojiTests {
     }
 
     @Test func openAIRequestAndReply() throws {
-        let body = EmojiAI.body("dober tek", model: "gpt-5-nano", reasoning: "minimal")
-        #expect(body["model"] as? String == "gpt-5-nano")
-        #expect(body["reasoning_effort"] as? String == "minimal" && body["temperature"] == nil)
+        let body = EmojiAI.body("dober tek", model: "gpt-6-luna", reasoning: "none")
+        #expect(body["model"] as? String == "gpt-6-luna")
+        #expect(body["reasoning_effort"] as? String == "none" && body["temperature"] == nil)
         #expect(EmojiAI.body("x", model: "m", reasoning: "")["reasoning_effort"] == nil)
         #expect(EmojiAI.errorMessage(Data(#"{"error":{"message":"The model is deprecated"}}"#.utf8)) == "The model is deprecated")
         let format = try #require(body["response_format"] as? [String: Any])
