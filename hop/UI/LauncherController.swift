@@ -119,10 +119,6 @@ final class LauncherController: NSObject, LauncherContext, NSTableViewDataSource
 
     func show(query initial: String? = nil) {
         onWillShow?()
-        if !panel.isVisible {
-            let front = NSWorkspace.shared.frontmostApplication
-            previousApp = front?.processIdentifier == getpid() ? nil : front
-        }
         switch LauncherBehavior.reopen(elapsed: Date().timeIntervalSince(lastHidden), inSubMode: modes.count > 1,
                                        keepQueryFor: keepQueryFor(), popToRootSeconds: popToRootSeconds()) {
         case .restore: break
@@ -165,35 +161,15 @@ final class LauncherController: NSObject, LauncherContext, NSTableViewDataSource
 
     private var warmedUp = false
 
-    /// The app in front when the launcher opened; it gets the keyboard back on hide.
-    private var previousApp: NSRunningApplication?
-
-    func hide() { hide(restoreFocus: true) }
-
-    /// `restoreFocus`: hand the keyboard back to the app that was in front. Some apps
-    /// (Electron ones like Signal) leave their window without key focus after a
-    /// non-activating panel had it, so a paste lands but typing afterwards goes nowhere.
-    func hide(restoreFocus: Bool) {
+    func hide() {
         guard panel.isVisible else { return }
         closeActionPanel()
         panel.orderOut(nil)
         lastHidden = Date()
-        if restoreFocus, let app = previousApp, !app.isTerminated { Self.refocus(app) }
     }
 
     func windowDidResignKey(_ notification: Notification) {
-        // Something else took the keyboard (a click elsewhere): leave it there.
-        if !suppressAutoHide { hide(restoreFocus: false) }
-    }
-
-    private static func refocus(_ app: NSRunningApplication) {
-        app.activate()
-        guard AXIsProcessTrusted() else { return }
-        let ax = AXUIElementCreateApplication(app.processIdentifier)
-        var window: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(ax, kAXFocusedWindowAttribute as CFString, &window) == .success,
-              let window, CFGetTypeID(window) == AXUIElementGetTypeID() else { return }
-        AXUIElementSetAttributeValue(window as! AXUIElement, kAXMainAttribute as CFString, kCFBooleanTrue)
+        if !suppressAutoHide { hide() }
     }
 
     // MARK: - Query
