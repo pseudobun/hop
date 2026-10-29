@@ -15,6 +15,9 @@ final class CalendarController {
     /// A change came in during a read; read again when it is done.
     private var again = false
     private(set) var lastRefresh = Date.distantPast
+    /// The next days' events for `hop events`: a CLI run from a terminal has no Calendar
+    /// access of its own (macOS asks about the terminal, not hop).
+    static let cache = JSONStore<[CalendarEvent]>(url: AppPaths.file("events.json"))
     /// Last known Calendar access; nil until checked. Never checked on the main thread.
     private(set) var access: EKAuthorizationStatus?
     private var lastAccessCheck = Date.distantPast
@@ -115,6 +118,7 @@ final class CalendarController {
             loading = false
             if fresh != events {
                 events = fresh
+                Self.cache.save(fresh)
                 onChange?()
             }
             if again {

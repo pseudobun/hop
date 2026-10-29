@@ -2,7 +2,7 @@ import AppKit
 import EventKit
 
 /// One calendar event, copied out of EventKit so it can cross threads.
-nonisolated struct CalendarEvent: Sendable, Equatable {
+nonisolated struct CalendarEvent: Sendable, Equatable, Codable {
     let id: String
     let title: String
     let start: Date

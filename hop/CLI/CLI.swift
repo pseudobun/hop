@@ -27,6 +27,14 @@ enum CLI {
         "snippets": snippets,
         "files": files,
         "shelf": shelf,
+        "codes": codes,
+        "events": events,
+        "tr": translate,
+        "translate": translate,
+        "ocr": ocr,
+        "emoji": emoji,
+        "bookmarks": bookmarks,
+        "permissions": permissions,
     ]
 
     /// Runs a CLI command and exits if argv names one; otherwise returns.
@@ -50,7 +58,7 @@ enum CLI {
           apps [query] [--json]               List apps, ranked like the launcher
           open <query>                        Open the best-matching app
           calc <expression>                   Evaluate an expression
-          convert <query> [--json]            Convert units: "734h to min", "1 sq mile = km2", "2 min ="
+          convert <query> [--json]            Convert units or currency: "734h to min", "1 sq mile = km2", "100 usd to eur"
           uninstall <app> [--yes] [--json]    Remove an app and its ~/Library leftovers
           downloads clear [--yes] [--json]    Move everything in Downloads to the Trash
           trash count | empty [--yes]         Count or empty the Trash
@@ -63,6 +71,13 @@ enum CLI {
           notes path                          Print the notes folder
           files <query> [--content] [--json] [--limit=N]   Files by name (or by text with --content), via Spotlight
           shelf <path…>                       Put files on a shelf in the running hop (paths or stdin, one per line)
+          codes [--latest] [--minutes=N] [--json]   One-time codes from Messages (needs Full Disk Access)
+          events [--days=N] [--birthdays] [--json]  Calendar events from today on (default today only)
+          tr <text> [--to=en|sl] [--json]     Translate Slovenian ↔ English with OpenAI (text or stdin)
+          ocr [image] [--copy] [--json]       Text in an image, or in an area you select on screen
+          emoji <query> [--limit=N] [--json]  Search emoji by name, slang or Slovenian
+          bookmarks [query] [--json]          Bookmarks from the config; bookmarks open <name>
+          permissions [--json]                Which macOS permissions hop has
           snippets [list] [--json]            Snippets from snippets.json5 with their keywords
           snippets expand <name|keyword> [--arg=value…]   Print a snippet with its placeholders filled in
           snippets add <name> [text] [--keyword=;k]       Append a snippet (text or stdin)
@@ -122,7 +137,9 @@ enum CLI {
 
     static func convert(_ a: Args) async -> Int32 {
         let q = a.positional.joined(separator: " ")
-        guard let c = Converter.convert(q) else { return Output.fail("cannot convert: \(q)") }
+        guard let c = Converter.convert(q) else {
+            return await convertCurrency(q, json: a.json) ?? Output.fail("cannot convert: \(q)")
+        }
         let posix = Locale(identifier: "en_US_POSIX")
         let result = Converter.format(c.result, locale: posix)
         if a.json {

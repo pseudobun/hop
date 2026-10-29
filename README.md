@@ -148,6 +148,15 @@ hop files justfile --limit=5   # Spotlight, names (or --content)
 hop snippets expand ";mt" --who=Mojca   # a snippet with its placeholders filled in
 hop hotkeys                    # hop's hotkeys, the hotkeys section, every bindable command
 hop config path | check | show
+hop convert 100 usd to eur     # units or currency
+hop codes --latest             # newest one-time code from Messages (Full Disk Access)
+hop events --days=3 --json     # Calendar; from the running hop when this terminal has no access
+pbpaste | hop tr | pbcopy      # Slovenian ↔ English with OpenAI ("Set OpenAI API Key" in hop)
+hop tr "see you tomorrow" --to=sl
+hop ocr screenshot.png         # or no file: select an area on screen; --copy
+hop emoji "povit srček"        # the picker's search
+hop bookmarks open kvm
+hop permissions --json
 ```
 
 Destructive commands only describe what they would do unless `--yes` is passed.

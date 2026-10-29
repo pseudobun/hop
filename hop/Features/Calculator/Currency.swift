@@ -153,6 +153,14 @@ final class ExchangeRates {
         }
     }
 
+    /// Fetches now when the rates are missing or stale; for callers that need them before answering.
+    func refreshNow() async {
+        if let s = snapshot, Date().timeIntervalSince(s.fetched) < 12 * 3600 { return }
+        guard let fresh = await Self.fetch(url) else { return }
+        snapshot = fresh
+        store.save(fresh)
+    }
+
     @concurrent private static func fetch(_ url: URL) async -> Snapshot? {
         var request = URLRequest(url: url, timeoutInterval: 10)
         request.setValue("hop", forHTTPHeaderField: "User-Agent")

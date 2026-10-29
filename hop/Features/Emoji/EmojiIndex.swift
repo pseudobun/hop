@@ -78,7 +78,7 @@ nonisolated final class EmojiIndex: Sendable {
         await withCheckedContinuation { done in queue.async { done.resume(returning: loadBlocking(bundle: bundle)) } }
     }
 
-    static func loadBlocking(bundle: Bundle = .main, appleNames: URL? = appleNamesURL) -> EmojiIndex? {
+    static func loadBlocking(bundle: Bundle = AppPaths.appBundle, appleNames: URL? = appleNamesURL) -> EmojiIndex? {
         guard let url = bundle.url(forResource: "emoji", withExtension: "json"),
               let data = try? Data(contentsOf: url),
               let file = try? JSONDecoder().decode(File.self, from: data)
