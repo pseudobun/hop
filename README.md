@@ -9,6 +9,9 @@ A tiny native macOS launcher. Pure Swift + AppKit, no WebKit. ~3.5 MB binary, ~4
 ## Features
 
 - App launcher on ⌘Space with frecency ranking (Raycast-compatible scorer)
+  - reopening within `general.keepQueryFor` seconds (10) brings back the last search and row, selected so typing replaces it
+  - → at the end of the query, Tab or ⌘K opens the selected result's actions (Tab still completes paths and enters sub-modes)
+  - fallbacks under the results, and alone when nothing matches so ↵ runs the first: Ask ChatGPT (sends the query), Search Google, Search GitHub (`general.fallbacks`, also any URL with `{query}`)
 - Inline answers, each a card you copy (↵), paste (⌘↵) or copy with its unit (⇧⌘C):
   - calculator and unit conversion (`734h to min`, `1 sq mile = km2`)
   - currencies: `100 usd to eur`, `€50 in gbp`, `1.5k rsd v eur` (open.er-api.com rates, fetched only after you type a currency, at most twice a day; `calculator.currency` is where amounts go without a target)
