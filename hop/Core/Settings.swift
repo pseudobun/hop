@@ -204,8 +204,10 @@ nonisolated struct HopConfig: Decodable, Equatable, Sendable {
         var skinTone = "none"
         /// Ask OpenAI for emoji when the index finds little (needs a key: "Set OpenAI API Key").
         var ai = true
-        /// The cheapest fast model is plenty for picking emoji.
-        var aiModel = "gpt-4.1-nano"
+        /// The cheapest model is plenty for picking emoji.
+        var aiModel = "gpt-5-nano"
+        /// reasoning_effort for reasoning models ("minimal" answers in about a second); "" omits it.
+        var aiReasoning = "minimal"
     }
 
     nonisolated struct CalculatorSettings: Decodable, Equatable, Sendable {
@@ -389,13 +391,14 @@ nonisolated extension HopConfig.Messages {
 }
 
 nonisolated extension HopConfig.Emoji {
-    private enum Keys: String, CodingKey { case enabled, skinTone, ai, aiModel }
+    private enum Keys: String, CodingKey { case enabled, skinTone, ai, aiModel, aiReasoning }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: Keys.self), d = Self()
         enabled = try c.value(.enabled, d.enabled)
         skinTone = try c.value(.skinTone, d.skinTone)
         ai = try c.value(.ai, d.ai)
         aiModel = try c.value(.aiModel, d.aiModel)
+        aiReasoning = try c.value(.aiReasoning, d.aiReasoning)
     }
 }
 
@@ -744,7 +747,9 @@ final class AppSettings {
         // Suggestions from OpenAI for phrases the index can't place ("ko deploy faila v petek");
         // only with a key ("Set OpenAI API Key" in hop), only for those queries
         ai: true,
-        aiModel: "gpt-4.1-nano",
+        aiModel: "gpt-5-nano",
+        // reasoning_effort: "minimal" keeps gpt-5-nano at about a second ("none" for gpt-6-luna, "" to omit)
+        aiReasoning: "minimal",
       },
 
       snippets: {

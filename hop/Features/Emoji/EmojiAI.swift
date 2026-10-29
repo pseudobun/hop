@@ -3,7 +3,7 @@ import AppKit
 /// Emoji for a query the index can't place ("ko deploy faila v petek"), from a small
 /// OpenAI model. Opt-in: needs an API key, stored in the login Keychain.
 nonisolated enum EmojiAI {
-    enum Failure: Error, Equatable { case noKey, http(Int), timeout, invalid }
+    enum Failure: Error, Equatable { case noKey, http(Int, String?), timeout, invalid }
 
     static let endpoint = URL(string: "https://api.openai.com/v1/chat/completions")!
     static let instructions = """
@@ -13,30 +13,31 @@ nonisolated enum EmojiAI {
         """
 
     /// Asks the model; the emoji come back as typed (validate them against the index).
-    static func suggest(_ query: String, key: String, model: String, session: URLSession = .shared) async -> Result<[String], Failure> {
+    static func suggest(_ query: String, key: String, model: String, reasoning: String,
+                        session: URLSession = .shared) async -> Result<[String], Failure> {
         var request = URLRequest(url: endpoint, timeoutInterval: 4)
         request.httpMethod = "POST"
         request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = try? JSONSerialization.data(withJSONObject: body(query, model: model))
+        request.httpBody = try? JSONSerialization.data(withJSONObject: body(query, model: model, reasoning: reasoning))
         do {
             let (data, response) = try await session.data(for: request)
             let status = (response as? HTTPURLResponse)?.statusCode ?? 0
-            guard status == 200 else { return .failure(.http(status)) }
+            guard status == 200 else { return .failure(.http(status, errorMessage(data))) }
             return parse(data).map(Result.success) ?? .failure(.invalid)
         } catch let error as URLError where error.code == .timedOut {
             return .failure(.timeout)
         } catch {
-            return .failure(.http(0))
+            return .failure(.http(0, error.localizedDescription))
         }
     }
 
-    /// Chat Completions with a strict JSON schema: `{"emoji": ["🔥", …]}`.
-    static func body(_ query: String, model: String) -> [String: Any] {
-        [
+    /// Chat Completions with a strict JSON schema: `{"emoji": ["🔥", …]}`. Reasoning models
+    /// take no temperature; `reasoning` ("minimal", "none", …) keeps them quick, "" leaves it out.
+    static func body(_ query: String, model: String, reasoning: String) -> [String: Any] {
+        var body: [String: Any] = [
             "model": model,
-            "temperature": 0.2,
-            "max_completion_tokens": 80,
+            "max_completion_tokens": 400,
             "messages": [["role": "system", "content": instructions], ["role": "user", "content": query]],
             "response_format": [
                 "type": "json_schema",
@@ -49,6 +50,13 @@ nonisolated enum EmojiAI {
                 ] as [String: Any],
             ],
         ]
+        if !reasoning.isEmpty { body["reasoning_effort"] = reasoning }
+        return body
+    }
+
+    /// OpenAI's `error.message`, e.g. "The model `x` has been deprecated".
+    static func errorMessage(_ data: Data) -> String? {
+        ((try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["error"] as? [String: Any])?["message"] as? String
     }
 
     static func parse(_ data: Data) -> [String]? {
