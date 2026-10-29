@@ -25,7 +25,7 @@ nonisolated struct HopConfig: Decodable, Equatable, Sendable {
     }
 
     nonisolated struct KeePass: Decodable, Equatable, Sendable {
-        nonisolated enum PasswordSource: String, Decodable, Equatable, Sendable {
+        nonisolated enum PasswordSource: String, Decodable, Equatable, Sendable, CaseIterable {
             /// Ask in hop once, remember it behind Touch ID / login password.
             case keychain
             /// Ask in hop every time the database is unlocked.
@@ -440,11 +440,15 @@ nonisolated extension String {
 final class AppSettings {
     private(set) var data = HopConfig()
     /// Parse error of the last load, shown as a row in the launcher.
-    private(set) var error: String?
+    private(set) var error: ConfigIssue?
+    /// Unknown keys (typos) in the last good load; the config still applies.
+    private(set) var warnings: [ConfigIssue] = []
 
     @ObservationIgnored var onChange: ((HopConfig, HopConfig) -> Void)?
     @ObservationIgnored let url: URL
     @ObservationIgnored private var watcher: FileWatcher?
+    /// The problem last shown in the HUD, so a save that changes nothing stays quiet.
+    @ObservationIgnored private var announced: ConfigIssue?
 
     /// `$HOP_CONFIG` overrides the location (handy for tests and agents).
     static var defaultURL: URL {
@@ -467,30 +471,43 @@ final class AppSettings {
         watch()
     }
 
-    func load() {
+    /// `announce` (after a save) shows a new error or warning in the HUD right away.
+    func load(announce: Bool = false) {
         let old = data
+        defer { if announce { announceProblem() } }
         guard let raw = try? Data(contentsOf: url) else {
             data = HopConfig()
             error = nil
+            warnings = []
             if old != data { onChange?(old, data) }
             return
         }
+        let text = String(decoding: raw, as: UTF8.self)
         do {
             let decoder = JSONDecoder()
             decoder.allowsJSON5 = true
             data = try decoder.decode(HopConfig.self, from: raw)
             error = nil
+            warnings = ConfigDiagnostics.warnings(in: text)
         } catch {
-            self.error = Self.describe(error)
-            Log.app.error("config: \(self.error ?? "", privacy: .public)")
+            self.error = ConfigDiagnostics.issue(for: error, in: text)
+            warnings = []
+            Log.app.error("config: \(self.error?.message ?? "", privacy: .public)")
             return // keep the last good config
         }
         if old != data { onChange?(old, data) }
     }
 
+    private func announceProblem() {
+        let current = error ?? warnings.first
+        defer { announced = current }
+        guard let current, current != announced else { return }
+        if error != nil { HUD.shared.fail("Config: \(current.message)") } else { HUD.shared.warn("Config: \(current.message)") }
+    }
+
     private func watch() {
         watcher?.stop()
-        watcher = FileWatcher(url: url) { [weak self] in self?.load() }
+        watcher = FileWatcher(url: url) { [weak self] in self?.load(announce: true) }
     }
 
     private func writeTemplate() {
@@ -500,18 +517,6 @@ final class AppSettings {
         } catch {
             Log.app.error("config template: \(error.localizedDescription, privacy: .public)")
         }
-    }
-
-    private static func describe(_ error: Error) -> String {
-        if case DecodingError.dataCorrupted(let ctx) = error {
-            let detail = (ctx.underlyingError as NSError?)?.userInfo[NSDebugDescriptionErrorKey] as? String
-            return detail ?? ctx.debugDescription
-        }
-        if case DecodingError.typeMismatch(_, let ctx) = error {
-            return "\(ctx.codingPath.map(\.stringValue).joined(separator: ".")): \(ctx.debugDescription)"
-        }
-        if case DecodingError.dataCorrupted = error { return "invalid JSON5" }
-        return error.localizedDescription
     }
 
     static let template = """
