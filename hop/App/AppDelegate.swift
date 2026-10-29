@@ -224,19 +224,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 let main = NSScreen.main?.frame ?? .zero
                 let shelf = shelves.newShelf(items, at: NSPoint(x: main.midX, y: main.midY))
                 if let path = defaults.string(forKey: "DebugShelfRender") {
-                    // Draws the view tree without the window server (no Screen Recording needed).
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
-                        guard let view = (shelf.panel.contentView as? NSGlassEffectView)?.contentView, let layer = view.layer,
-                              let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: Int(view.bounds.width * 2), pixelsHigh: Int(view.bounds.height * 2),
-                                                         bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
-                                                         colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0),
-                              let ctx = NSGraphicsContext(bitmapImageRep: rep) else { return }
-                        ctx.cgContext.setFillColor(NSColor(srgbRed: 0.2, green: 0.25, blue: 0.4, alpha: 1).cgColor)
-                        ctx.cgContext.fill(CGRect(x: 0, y: 0, width: rep.pixelsWide, height: rep.pixelsHigh))
-                        ctx.cgContext.scaleBy(x: 2, y: 2)
-                        layer.render(in: ctx.cgContext)
-                        try? rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: path))
-                    }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { DebugSnapshot.render(shelf.panel, to: path) }
                 }
                 if let path = defaults.string(forKey: "DebugSnapshotPath") {
                     Task {
@@ -250,6 +238,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 }
             }
         }
+        if let names = defaults.string(forKey: "DebugBirthdays") {
+            // "Ana Novak,Bor|Cene": today's names, then tomorrow's after "|".
+            let days = names.split(separator: "|", omittingEmptySubsequences: false).map { $0.split(separator: ",").map(String.init) }
+            calendar.debugBirthdays(today: days.first ?? [], tomorrow: days.count > 1 ? days[1] : [])
+        }
         if defaults.bool(forKey: "DebugShowOnLaunch") {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
                 guard let self else { return }
@@ -259,6 +252,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 }
                 if defaults.string(forKey: "DebugPush") == "permissions" { launcher.push(makePermissions()) }
                 if defaults.string(forKey: "DebugPush") == "kill" { launcher.push(KillProcessMode(sensitivity: settings.data.general.sensitivity)) }
+                if let path = defaults.string(forKey: "DebugLauncherRender") {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { DebugSnapshot.render(self.launcher.panel, to: path) }
+                }
                 if let path = defaults.string(forKey: "DebugSnapshotPath") {
                     Task {
                         try? await Task.sleep(for: .milliseconds(700))

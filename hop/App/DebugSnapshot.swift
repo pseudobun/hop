@@ -19,6 +19,23 @@ enum DebugSnapshot {
         return w
     }
 
+    /// Draws a window's view tree without the window server (no Screen Recording needed);
+    /// glass has no backdrop here, so a flat colour stands in for the desktop.
+    static func render(_ window: NSWindow, to path: String) {
+        guard let root = window.contentView else { return }
+        let view = (root as? NSGlassEffectView)?.contentView ?? root
+        guard let layer = view.layer,
+              let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: Int(view.bounds.width * 2), pixelsHigh: Int(view.bounds.height * 2),
+                                         bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+                                         colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0),
+              let ctx = NSGraphicsContext(bitmapImageRep: rep) else { return }
+        ctx.cgContext.setFillColor(NSColor(srgbRed: 0.2, green: 0.25, blue: 0.4, alpha: 1).cgColor)
+        ctx.cgContext.fill(CGRect(x: 0, y: 0, width: rep.pixelsWide, height: rep.pixelsHigh))
+        ctx.cgContext.scaleBy(x: 2, y: 2)
+        layer.render(in: ctx.cgContext)
+        try? rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: path))
+    }
+
     /// Captures the screen region around `window` with only hop's windows composited.
     static func captureRegion(around window: NSWindow, padding: CGFloat, to path: String) async {
         do {

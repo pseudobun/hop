@@ -59,9 +59,28 @@ final class CalendarController {
         }
     }
 
+    #if DEBUG
+    /// Fake all-day birthdays, so the Upcoming rows can be looked at without contacts.
+    func debugBirthdays(today: [String], tomorrow: [String]) {
+        let start = Calendar.current.startOfDay(for: Date())
+        let make = { (name: String, day: Double) in
+            CalendarEvent(id: "debug.\(name)", title: "\(name)’s Birthday", start: start.addingTimeInterval(day * 86400),
+                          end: start.addingTimeInterval((day + 1) * 86400), isAllDay: true, isBirthday: true,
+                          calendar: "Birthdays", color: [], location: "", joinURL: nil)
+        }
+        debugEvents = today.map { make($0, 0) } + tomorrow.map { make($0, 1) }
+    }
+
+    private var debugEvents: [CalendarEvent] = []
+    #endif
+
     /// Root's "Upcoming" rows: events running now or starting soon, then today's and tomorrow's birthdays.
     func upcomingItems(now: Date = Date()) -> [Item] {
         guard config.enabled else { return [] }
+        var events = events
+        #if DEBUG
+        events += debugEvents
+        #endif
         var items = CalendarEvents.soon(events, now: now, minutes: config.soonMinutes).prefix(3).map { CalendarItems.event($0, now: now) }
         if config.birthdays {
             let b = CalendarEvents.birthdays(events, now: now)
