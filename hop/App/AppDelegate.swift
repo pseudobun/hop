@@ -366,6 +366,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
+        if previous?.translate != config.translate {
+            // "tr hvala za vse" opens Translate with that text.
+            root.prefixModes.removeAll { $0.prefix == "tr " }
+            if config.translate.enabled {
+                root.prefixModes.append((prefix: "tr ", make: { [unowned self] in TranslateCommands.mode(services) }))
+            }
+        }
+
         if previous?.shelf != config.shelf {
             shelves.apply(config.shelf)
             let specs = [config.shelf.hotkey, config.shelf.clipboardHotkey, config.shelf.reopenHotkey]

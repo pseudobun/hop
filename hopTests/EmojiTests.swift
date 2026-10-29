@@ -136,17 +136,18 @@ struct EmojiTests {
     }
 
     @Test func openAIRequestAndReply() throws {
-        let body = EmojiAI.body("dober tek", model: "gpt-6-luna", reasoning: "none")
+        let body = OpenAI.body(system: "s", user: "dober tek", model: "gpt-6-luna", reasoning: "none", maxTokens: 400, schema: EmojiAI.schema)
         #expect(body["model"] as? String == "gpt-6-luna")
         #expect(body["reasoning_effort"] as? String == "none" && body["temperature"] == nil)
-        #expect(EmojiAI.body("x", model: "m", reasoning: "")["reasoning_effort"] == nil)
-        #expect(EmojiAI.errorMessage(Data(#"{"error":{"message":"The model is deprecated"}}"#.utf8)) == "The model is deprecated")
+        #expect(OpenAI.body(system: "s", user: "x", model: "m", reasoning: "", maxTokens: 10)["reasoning_effort"] == nil)
+        #expect(OpenAI.errorMessage(Data(#"{"error":{"message":"The model is deprecated"}}"#.utf8)) == "The model is deprecated")
         let format = try #require(body["response_format"] as? [String: Any])
         #expect(format["type"] as? String == "json_schema")
         #expect(JSONSerialization.isValidJSONObject(body))
         let reply = #"{"choices":[{"message":{"role":"assistant","content":"{\"emoji\":[\"🍽️\",\"😋\"]}"}}]}"#
-        #expect(EmojiAI.parse(Data(reply.utf8)) == ["🍽️", "😋"])
-        #expect(EmojiAI.parse(Data("{}".utf8)) == nil)
+        let content = try #require(OpenAI.content(Data(reply.utf8)))
+        #expect(EmojiAI.parse(content) == ["🍽️", "😋"])
+        #expect(OpenAI.content(Data("{}".utf8)) == nil)
         // Model picks map to index entries even without the variation selector.
         #expect(Self.index.entry(for: "🍽") != nil || Self.index.entry(for: "🍽️") != nil)
     }

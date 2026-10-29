@@ -10,15 +10,6 @@ enum EmojiCommands {
                  aliases: ["emoji", "emoticon", "smiley"], icon: .tile("face.smiling.inverse", Palette.emoji), accessory: "Command",
                  actions: [Action(title: "Search Emoji", symbol: "face.smiling") { .push(mode(services)) }],
                  pushesMode: true),
-            Item(id: "emoji.openaiKey", title: "Set OpenAI API Key", subtitle: "Smarter emoji suggestions; kept in the Keychain",
-                 aliases: ["openai"], icon: .tile("key.fill", Palette.emoji), accessory: "Command",
-                 actions: [
-                     Action(title: "Set Key", symbol: "key") { .push(OpenAIKeyMode()) },
-                     Action(title: "Remove Key", symbol: "trash", shortcut: .ret(.command), style: .destructive) {
-                         OpenAIKey.remove()
-                         return .dismissWithHUD("OpenAI key removed")
-                     },
-                 ], tracksFrecency: false, pushesMode: true),
         ]
     }
 
@@ -171,11 +162,11 @@ final class EmojiMode: Mode {
         context?.setLoading(false)
         aiTask = Task { [weak self] in
             try? await Task.sleep(for: .milliseconds(350))
-            guard !Task.isCancelled, let key = await OpenAIKey.load(), let self else { return }
+            guard !Task.isCancelled, await OpenAIKey.load() != nil, let self else { return }
             aiWaiting = true
             context?.setLoading(true)
             context?.reload()
-            let result = await EmojiAI.suggest(query, key: key, model: ai.model, reasoning: ai.reasoning)
+            let result = await EmojiAI.suggest(query, model: ai.model, reasoning: ai.reasoning)
             guard !Task.isCancelled else { return }
             aiWaiting = false
             aiQuery = nil
@@ -190,9 +181,9 @@ final class EmojiMode: Mode {
                 Self.aiCache[Self.aiKey(query)] = []
                 context?.reload()
                 Log.app.error("emoji ai: \(String(describing: error), privacy: .public)")
-                guard !Self.warned, case .http(let status, let message) = error, status != 0 else { return }
+                guard !Self.warned, case .http(let status, _) = error, status != 0 else { return }
                 Self.warned = true
-                HUD.shared.warn(status == 401 ? "OpenAI rejected the API key" : "OpenAI: \(message ?? "error \(status)")")
+                HUD.shared.warn(OpenAI.describe(error))
             }
         }
     }

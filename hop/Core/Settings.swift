@@ -210,6 +210,18 @@ nonisolated struct HopConfig: Decodable, Equatable, Sendable {
         var aiReasoning = "none"
     }
 
+    nonisolated struct Translate: Decodable, Equatable, Sendable {
+        var enabled = true
+        /// Translations are rare and should read well: a strong model, not the cheapest.
+        var model = "gpt-6.1-terra"
+        /// reasoning_effort; "" leaves it out.
+        var reasoning = "none"
+    }
+
+    nonisolated struct OCR: Decodable, Equatable, Sendable {
+        var enabled = true
+    }
+
     nonisolated struct CalculatorSettings: Decodable, Equatable, Sendable {
         /// Convert currencies; rates come from open.er-api.com, only once you type one.
         var currencies = true
@@ -231,6 +243,8 @@ nonisolated struct HopConfig: Decodable, Equatable, Sendable {
     var shelf = Shelf()
     var messages = Messages()
     var calendar = CalendarSettings()
+    var translate = Translate()
+    var ocr = OCR()
     var emoji = Emoji()
     /// Global hotkeys for any command or app: { "Empty Trash": "hyper+t", "Safari": "hyper+s" }.
     var hotkeys: [String: String] = [:]
@@ -247,7 +261,7 @@ nonisolated private extension KeyedDecodingContainer {
 }
 
 nonisolated extension HopConfig {
-    private enum Keys: String, CodingKey { case general, hyperKey, wireguard, keepass, system, bookmarks, notes, clipboard, snippets, files, calculator, shelf, messages, calendar, emoji, hotkeys }
+    private enum Keys: String, CodingKey { case general, hyperKey, wireguard, keepass, system, bookmarks, notes, clipboard, snippets, files, calculator, shelf, messages, calendar, translate, ocr, emoji, hotkeys }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: Keys.self)
         general = try c.value(.general, General())
@@ -264,6 +278,8 @@ nonisolated extension HopConfig {
         shelf = try c.value(.shelf, Shelf())
         messages = try c.value(.messages, Messages())
         calendar = try c.value(.calendar, CalendarSettings())
+        translate = try c.value(.translate, Translate())
+        ocr = try c.value(.ocr, OCR())
         emoji = try c.value(.emoji, Emoji())
         hotkeys = try c.value(.hotkeys, [:])
     }
@@ -411,6 +427,24 @@ nonisolated extension HopConfig.CalendarSettings {
         days = try c.value(.days, d.days)
         birthdays = try c.value(.birthdays, d.birthdays)
         ignoreCalendars = try c.value(.ignoreCalendars, d.ignoreCalendars)
+    }
+}
+
+nonisolated extension HopConfig.Translate {
+    private enum Keys: String, CodingKey { case enabled, model, reasoning }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: Keys.self), d = Self()
+        enabled = try c.value(.enabled, d.enabled)
+        model = try c.value(.model, d.model)
+        reasoning = try c.value(.reasoning, d.reasoning)
+    }
+}
+
+nonisolated extension HopConfig.OCR {
+    private enum Keys: String, CodingKey { case enabled }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: Keys.self), d = Self()
+        enabled = try c.value(.enabled, d.enabled)
     }
 }
 
@@ -750,6 +784,19 @@ final class AppSettings {
         aiModel: "gpt-6-luna",
         // reasoning_effort: "none" keeps it at about 1.5 s ("" leaves it out)
         aiReasoning: "none",
+      },
+
+      translate: {
+        // "Translate" or "tr " in hop: Slovenian ↔ English with OpenAI ("Set OpenAI API Key")
+        enabled: true,
+        model: "gpt-6.1-terra",
+        // reasoning_effort ("none", "low", …; "" leaves it out)
+        reasoning: "none",
+      },
+
+      ocr: {
+        // "Copy Text from Screen": select an area, its text goes to the clipboard (read on this Mac)
+        enabled: true,
       },
 
       snippets: {

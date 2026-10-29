@@ -23,6 +23,8 @@ enum Palette {
     static var shelf: NSColor { Theme.info }
     static var messages: NSColor { Theme.good }
     static var calendar: NSColor { Theme.chart4 }
+    static var translate: NSColor { Theme.chart1 }
+    static var ocr: NSColor { Theme.chart5 }
     static var emoji: NSColor { Theme.chart2 }
     static var neutral: NSColor { Theme.mutedForeground }
 }

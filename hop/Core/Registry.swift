@@ -43,6 +43,9 @@ enum Registry {
         items += ShelfCommands.items(services)
         items += MessagesCommands.items(services)
         items += CalendarCommands.items(services)
+        items += TranslateCommands.items(services)
+        items += ScreenTextCommands.items(services)
+        items += OpenAICommands.items(services)
         items += CalculatorCommands.items(services)
         items += EmojiCommands.items(services)
         items += [
