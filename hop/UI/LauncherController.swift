@@ -14,6 +14,8 @@ final class LauncherController: NSObject, LauncherContext, NSTableViewDataSource
     private var current: Mode { modes.last! }
     var onItemPerformed: ((Item, Int) -> Void)?
     var popToRootSeconds: () -> Int = { 90 }
+    /// Called at the start of every `show`, before the rows are built.
+    var onWillShow: (() -> Void)?
 
     private var rows: [Row] = []
     /// The mode `rows` were built for; a different mode gets a full reload (row tint, cell kinds).
@@ -109,6 +111,7 @@ final class LauncherController: NSObject, LauncherContext, NSTableViewDataSource
     func toggle() { isVisible ? hide() : show() }
 
     func show(query initial: String? = nil) {
+        onWillShow?()
         if Date().timeIntervalSince(lastHidden) > Double(popToRootSeconds()) {
             while modes.count > 1 { modes.removeLast().didExit() }
             enterCurrentMode(query: "")
