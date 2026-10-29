@@ -188,6 +188,12 @@ nonisolated struct HopConfig: Decodable, Equatable, Sendable {
         var ignoreCalendars: [String] = []
     }
 
+    nonisolated struct Emoji: Decodable, Equatable, Sendable {
+        var enabled = true
+        /// none, light, mediumLight, medium, mediumDark or dark; for emoji that take one.
+        var skinTone = "none"
+    }
+
     nonisolated struct CalculatorSettings: Decodable, Equatable, Sendable {
         /// Convert currencies; rates come from open.er-api.com, only once you type one.
         var currencies = true
@@ -209,6 +215,7 @@ nonisolated struct HopConfig: Decodable, Equatable, Sendable {
     var shelf = Shelf()
     var messages = Messages()
     var calendar = CalendarSettings()
+    var emoji = Emoji()
     /// Global hotkeys for any command or app: { "Empty Trash": "hyper+t", "Safari": "hyper+s" }.
     var hotkeys: [String: String] = [:]
 
@@ -224,7 +231,7 @@ nonisolated private extension KeyedDecodingContainer {
 }
 
 nonisolated extension HopConfig {
-    private enum Keys: String, CodingKey { case general, hyperKey, wireguard, keepass, system, bookmarks, notes, clipboard, snippets, files, calculator, shelf, messages, calendar, hotkeys }
+    private enum Keys: String, CodingKey { case general, hyperKey, wireguard, keepass, system, bookmarks, notes, clipboard, snippets, files, calculator, shelf, messages, calendar, emoji, hotkeys }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: Keys.self)
         general = try c.value(.general, General())
@@ -241,6 +248,7 @@ nonisolated extension HopConfig {
         shelf = try c.value(.shelf, Shelf())
         messages = try c.value(.messages, Messages())
         calendar = try c.value(.calendar, CalendarSettings())
+        emoji = try c.value(.emoji, Emoji())
         hotkeys = try c.value(.hotkeys, [:])
     }
 }
@@ -358,6 +366,15 @@ nonisolated extension HopConfig.Messages {
         enabled = try c.value(.enabled, d.enabled)
         days = try c.value(.days, d.days)
         latestMinutes = try c.value(.latestMinutes, d.latestMinutes)
+    }
+}
+
+nonisolated extension HopConfig.Emoji {
+    private enum Keys: String, CodingKey { case enabled, skinTone }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: Keys.self), d = Self()
+        enabled = try c.value(.enabled, d.enabled)
+        skinTone = try c.value(.skinTone, d.skinTone)
     }
 }
 
@@ -680,6 +697,13 @@ final class AppSettings {
         birthdays: true,
         // Calendars to leave out, by name
         ignoreCalendars: [],
+      },
+
+      emoji: {
+        // "Search Emoji", or type ":" in hop: names, keywords (English, Slovenian) and slang
+        enabled: true,
+        // For emoji that take one: none, light, mediumLight, medium, mediumDark, dark
+        skinTone: "none",
       },
 
       snippets: {

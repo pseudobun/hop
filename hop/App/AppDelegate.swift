@@ -251,6 +251,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in self?.launcher.debugOpenActionPanel() }
                 }
                 if defaults.string(forKey: "DebugPush") == "permissions" { launcher.push(makePermissions()) }
+                if defaults.string(forKey: "DebugPush") == "emoji" { launcher.push(EmojiCommands.mode(services)) }
                 if defaults.string(forKey: "DebugPush") == "kill" { launcher.push(KillProcessMode(sensitivity: settings.data.general.sensitivity)) }
                 if let path = defaults.string(forKey: "DebugLauncherRender") {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { DebugSnapshot.render(self.launcher.panel, to: path) }
@@ -329,6 +330,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         if previous?.calendar != config.calendar { calendar.apply(config.calendar) }
+
+        if previous?.emoji != config.emoji {
+            // ":" like Slack and GitHub shortcodes: ":fire" searches emoji for "fire".
+            root.prefixModes.removeAll { $0.prefix == ":" }
+            if config.emoji.enabled {
+                root.prefixModes.append((prefix: ":", make: { [unowned self] in EmojiCommands.mode(services) }))
+            }
+        }
 
         if previous?.shelf != config.shelf {
             shelves.apply(config.shelf)
