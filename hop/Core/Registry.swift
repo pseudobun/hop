@@ -44,6 +44,7 @@ enum Registry {
         items += MessagesCommands.items(services)
         items += CalendarCommands.items(services)
         items += CalculatorCommands.items(services)
+        items += EmojiCommands.items(services)
         items += [
             Item(id: "hop.config", title: "Open hop Config", subtitle: "~/.config/hop/config.json5",
                  icon: .tile("gearshape.fill", Palette.neutral), accessory: "Command",
