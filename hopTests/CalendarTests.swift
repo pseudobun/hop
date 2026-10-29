@@ -38,6 +38,12 @@ struct CalendarTests {
         #expect(b.tomorrow.map(\.title) == ["Bor"])
     }
 
+    @Test func birthdayNames() {
+        #expect(CalendarEvents.birthdayName("Ana Novak’s Birthday") == "Ana Novak")
+        #expect(CalendarEvents.birthdayName("Jonas' Birthday") == "Jonas")
+        #expect(CalendarEvents.birthdayName("Rojstni dan: Bor") == "Rojstni dan: Bor")
+    }
+
     @Test func relativeTimes() {
         #expect(CalendarEvents.relative(event("a", in: -5), now: now) == "now")
         #expect(CalendarEvents.relative(event("a", in: 12), now: now) == "in 12 min")

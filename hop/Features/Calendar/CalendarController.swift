@@ -59,13 +59,14 @@ final class CalendarController {
         }
     }
 
-    /// Root's "Upcoming" rows: events running now or starting soon, then today's birthdays.
+    /// Root's "Upcoming" rows: events running now or starting soon, then today's and tomorrow's birthdays.
     func upcomingItems(now: Date = Date()) -> [Item] {
         guard config.enabled else { return [] }
         var items = CalendarEvents.soon(events, now: now, minutes: config.soonMinutes).prefix(3).map { CalendarItems.event($0, now: now) }
         if config.birthdays {
             let b = CalendarEvents.birthdays(events, now: now)
-            if !b.today.isEmpty || !b.tomorrow.isEmpty { items.append(CalendarItems.birthdays(today: b.today, tomorrow: b.tomorrow)) }
+            items += b.today.map { CalendarItems.birthday($0, today: true) }
+            items += b.tomorrow.map { CalendarItems.birthday($0, today: false) }
         }
         return items
     }
@@ -92,16 +93,15 @@ enum CalendarItems {
                     actions: actions(e), tracksFrecency: false, chip: chip)
     }
 
-    static func birthdays(today: [CalendarEvent], tomorrow: [CalendarEvent]) -> Item {
-        let names = { (list: [CalendarEvent]) in list.map(\.title).joined(separator: ", ") }
-        let title = today.isEmpty ? names(tomorrow) : names(today)
-        let subtitle = today.isEmpty ? "Tomorrow" : tomorrow.isEmpty ? "Today" : "Today · tomorrow: \(names(tomorrow))"
-        let first = today.first ?? tomorrow.first
-        return Item(id: "calendar.birthdays", title: title, subtitle: subtitle, icon: .emoji("🎂"),
-                    actions: [Action(title: "Open in Calendar", symbol: "calendar") {
-                        if let first { open(first) }
-                        return .dismiss
-                    }], tracksFrecency: false)
+    /// One person's birthday, e.g. "Ana Novak" · Birthday today.
+    static func birthday(_ e: CalendarEvent, today: Bool) -> Item {
+        Item(id: "calendar.birthday.\(e.id).\(e.start.timeIntervalSince1970)", title: CalendarEvents.birthdayName(e.title),
+             subtitle: today ? "Birthday today" : "Birthday tomorrow", icon: .emoji("🎂"),
+             actions: [Action(title: "Open in Calendar", symbol: "calendar") {
+                 open(e)
+                 return .dismiss
+             }], tracksFrecency: false,
+             chip: Chip(text: today ? "Today" : "Tomorrow", tone: today ? .good : .info))
     }
 
     private static func actions(_ e: CalendarEvent) -> [Action] {
@@ -225,7 +225,7 @@ final class CalendarMode: Mode {
         for (_, group) in Dictionary(grouping: list, by: { cal.startOfDay(for: max($0.start, now)) }).sorted(by: { $0.key < $1.key }) {
             let ordered = group.sorted { ($0.isAllDay ? 0 : 1, $0.start) < ($1.isAllDay ? 0 : 1, $1.start) }
             let items = ordered.map { e in
-                e.isBirthday ? CalendarItems.birthdays(today: [e], tomorrow: []).with(id: "calendar.\(e.id)", subtitle: "Birthday")
+                e.isBirthday ? CalendarItems.birthday(e, today: true).with(id: "calendar.\(e.id)", subtitle: "Birthday")
                     : CalendarItems.event(e, now: now)
             }
             sections.append(ResultSection(title: CalendarItems.day(max(group[0].start, now), now: now), items: items))

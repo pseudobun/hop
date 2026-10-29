@@ -97,6 +97,14 @@ nonisolated enum CalendarEvents {
                 all.filter { calendar.isDate($0.start, inSameDayAs: tomorrow) })
     }
 
+    /// "Ana Novak’s Birthday" → "Ana Novak"; other titles stay as they are.
+    static func birthdayName(_ title: String) -> String {
+        for suffix in ["’s Birthday", "'s Birthday", "’ Birthday", "' Birthday", " Birthday"] where title.hasSuffix(suffix) {
+            return String(title.dropLast(suffix.count))
+        }
+        return title
+    }
+
     /// "in 12 min", "now", "in 1 h 5 min".
     static func relative(_ e: CalendarEvent, now: Date) -> String {
         if e.isOngoing(at: now) { return "now" }
