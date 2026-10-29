@@ -18,6 +18,8 @@ struct EmojiTests {
 
     @Test func slangFindsIntent() {
         #expect(top("wtf", 4) == ["🤯", "😳", "🤬", "😱"])
+        // No fuzzy noise after the slang matches ("white flag" has w, t, f).
+        #expect(!top("wtf", 40).contains("🏳️"))
         #expect(Array(top("lol", 2)) == ["😂", "🤣"])
         #expect(top("rip", 2) == ["🪦", "💀"])
         #expect(top("gg").contains("👍") && top("gg").contains("🎉"))

@@ -280,15 +280,18 @@ nonisolated final class EmojiIndex: Sendable {
             results.append(e)
         }
         // Slang and intent: "wtf", "ship it", "srce".
+        var slangHit = false
         for s in slang {
             let bonus: Int32
-            if s.key == q { bonus = 1000 } else if q.count >= 3 && s.key.starts(with: q) { bonus = 220 } else { continue }
+            if s.key == q { bonus = 1000; slangHit = true } else if q.count >= 3 && s.key.starts(with: q) { bonus = 220 } else { continue }
             for (rank, e) in s.entries.enumerated() {
                 if total[e] == 0 { results.append(e) }
                 total[e] += max(10, bonus - Int32(rank * 12))
             }
         }
-        if results.count < 12 && q.count >= 3 {
+        // Fuzzy only for longer typos ("thmbsup"); short queries and slang hits match letters
+        // scattered through unrelated names ("wtf" → "white flag").
+        if results.count < 12 && q.count >= 4 && !slangHit {
             let utf16 = Array(String(decoding: q, as: UTF8.self).utf16)
             for e in 0..<n where total[e] == 0 {
                 if case .scored(let s, _) = FuzzyScorer.score(fuzzyNames[e], utf16), s > 0 {
