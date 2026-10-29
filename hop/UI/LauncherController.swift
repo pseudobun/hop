@@ -30,6 +30,8 @@ final class LauncherController: NSObject, LauncherContext, NSTableViewDataSource
     private let spinner = NSProgressIndicator()
     private let table = NSTableView()
     private let scroll = NSScrollView()
+    /// Stands in for the table when the mode's layout is a grid (emoji).
+    private let grid = GridResultsView()
     private let footerTitle = NSTextField(labelWithString: "")
     private let footerActions = NSTextField(labelWithString: "Actions  ⌘K")
     private let emptyLabel = NSTextField(labelWithString: "No results")
@@ -177,10 +179,25 @@ final class LauncherController: NSObject, LauncherContext, NSTableViewDataSource
         panel.makeFirstResponder(activeField)
     }
 
+    private var gridColumns: Int? {
+        if case .grid(let columns) = current.layout { columns } else { nil }
+    }
+
     private func refresh(keepSelection: Bool = false) {
         let previousID = keepSelection ? selectedItem?.id : nil
+        let sections = current.sections(for: query)
+        scroll.isHidden = gridColumns != nil
+        grid.isHidden = gridColumns == nil
+        if let columns = gridColumns {
+            if !rows.isEmpty { update(to: []) }
+            grid.show(sections, columns: columns, tint: current.tint, keepingID: previousID)
+            emptyLabel.isHidden = !grid.isEmpty || query.isEmpty
+            updateFooter()
+            return
+        }
+        if !grid.isEmpty { grid.show([], columns: 1, tint: nil, keepingID: nil) }
         var newRows: [Row] = []
-        for s in current.sections(for: query) where !s.items.isEmpty {
+        for s in sections where !s.items.isEmpty {
             if let t = s.title { newRows.append(.header(t)) }
             newRows.append(contentsOf: s.items.map(Row.item))
         }
@@ -228,6 +245,7 @@ final class LauncherController: NSObject, LauncherContext, NSTableViewDataSource
     // MARK: - Selection
 
     private var selectedItem: Item? {
+        if gridColumns != nil { return grid.selectedItem }
         let r = table.selectedRow
         guard r >= 0, r < rows.count, case .item(let item) = rows[r] else { return nil }
         return item
@@ -274,6 +292,10 @@ final class LauncherController: NSObject, LauncherContext, NSTableViewDataSource
         }
         let mods = event.modifierFlags.intersection(KeyCombo.relevant)
         switch event.keyCode {
+        case 125 where gridColumns != nil: grid.move(rows: 1); return true
+        case 126 where gridColumns != nil: grid.move(rows: -1); return true
+        case 123 where gridColumns != nil && mods.isEmpty: grid.move(columns: -1); return true // ←
+        case 124 where gridColumns != nil && mods.isEmpty: grid.move(columns: 1); return true // →
         case 125: move(1); return true // ↓
         case 126: move(-1); return true // ↑
         case 53 where mods == .command: // ⌘Esc: back to the root search
@@ -542,7 +564,12 @@ final class LauncherController: NSObject, LauncherContext, NSTableViewDataSource
         watermark.autoresizingMask = [.width, .height]
         content.addSubview(watermark)
 
-        for v in [header, topDivider, scroll, emptyLabel, bottomDivider, footer, actionPanel] as [NSView] {
+        grid.isHidden = true
+        grid.onSelectionChange = { [weak self] in self?.updateFooter() }
+        grid.onActivate = { [weak self] item in
+            if let a = item.actions.first { self?.perform(a, of: item, index: 0) }
+        }
+        for v in [header, topDivider, scroll, grid, emptyLabel, bottomDivider, footer, actionPanel] as [NSView] {
             v.translatesAutoresizingMaskIntoConstraints = false
             content.addSubview(v)
         }
@@ -560,6 +587,10 @@ final class LauncherController: NSObject, LauncherContext, NSTableViewDataSource
             scroll.leadingAnchor.constraint(equalTo: content.leadingAnchor),
             scroll.trailingAnchor.constraint(equalTo: content.trailingAnchor),
             scroll.bottomAnchor.constraint(equalTo: bottomDivider.topAnchor),
+            grid.topAnchor.constraint(equalTo: topDivider.bottomAnchor),
+            grid.leadingAnchor.constraint(equalTo: content.leadingAnchor),
+            grid.trailingAnchor.constraint(equalTo: content.trailingAnchor),
+            grid.bottomAnchor.constraint(equalTo: bottomDivider.topAnchor),
             emptyLabel.centerXAnchor.constraint(equalTo: scroll.centerXAnchor),
             emptyLabel.centerYAnchor.constraint(equalTo: scroll.centerYAnchor),
             bottomDivider.leadingAnchor.constraint(equalTo: content.leadingAnchor),

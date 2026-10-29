@@ -1,5 +1,11 @@
 import AppKit
 
+enum ResultLayout: Equatable {
+    case list
+    /// Items' `.emoji` icons in a grid; the selected item's title shows under it.
+    case grid(columns: Int)
+}
+
 /// What a mode can ask of the launcher.
 protocol LauncherContext: AnyObject {
     var query: String { get }
@@ -30,6 +36,8 @@ protocol Mode: AnyObject {
     var isSecureInput: Bool { get }
     /// Optional control right of the search field (e.g. a folder filter).
     var accessoryView: NSView? { get }
+    /// Rows, or a grid of large glyphs (emoji) where ←→↑↓ move.
+    var layout: ResultLayout { get }
 
     func sections(for query: String) -> [ResultSection]
     func didEnter(_ context: LauncherContext)
@@ -44,6 +52,7 @@ extension Mode {
     var tint: NSColor? { nil }
     var isSecureInput: Bool { false }
     var accessoryView: NSView? { nil }
+    var layout: ResultLayout { .list }
     func didEnter(_ context: LauncherContext) {}
     func didExit() {}
     func submit(_ query: String) -> ActionResult? { nil }
