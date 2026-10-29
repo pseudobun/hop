@@ -125,4 +125,25 @@ struct EmojiTests {
         print("emoji browse sections: \(browse), index build: \(load)")
         #expect(browse < .milliseconds(100))
     }
+
+    @Test func asksTheModelOnlyForPhrasesAndMisses() {
+        #expect(!EmojiMode.wantsAI("fire", matches: 20))
+        #expect(!EmojiMode.wantsAI("ok", matches: 0))
+        #expect(EmojiMode.wantsAI("deploy faila", matches: 30))
+        #expect(EmojiMode.wantsAI("zxqv", matches: 0))
+        #expect(EmojiMode.aiKey("  Ko Deploy   faila ") == "ko deploy faila")
+    }
+
+    @Test func openAIRequestAndReply() throws {
+        let body = EmojiAI.body("dober tek", model: "gpt-4.1-nano")
+        #expect(body["model"] as? String == "gpt-4.1-nano")
+        let format = try #require(body["response_format"] as? [String: Any])
+        #expect(format["type"] as? String == "json_schema")
+        #expect(JSONSerialization.isValidJSONObject(body))
+        let reply = #"{"choices":[{"message":{"role":"assistant","content":"{\"emoji\":[\"🍽️\",\"😋\"]}"}}]}"#
+        #expect(EmojiAI.parse(Data(reply.utf8)) == ["🍽️", "😋"])
+        #expect(EmojiAI.parse(Data("{}".utf8)) == nil)
+        // Model picks map to index entries even without the variation selector.
+        #expect(Self.index.entry(for: "🍽") != nil || Self.index.entry(for: "🍽️") != nil)
+    }
 }

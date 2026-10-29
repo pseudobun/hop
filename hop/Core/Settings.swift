@@ -202,6 +202,10 @@ nonisolated struct HopConfig: Decodable, Equatable, Sendable {
         var enabled = true
         /// none, light, mediumLight, medium, mediumDark or dark; for emoji that take one.
         var skinTone = "none"
+        /// Ask OpenAI for emoji when the index finds little (needs a key: "Set OpenAI API Key").
+        var ai = true
+        /// The cheapest fast model is plenty for picking emoji.
+        var aiModel = "gpt-4.1-nano"
     }
 
     nonisolated struct CalculatorSettings: Decodable, Equatable, Sendable {
@@ -385,11 +389,13 @@ nonisolated extension HopConfig.Messages {
 }
 
 nonisolated extension HopConfig.Emoji {
-    private enum Keys: String, CodingKey { case enabled, skinTone }
+    private enum Keys: String, CodingKey { case enabled, skinTone, ai, aiModel }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: Keys.self), d = Self()
         enabled = try c.value(.enabled, d.enabled)
         skinTone = try c.value(.skinTone, d.skinTone)
+        ai = try c.value(.ai, d.ai)
+        aiModel = try c.value(.aiModel, d.aiModel)
     }
 }
 
@@ -735,6 +741,10 @@ final class AppSettings {
         enabled: true,
         // For emoji that take one: none, light, mediumLight, medium, mediumDark, dark
         skinTone: "none",
+        // Suggestions from OpenAI for phrases the index can't place ("ko deploy faila v petek");
+        // only with a key ("Set OpenAI API Key" in hop), only for those queries
+        ai: true,
+        aiModel: "gpt-4.1-nano",
       },
 
       snippets: {

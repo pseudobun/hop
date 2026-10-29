@@ -1,4 +1,5 @@
 import AppKit
+import os
 
 /// Root command for the emoji picker.
 enum EmojiCommands {
@@ -9,11 +10,21 @@ enum EmojiCommands {
                  aliases: ["emoji", "emoticon", "smiley"], icon: .tile("face.smiling.inverse", Palette.emoji), accessory: "Command",
                  actions: [Action(title: "Search Emoji", symbol: "face.smiling") { .push(mode(services)) }],
                  pushesMode: true),
+            Item(id: "emoji.openaiKey", title: "Set OpenAI API Key", subtitle: "Smarter emoji suggestions; kept in the Keychain",
+                 aliases: ["openai"], icon: .tile("key.fill", Palette.emoji), accessory: "Command",
+                 actions: [
+                     Action(title: "Set Key", symbol: "key") { .push(OpenAIKeyMode()) },
+                     Action(title: "Remove Key", symbol: "trash", shortcut: .ret(.command), style: .destructive) {
+                         OpenAIKey.remove()
+                         return .dismissWithHUD("OpenAI key removed")
+                     },
+                 ], tracksFrecency: false, pushesMode: true),
         ]
     }
 
     static func mode(_ services: Services) -> EmojiMode {
-        EmojiMode(usage: .shared, skinTone: SkinTone(config: services.settings.data.emoji.skinTone))
+        let config = services.settings.data.emoji
+        return EmojiMode(usage: .shared, skinTone: SkinTone(config: config.skinTone), aiModel: config.ai ? config.aiModel : nil)
     }
 }
 
@@ -69,14 +80,21 @@ final class EmojiMode: Mode {
 
     private let usage: EmojiUsage
     private let skinTone: SkinTone
+    /// OpenAI model for phrases the index can't place; nil is off.
+    private let aiModel: String?
+    /// Model picks per query, as index entries; kept for the session.
+    private static var aiCache: [String: [Int]] = [:]
+    private var aiTask: Task<Void, Never>?
+    private static var warnedKey = false
     private weak var context: LauncherContext?
     private var index: EmojiIndex?
     /// Shared across pushes: built once per launch, at first use.
     private static var cached: EmojiIndex?
 
-    init(usage: EmojiUsage, skinTone: SkinTone, index: EmojiIndex? = nil) {
+    init(usage: EmojiUsage, skinTone: SkinTone, aiModel: String? = nil, index: EmojiIndex? = nil) {
         self.usage = usage
         self.skinTone = skinTone
+        self.aiModel = aiModel
         self.index = index ?? Self.cached
     }
 
@@ -100,8 +118,52 @@ final class EmojiMode: Mode {
         if q.isEmpty || q == ":" { return browseSections(index) }
         let now = Date()
         let order = index.search(q) { usage.score(index.entries[$0].emoji, now: now) }
-        return [ResultSection(title: nil, items: order.map { item(index, $0, id: "emoji.\($0)") })]
+        let matches = order.map { item(index, $0, id: "emoji.\($0)") }
+        guard aiModel != nil, Self.wantsAI(q, matches: order.count) else { return [ResultSection(title: nil, items: matches)] }
+        guard let picks = Self.aiCache[Self.aiKey(q)] else {
+            ask(q, index: index)
+            return [ResultSection(title: nil, items: matches)]
+        }
+        let suggested = picks.map { item(index, $0, id: "emoji.ai.\($0)") }
+        return [ResultSection(title: "Suggested", items: suggested), ResultSection(title: "Matches", items: matches)]
     }
+
+    /// Phrases and queries the index barely matches; single words it knows stay local.
+    nonisolated static func wantsAI(_ query: String, matches: Int) -> Bool {
+        let q = query.trimmingCharacters(in: .whitespaces)
+        return q.count >= 3 && (matches < 6 || q.split(separator: " ").count >= 2)
+    }
+
+    nonisolated static func aiKey(_ query: String) -> String {
+        query.lowercased().split(separator: " ").joined(separator: " ")
+    }
+
+    /// Asks the model once typing pauses; the rows update when the answer is in.
+    private func ask(_ query: String, index: EmojiIndex) {
+        guard let model = aiModel else { return }
+        aiTask?.cancel()
+        aiTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(350))
+            guard !Task.isCancelled, let key = await OpenAIKey.load() else { return }
+            let result = await EmojiAI.suggest(query, key: key, model: model)
+            guard !Task.isCancelled else { return }
+            switch result {
+            case .success(let emoji):
+                var seen = Set<Int>()
+                Self.aiCache[Self.aiKey(query)] = emoji.compactMap(index.entry(for:)).filter { seen.insert($0).inserted }
+                self?.context?.reload()
+            case .failure(.http(401)):
+                if !Self.warnedKey {
+                    Self.warnedKey = true
+                    HUD.shared.warn("OpenAI rejected the API key")
+                }
+            case .failure(let error):
+                Log.app.error("emoji ai: \(String(describing: error), privacy: .public)")
+            }
+        }
+    }
+
+    func didExit() { aiTask?.cancel() }
 
     private func browseSections(_ index: EmojiIndex) -> [ResultSection] {
         let lookup = { (emoji: String) in index.entry(for: emoji) }
