@@ -9,6 +9,10 @@ nonisolated struct HopConfig: Decodable, Equatable, Sendable {
         var hotkey = "cmd+space"
         var sensitivity: Sensitivity = .high
         var popToRootSeconds = 90
+        /// Reopening the root search within this many seconds restores its query and row; 0 = off.
+        var keepQueryFor = 10
+        /// Rows under root results (and the only rows when nothing matches): ids from `FallbackSearch`.
+        var fallbacks = ["chatgpt", "google", "github"]
         var openAtLogin = true
         var menuBarIcon = true
     }
@@ -246,12 +250,14 @@ nonisolated extension HopConfig {
 }
 
 nonisolated extension HopConfig.General {
-    private enum Keys: String, CodingKey { case hotkey, sensitivity, popToRootSeconds, openAtLogin, menuBarIcon }
+    private enum Keys: String, CodingKey { case hotkey, sensitivity, popToRootSeconds, keepQueryFor, fallbacks, openAtLogin, menuBarIcon }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: Keys.self), d = Self()
         hotkey = try c.value(.hotkey, d.hotkey)
         sensitivity = try c.value(.sensitivity, d.sensitivity)
         popToRootSeconds = try c.value(.popToRootSeconds, d.popToRootSeconds)
+        keepQueryFor = try c.value(.keepQueryFor, d.keepQueryFor)
+        fallbacks = try c.value(.fallbacks, d.fallbacks)
         openAtLogin = try c.value(.openAtLogin, d.openAtLogin)
         menuBarIcon = try c.value(.menuBarIcon, d.menuBarIcon)
     }
@@ -525,6 +531,12 @@ final class AppSettings {
         sensitivity: "high",
         // Reopening after this many seconds starts back at the root search
         popToRootSeconds: 90,
+        // Reopening within this many seconds brings back the last root search, selected so
+        // typing replaces it; 0 always starts empty. Capped by popToRootSeconds.
+        keepQueryFor: 10,
+        // Shown under root results, and alone when nothing matches (↵ runs the first):
+        // "chatgpt", "google", "github", or a URL with {query}, e.g. "https://duckduckgo.com/?q={query}"
+        fallbacks: ["chatgpt", "google", "github"],
         openAtLogin: true,
         menuBarIcon: true,
       },

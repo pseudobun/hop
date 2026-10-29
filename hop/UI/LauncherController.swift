@@ -14,6 +14,8 @@ final class LauncherController: NSObject, LauncherContext, NSTableViewDataSource
     private var current: Mode { modes.last! }
     var onItemPerformed: ((Item, Int) -> Void)?
     var popToRootSeconds: () -> Int = { 90 }
+    /// Seconds the root query survives the launcher being hidden; 0 = always start empty.
+    var keepQueryFor: () -> Int = { 10 }
 
     private var rows: [Row] = []
     /// The mode `rows` were built for; a different mode gets a full reload (row tint, cell kinds).
@@ -109,13 +111,16 @@ final class LauncherController: NSObject, LauncherContext, NSTableViewDataSource
     func toggle() { isVisible ? hide() : show() }
 
     func show(query initial: String? = nil) {
-        if Date().timeIntervalSince(lastHidden) > Double(popToRootSeconds()) {
+        switch LauncherBehavior.reopen(elapsed: Date().timeIntervalSince(lastHidden), inSubMode: modes.count > 1,
+                                       keepQueryFor: keepQueryFor(), popToRootSeconds: popToRootSeconds()) {
+        case .restore: break
+        case .clearQuery, .popToRoot:
             while modes.count > 1 { modes.removeLast().didExit() }
             enterCurrentMode(query: "")
             select(nil)
         }
         if let initial { activeField.stringValue = initial }
-        // Reopening within popToRootSeconds comes back to the same row, not the first one.
+        // Reopening soon after comes back to the same query and row (selected below, so typing replaces it).
         refresh(keepSelection: initial == nil)
         panel.positionOnMouseScreen()
         panel.orderFrontRegardless()
@@ -261,7 +266,7 @@ final class LauncherController: NSObject, LauncherContext, NSTableViewDataSource
 
     private func updateFooter() {
         footerTitle.attributedStringValue = selectedItem?.actions.first.map { Keycap.label($0.title, keys: "↵") } ?? NSAttributedString()
-        footerActions.attributedStringValue = Keycap.label("Actions", keys: "⌘K")
+        footerActions.attributedStringValue = Keycap.label("Actions", keys: ["→", "⌘K"])
         footerActions.isHidden = (selectedItem?.actions.count ?? 0) < 2
     }
 
@@ -270,6 +275,9 @@ final class LauncherController: NSObject, LauncherContext, NSTableViewDataSource
     private func handleKey(_ event: NSEvent) -> Bool {
         if !actionPanel.isHidden {
             if event.keyCode == 53 || KeyCombo.cmd("k").matches(event) { closeActionPanel(); return true }
+            // ← and Tab back out of the panel that → and Tab opened.
+            let bare = event.modifierFlags.intersection(KeyCombo.relevant).isEmpty
+            if bare && (event.keyCode == 123 || event.keyCode == 48) { closeActionPanel(); return true }
             if actionPanel.handle(event) { return true }
         }
         let mods = event.modifierFlags.intersection(KeyCombo.relevant)
@@ -282,13 +290,18 @@ final class LauncherController: NSObject, LauncherContext, NSTableViewDataSource
         case 53: // Esc
             if modes.count > 1 { pop() } else { hide() }
             return true
-        case 48 where current.complete(query) != nil: // Tab completes (paths)
-            setQuery(current.complete(query) ?? query)
-            return true
-        case 48: // Tab
-            if let item = selectedItem, let first = item.actions.first, item.pushesMode {
-                perform(first, of: item, index: 0)
+        case 48: // Tab: complete a path, enter a sub-mode, or open the actions
+            let item = selectedItem
+            switch LauncherBehavior.tab(completion: current.complete(query), pushesMode: item?.pushesMode ?? false,
+                                        actionCount: item?.actions.count ?? 0) {
+            case .complete(let completed): setQuery(completed)
+            case .enterMode: if let item, let first = item.actions.first { perform(first, of: item, index: 0) }
+            case .openActions: openActionPanel()
+            case .nothing: break
             }
+            return true
+        case 124 where mods.isEmpty && rightArrowOpensActions: // → at the end of the query
+            openActionPanel()
             return true
         case 51 where query.isEmpty && modes.count > 1 && mods.isEmpty: // ⌫ on empty query
             pop()
@@ -352,11 +365,24 @@ final class LauncherController: NSObject, LauncherContext, NSTableViewDataSource
 
     #if DEBUG
     func debugOpenActionPanel() { toggleActionPanel() }
+    var debugActionPanelOpen: Bool { !actionPanel.isHidden }
     var debugSelectedID: String? { selectedItem?.id }
     #endif
 
+    private var rightArrowOpensActions: Bool {
+        let length = (query as NSString).length
+        // Without an editor (the field is not focused) the caret counts as at the end.
+        let selection = activeField.currentEditor()?.selectedRange ?? NSRange(location: length, length: 0)
+        return LauncherBehavior.rightArrowOpensActions(selection: selection, textLength: length,
+                                                       actionCount: selectedItem?.actions.count ?? 0)
+    }
+
     private func toggleActionPanel() {
         if !actionPanel.isHidden { closeActionPanel(); return }
+        openActionPanel()
+    }
+
+    private func openActionPanel() {
         guard let item = selectedItem, !item.actions.isEmpty else { return }
         actionPanel.show(item.actions)
         actionPanel.onPerform = { [weak self] action in

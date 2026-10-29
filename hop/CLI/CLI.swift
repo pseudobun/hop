@@ -238,7 +238,8 @@ enum CLI {
             let c = settings.data
             Output.json([
                 "general": ["hotkey": c.general.hotkey, "sensitivity": c.general.sensitivity.rawValue,
-                            "popToRootSeconds": c.general.popToRootSeconds, "openAtLogin": c.general.openAtLogin,
+                            "popToRootSeconds": c.general.popToRootSeconds, "keepQueryFor": c.general.keepQueryFor,
+                            "fallbacks": c.general.fallbacks, "openAtLogin": c.general.openAtLogin,
                             "menuBarIcon": c.general.menuBarIcon],
                 "hyperKey": ["enabled": c.hyperKey.enabled, "quickPressEscape": c.hyperKey.quickPressEscape],
                 "wireguard": ["enabled": c.wireguard.enabled, "showFlags": c.wireguard.showFlags],

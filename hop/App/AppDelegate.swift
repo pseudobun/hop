@@ -119,6 +119,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         launcher = LauncherController(root: root)
         services.hideLauncher = { [weak self] in self?.launcher.hide() }
         launcher.popToRootSeconds = { settings.data.general.popToRootSeconds }
+        launcher.keepQueryFor = { settings.data.general.keepQueryFor }
         launcher.onItemPerformed = { item, index in
             if index == 0 && item.tracksFrecency { frecency.recordVisit(item.id) }
         }

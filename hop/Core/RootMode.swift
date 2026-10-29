@@ -110,6 +110,10 @@ final class RootMode: Mode {
             sections.append(ResultSection(title: a.kind, items: [answerItem(a)]))
         }
         sections.append(ResultSection(title: "Results", items: results))
+        // Last, so they never outrank a match; alone (and selected) when nothing matches.
+        if let fallbacks = FallbackSearch.section(for: query, entries: settings.data.general.fallbacks) {
+            sections.append(fallbacks)
+        }
         return sections
     }
 

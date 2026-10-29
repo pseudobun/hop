@@ -26,6 +26,24 @@ enum Keycap {
         return s
     }
 
+    /// "Title [→] [⌘K]": several keys that do the same thing.
+    static func label(_ title: String, keys: [String]) -> NSAttributedString {
+        guard keys.count > 1 else { return label(title, keys: keys.first ?? "") }
+        let key = LabelKey(title: title, keys: keys.joined(separator: "\u{1}"))
+        if let cached = labels[key] { return cached }
+        let s = NSMutableAttributedString(attributedString: label(title, keys: keys[0]))
+        for k in keys.dropFirst() {
+            s.append(NSAttributedString(string: " ", attributes: [.font: Theme.meta]))
+            let cap = NSTextAttachment()
+            let img = image(k)
+            cap.image = img
+            cap.bounds = NSRect(x: 0, y: -4, width: img.size.width, height: img.size.height)
+            s.append(NSAttributedString(attachment: cap))
+        }
+        labels[key] = s
+        return s
+    }
+
     static func image(_ keys: String) -> NSImage {
         if let cached = images[keys] { return cached }
         let font = Theme.mono(11, 500)
