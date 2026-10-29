@@ -75,7 +75,7 @@ final class EmojiUsage {
 final class EmojiMode: Mode {
     let title: String? = "Emoji"
     let tint: NSColor? = Palette.emoji
-    let placeholder = "Search emoji… (wtf, ship it, srce)"
+    let placeholder = "Search emoji… (wtf, ship it, srce) · ⌘↵ or ? asks AI"
     static let columns = 9
     var layout: ResultLayout { .grid(columns: Self.columns) }
 
@@ -86,6 +86,11 @@ final class EmojiMode: Mode {
     /// Model picks per query, as index entries; kept for the session.
     private static var aiCache: [String: [Int]] = [:]
     private var aiTask: Task<Void, Never>?
+    /// The query `aiTask` is for, and whether its request is out (shown as a placeholder).
+    private var aiQuery: String?
+    private var aiWaiting = false
+    /// Queries sent to the model by hand (⌘↵), though the index matched something.
+    private var forcedAI: Set<String> = []
     /// One HUD per launch for a failing API (bad key, retired model), not one per keystroke.
     private static var warned = false
     private weak var context: LauncherContext?
@@ -116,24 +121,41 @@ final class EmojiMode: Mode {
 
     func sections(for query: String) -> [ResultSection] {
         guard let index else { return [] }
-        let q = query.trimmingCharacters(in: .whitespaces)
+        var q = query.trimmingCharacters(in: .whitespaces)
         if q.isEmpty || q == ":" { return browseSections(index) }
+        // "?" in front asks the model straight away.
+        let asked = q.hasPrefix("?")
+        if asked { q = q.dropFirst().trimmingCharacters(in: .whitespaces) }
+        guard !q.isEmpty else { return browseSections(index) }
         let now = Date()
         let order = index.search(q) { usage.score(index.entries[$0].emoji, now: now) }
-        let matches = order.map { item(index, $0, id: "emoji.\($0)") }
-        guard ai != nil, Self.wantsAI(q, matches: order.count) else { return [ResultSection(title: nil, items: matches)] }
+        var matches = order.map { item(index, $0, id: "emoji.\($0)") }
+        if ai != nil {
+            let key = Self.aiKey(q)
+            let askAction = Action(title: "Ask AI", symbol: "sparkles", shortcut: .ret(.command)) { [weak self] in
+                self?.forcedAI.insert(key)
+                return .reload
+            }
+            for i in matches.indices { matches[i].actions.append(askAction) }
+        }
+        let forced = asked || forcedAI.contains(Self.aiKey(q))
+        guard ai != nil, Self.wantsAI(q, matches: order.count, forced: forced) else { return [ResultSection(title: nil, items: matches)] }
         guard let picks = Self.aiCache[Self.aiKey(q)] else {
             ask(q, index: index)
-            return [ResultSection(title: nil, items: matches)]
+            guard aiWaiting, aiQuery == Self.aiKey(q) else { return [ResultSection(title: nil, items: matches)] }
+            let waiting = Item(id: "emoji.ai.waiting", title: "Asking OpenAI…", subtitle: ai?.model, icon: .emoji("✨"),
+                               actions: [], tracksFrecency: false)
+            return [ResultSection(title: "Suggested", items: [waiting]), ResultSection(title: "Matches", items: matches)]
         }
+        guard !picks.isEmpty else { return [ResultSection(title: nil, items: matches)] }
         let suggested = picks.map { item(index, $0, id: "emoji.ai.\($0)") }
         return [ResultSection(title: "Suggested", items: suggested), ResultSection(title: "Matches", items: matches)]
     }
 
-    /// Phrases and queries the index barely matches; single words it knows stay local.
-    nonisolated static func wantsAI(_ query: String, matches: Int) -> Bool {
+    /// Only when the index found nothing, or when asked (⌘↵ or a leading "?"): no request per keystroke.
+    nonisolated static func wantsAI(_ query: String, matches: Int, forced: Bool = false) -> Bool {
         let q = query.trimmingCharacters(in: .whitespaces)
-        return q.count >= 3 && (matches < 6 || q.split(separator: " ").count >= 2)
+        return forced ? q.count >= 2 : q.count >= 3 && matches == 0
     }
 
     nonisolated static func aiKey(_ query: String) -> String {
@@ -142,19 +164,31 @@ final class EmojiMode: Mode {
 
     /// Asks the model once typing pauses; the rows update when the answer is in.
     private func ask(_ query: String, index: EmojiIndex) {
-        guard let ai else { return }
+        guard let ai, aiQuery != Self.aiKey(query) else { return }
         aiTask?.cancel()
+        aiQuery = Self.aiKey(query)
+        aiWaiting = false
+        context?.setLoading(false)
         aiTask = Task { [weak self] in
             try? await Task.sleep(for: .milliseconds(350))
-            guard !Task.isCancelled, let key = await OpenAIKey.load() else { return }
+            guard !Task.isCancelled, let key = await OpenAIKey.load(), let self else { return }
+            aiWaiting = true
+            context?.setLoading(true)
+            context?.reload()
             let result = await EmojiAI.suggest(query, key: key, model: ai.model, reasoning: ai.reasoning)
             guard !Task.isCancelled else { return }
+            aiWaiting = false
+            aiQuery = nil
+            context?.setLoading(false)
             switch result {
             case .success(let emoji):
                 var seen = Set<Int>()
                 Self.aiCache[Self.aiKey(query)] = emoji.compactMap(index.entry(for:)).filter { seen.insert($0).inserted }
-                self?.context?.reload()
+                context?.reload()
             case .failure(let error):
+                // Not asked again this session; the placeholder goes away.
+                Self.aiCache[Self.aiKey(query)] = []
+                context?.reload()
                 Log.app.error("emoji ai: \(String(describing: error), privacy: .public)")
                 guard !Self.warned, case .http(let status, let message) = error, status != 0 else { return }
                 Self.warned = true
@@ -163,7 +197,12 @@ final class EmojiMode: Mode {
         }
     }
 
-    func didExit() { aiTask?.cancel() }
+    func didExit() {
+        aiTask?.cancel()
+        aiQuery = nil
+        aiWaiting = false
+        context?.setLoading(false)
+    }
 
     private func browseSections(_ index: EmojiIndex) -> [ResultSection] {
         let lookup = { (emoji: String) in index.entry(for: emoji) }

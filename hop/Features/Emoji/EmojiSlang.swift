@@ -4,6 +4,22 @@ import Foundation
 /// intents and Slovenian. A query equal to a key ranks these first, in this order; a query
 /// that starts a key (3+ letters) lifts them less. Keys are folded like queries (č → c).
 nonisolated enum EmojiSlang {
+    /// Extra words an emoji is known by, searched like its keywords (any query word may hit
+    /// them), where CLDR's Slovenian is thin: ❤️‍🩹 is only "zakrpano srce" there.
+    static let keywords: [(emoji: String, words: String)] = [
+        ("❤️‍🩹", "povit povito povoj obliz celjenje ozdravljeno mending bandaged healing"),
+        ("🩹", "obliz povoj povit rana prask"),
+        ("💔", "zlomljeno zlomljen strto razbito"),
+        ("❤️", "srcek ljubezen ljubim"),
+        ("🤒", "bolan bolna vrocina prehlad"),
+        ("🤕", "poskodovan povit glava"),
+        ("😴", "zaspan zaspana spanec spim"),
+        ("🍺", "pivo pir"),
+        ("☕", "kava kavica"),
+        ("🎂", "rojstni torta"),
+        ("🥳", "zur zabava rojstni"),
+    ]
+
     static let table: [(keys: String, emoji: String)] = [
         // Reactions
         ("wtf|what the|kaj za vraga|kva", "🤯😳🤬😱🫠"),

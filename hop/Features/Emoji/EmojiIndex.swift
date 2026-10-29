@@ -125,6 +125,8 @@ nonisolated final class EmojiIndex: Sendable {
         var localNames: [[UInt8]] = []
         var fuzzy: [FuzzyTarget] = []
         var byEmoji: [String: Int] = [:]
+        var extraKeywords: [String: String] = [:]
+        for (emoji, words) in EmojiSlang.keywords { extraKeywords[Self.key(emoji), default: ""] += " " + words }
         for row in file.e {
             let appleName = apple[Self.key(row.emoji)]
             // Not in AppleName.strings: newer than this macOS, unless the font has it (♀️).
@@ -151,6 +153,7 @@ nonisolated final class EmojiIndex: Sendable {
             add(row.keywords, .keyword)
             if slovenian.count > 1 { add(String(slovenian[1]), .other) }
             if let appleName { add(appleName, .other) }
+            if let extra = extraKeywords[Self.key(row.emoji)] { add(extra, .keyword) }
         }
         let sorted = tokenMap.keys.sorted { $0.lexicographicallyPrecedes($1) }
         tokens = sorted
@@ -244,25 +247,30 @@ nonisolated final class EmojiIndex: Sendable {
         var matchedWords = [Int](repeating: 0, count: n)
         var wordBest = [Int32](repeating: 0, count: n)
         var touched: [Int] = []
-        for (wi, w) in qWords.enumerated() {
+        for (wi, word) in qWords.enumerated() {
             touched.removeAll(keepingCapacity: true)
-            var t = lowerBound(w)
-            while t < tokens.count, tokens[t].starts(with: w) {
-                let exact = tokens[t].count == w.count
-                // A prefix scores by how much of the word it covers.
-                let cover = Int32(w.count * 20 / tokens[t].count)
-                for p in postings[t] {
-                    let s: Int32 = switch p.field {
-                    case .nameFirst: exact ? 110 : 50 + cover
-                    case .name: exact ? 100 : 45 + cover
-                    case .keyword: exact ? 75 : 30 + cover
-                    case .other: exact ? 65 : 25 + cover
+            // Its stem too, a bit lower: Slovenian endings the data doesn't have ("srček" → srce).
+            var forms: [(w: [UInt8], penalty: Int32)] = [(word, 0)]
+            if let stem = Self.stem(word) { forms.append((stem, 15)) }
+            for (w, penalty) in forms {
+                var t = lowerBound(w)
+                while t < tokens.count, tokens[t].starts(with: w) {
+                    let exact = tokens[t].count == w.count
+                    // A prefix scores by how much of the word it covers.
+                    let cover = Int32(w.count * 20 / tokens[t].count)
+                    for p in postings[t] {
+                        let s: Int32 = switch p.field {
+                        case .nameFirst: exact ? 110 : 50 + cover
+                        case .name: exact ? 100 : 45 + cover
+                        case .keyword: exact ? 75 : 30 + cover
+                        case .other: exact ? 65 : 25 + cover
+                        }
+                        let e = Int(p.entry)
+                        if wordBest[e] == 0 { touched.append(e) }
+                        if s - penalty > wordBest[e] { wordBest[e] = s - penalty }
                     }
-                    let e = Int(p.entry)
-                    if wordBest[e] == 0 { touched.append(e) }
-                    if s > wordBest[e] { wordBest[e] = s }
+                    t += 1
                 }
-                t += 1
             }
             for e in touched {
                 if matchedWords[e] == wi {
@@ -303,6 +311,18 @@ nonisolated final class EmojiIndex: Sendable {
         var ranked = results.map { e in (e, Double(total[e]) + min(50, 8 * log(max(1, boost(e))))) }
         ranked.sort { $0.1 != $1.1 ? $0.1 > $1.1 : $0.0 < $1.0 }
         return ranked.prefix(limit).map(\.0)
+    }
+
+    /// Diminutive and case endings, longest first; folded (č → c).
+    private static let endings: [[UInt8]] = ["ckov", "cka", "cki", "cku", "cek", "ica", "ice", "ici", "ek", "ka", "ki",
+                                             "ko", "ku", "em", "om", "ih", "mi", "a", "e", "i", "o", "u"].map { Array($0.utf8) }
+
+    /// "srcek" → "src" (matches "srce"); nil when no ending leaves 3+ letters.
+    static func stem(_ w: [UInt8]) -> [UInt8]? {
+        for e in endings where w.count - e.count >= 3 && w.suffix(e.count).elementsEqual(e) {
+            return Array(w.dropLast(e.count))
+        }
+        return nil
     }
 
     private func lowerBound(_ w: [UInt8]) -> Int {

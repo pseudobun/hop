@@ -129,7 +129,8 @@ struct EmojiTests {
     @Test func asksTheModelOnlyForPhrasesAndMisses() {
         #expect(!EmojiMode.wantsAI("fire", matches: 20))
         #expect(!EmojiMode.wantsAI("ok", matches: 0))
-        #expect(EmojiMode.wantsAI("deploy faila", matches: 30))
+        #expect(!EmojiMode.wantsAI("deploy faila", matches: 3))
+        #expect(EmojiMode.wantsAI("deploy faila", matches: 3, forced: true))
         #expect(EmojiMode.wantsAI("zxqv", matches: 0))
         #expect(EmojiMode.aiKey("  Ko Deploy   faila ") == "ko deploy faila")
     }
@@ -148,5 +149,12 @@ struct EmojiTests {
         #expect(EmojiAI.parse(Data("{}".utf8)) == nil)
         // Model picks map to index entries even without the variation selector.
         #expect(Self.index.entry(for: "🍽") != nil || Self.index.entry(for: "🍽️") != nil)
+    }
+
+    @Test func slovenianEndingsAndSynonyms() {
+        #expect(top("povit srček", 3).contains("❤️‍🩹"))
+        #expect(top("srček", 4).contains("❤️"))
+        #expect(EmojiIndex.stem(Array("srcek".utf8)).map { String(decoding: $0, as: UTF8.self) } == "src")
+        #expect(EmojiIndex.stem(Array("ok".utf8)) == nil)
     }
 }
