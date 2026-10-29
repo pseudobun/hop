@@ -13,6 +13,9 @@ final class Services {
     var clipboard: ClipboardController?
     var snippets: SnippetService?
     var shelves: ShelfController?
+    var calendar: CalendarController?
+    /// Hides the launcher, e.g. before pasting into the app behind it.
+    var hideLauncher: (() -> Void)?
     /// Opens the config file in the user's editor.
     func openConfig() {
         let url = settings.url
@@ -43,6 +46,8 @@ enum Registry {
         items += SnippetCommands.items(services)
         items += FileCommands.items(services)
         items += ShelfCommands.items(services)
+        items += MessagesCommands.items(services)
+        items += CalendarCommands.items(services)
         items += CalculatorCommands.items(services)
         items += [
             Item(id: "hop.config", title: "Open hop Config", subtitle: "~/.config/hop/config.json5",

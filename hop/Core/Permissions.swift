@@ -1,13 +1,14 @@
 import AppKit
 import ApplicationServices
 import Carbon
+import EventKit
 import ServiceManagement
 
 /// The macOS permissions hop's features need, with status checks and the
 /// system prompts that grant them.
 /// Nonisolated so the status checks can run off the main thread.
 nonisolated enum Permission: CaseIterable {
-    case accessibility, finderAutomation, downloads, fullDiskAccess, loginItem
+    case accessibility, finderAutomation, downloads, fullDiskAccess, calendar, loginItem
 
     nonisolated enum Status { case granted, missing, unknown }
 
@@ -17,6 +18,7 @@ nonisolated enum Permission: CaseIterable {
         case .finderAutomation: "Control Finder"
         case .downloads: "Downloads Folder"
         case .fullDiskAccess: "Full Disk Access"
+        case .calendar: "Calendar"
         case .loginItem: "Open at Login"
         }
     }
@@ -26,7 +28,8 @@ nonisolated enum Permission: CaseIterable {
         case .accessibility: "Hyper Key, pasting from KeePassXC and the clipboard history"
         case .finderAutomation: "Empty Trash and removing protected apps"
         case .downloads: "Clear Downloads"
-        case .fullDiskAccess: "Optional: remove app data in ~/Library/Containers when uninstalling"
+        case .fullDiskAccess: "Optional: codes from Messages, removing app data in ~/Library/Containers"
+        case .calendar: "Optional: upcoming events and birthdays in search"
         case .loginItem: "Start hop when you log in"
         }
     }
@@ -37,6 +40,7 @@ nonisolated enum Permission: CaseIterable {
         case .finderAutomation: "macwindow.on.rectangle"
         case .downloads: "arrow.down"
         case .fullDiskAccess: "externaldrive.fill"
+        case .calendar: "calendar"
         case .loginItem: "power"
         }
     }
@@ -47,11 +51,12 @@ nonisolated enum Permission: CaseIterable {
         case .finderAutomation: Theme.chart1
         case .downloads: Theme.chart5
         case .fullDiskAccess: Palette.neutral
+        case .calendar: Palette.calendar
         case .loginItem: Theme.good
         }
     }
 
-    var isOptional: Bool { self == .fullDiskAccess }
+    var isOptional: Bool { self == .fullDiskAccess || self == .calendar }
 
     var settingsURL: URL {
         let pane = switch self {
@@ -59,6 +64,7 @@ nonisolated enum Permission: CaseIterable {
         case .finderAutomation: "com.apple.preference.security?Privacy_Automation"
         case .downloads: "com.apple.preference.security?Privacy_FilesAndFolders"
         case .fullDiskAccess: "com.apple.preference.security?Privacy_AllFiles"
+        case .calendar: "com.apple.preference.security?Privacy_Calendars"
         case .loginItem: "com.apple.LoginItems-Settings.extension"
         }
         return URL(string: "x-apple.systempreferences:\(pane)")!
@@ -81,6 +87,12 @@ nonisolated enum Permission: CaseIterable {
             // A TCC-protected file only readable with Full Disk Access.
             let probe = FileManager.default.homeDirectoryForCurrentUser.appending(path: "Library/Safari/Bookmarks.plist").path
             return FileManager.default.isReadableFile(atPath: probe) ? .granted : .missing
+        case .calendar:
+            switch EKEventStore.authorizationStatus(for: .event) {
+            case .fullAccess: return .granted
+            case .notDetermined: return .unknown
+            default: return .missing
+            }
         case .loginItem:
             return SMAppService.mainApp.status == .enabled ? .granted : .missing
         }
@@ -102,6 +114,9 @@ nonisolated enum Permission: CaseIterable {
             if !ok { NSWorkspace.shared.open(settingsURL) }
         case .fullDiskAccess:
             NSWorkspace.shared.open(settingsURL)
+        case .calendar:
+            let granted = CalendarEvents.isUndetermined ? await CalendarEvents.requestAccess() : false
+            if !granted { NSWorkspace.shared.open(settingsURL) }
         case .loginItem:
             ConfigEditor.setBool("openAtLogin", true)
             do { try SMAppService.mainApp.register() } catch { SMAppService.openSystemSettingsLoginItems() }

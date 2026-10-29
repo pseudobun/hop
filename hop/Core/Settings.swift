@@ -168,6 +168,26 @@ nonisolated struct HopConfig: Decodable, Equatable, Sendable {
         var ignoreApps: [String] = []
     }
 
+    nonisolated struct Messages: Decodable, Equatable, Sendable {
+        var enabled = true
+        /// How far back "Messages Codes" looks.
+        var days = 3
+        /// "Paste Latest Code" only takes a code this recent.
+        var latestMinutes = 15
+    }
+
+    nonisolated struct CalendarSettings: Decodable, Equatable, Sendable {
+        var enabled = true
+        /// Root search shows events starting within this many minutes (and ones running now).
+        var soonMinutes = 60
+        /// How many days "Calendar" lists.
+        var days = 7
+        /// Today's and tomorrow's birthdays at the top of root search.
+        var birthdays = true
+        /// Calendars to leave out, by name.
+        var ignoreCalendars: [String] = []
+    }
+
     nonisolated struct CalculatorSettings: Decodable, Equatable, Sendable {
         /// Convert currencies; rates come from open.er-api.com, only once you type one.
         var currencies = true
@@ -187,6 +207,8 @@ nonisolated struct HopConfig: Decodable, Equatable, Sendable {
     var files = Files()
     var calculator = CalculatorSettings()
     var shelf = Shelf()
+    var messages = Messages()
+    var calendar = CalendarSettings()
     /// Global hotkeys for any command or app: { "Empty Trash": "hyper+t", "Safari": "hyper+s" }.
     var hotkeys: [String: String] = [:]
 
@@ -202,7 +224,7 @@ nonisolated private extension KeyedDecodingContainer {
 }
 
 nonisolated extension HopConfig {
-    private enum Keys: String, CodingKey { case general, hyperKey, wireguard, keepass, system, bookmarks, notes, clipboard, snippets, files, calculator, shelf, hotkeys }
+    private enum Keys: String, CodingKey { case general, hyperKey, wireguard, keepass, system, bookmarks, notes, clipboard, snippets, files, calculator, shelf, messages, calendar, hotkeys }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: Keys.self)
         general = try c.value(.general, General())
@@ -217,6 +239,8 @@ nonisolated extension HopConfig {
         files = try c.value(.files, Files())
         calculator = try c.value(.calculator, CalculatorSettings())
         shelf = try c.value(.shelf, Shelf())
+        messages = try c.value(.messages, Messages())
+        calendar = try c.value(.calendar, CalendarSettings())
         hotkeys = try c.value(.hotkeys, [:])
     }
 }
@@ -324,6 +348,28 @@ nonisolated extension HopConfig.Shelf {
         reopenHotkey = try c.value(.reopenHotkey, d.reopenHotkey)
         keepAfterDragOut = try c.value(.keepAfterDragOut, d.keepAfterDragOut)
         ignoreApps = try c.value(.ignoreApps, d.ignoreApps)
+    }
+}
+
+nonisolated extension HopConfig.Messages {
+    private enum Keys: String, CodingKey { case enabled, days, latestMinutes }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: Keys.self), d = Self()
+        enabled = try c.value(.enabled, d.enabled)
+        days = try c.value(.days, d.days)
+        latestMinutes = try c.value(.latestMinutes, d.latestMinutes)
+    }
+}
+
+nonisolated extension HopConfig.CalendarSettings {
+    private enum Keys: String, CodingKey { case enabled, soonMinutes, days, birthdays, ignoreCalendars }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: Keys.self), d = Self()
+        enabled = try c.value(.enabled, d.enabled)
+        soonMinutes = try c.value(.soonMinutes, d.soonMinutes)
+        days = try c.value(.days, d.days)
+        birthdays = try c.value(.birthdays, d.birthdays)
+        ignoreCalendars = try c.value(.ignoreCalendars, d.ignoreCalendars)
     }
 }
 
@@ -611,6 +657,29 @@ final class AppSettings {
         keepAfterDragOut: false,
         // Drags from these apps never open a shelf (bundle identifiers)
         ignoreApps: [],
+      },
+
+      messages: {
+        // Verification codes from SMS and iMessage (needs Full Disk Access)
+        enabled: true,
+        // How many days back "Messages Codes" lists codes
+        days: 3,
+        // "Paste Latest Code" takes only a code received this many minutes ago or later;
+        // bind it in hotkeys, e.g. "messages.pasteCode": "hyper+m"
+        latestMinutes: 15,
+      },
+
+      calendar: {
+        // Upcoming events and birthdays from Calendar (asks for Calendar access)
+        enabled: true,
+        // Root search shows events starting within this many minutes, and ones running now
+        soonMinutes: 60,
+        // How many days "Calendar" lists
+        days: 7,
+        // Today's and tomorrow's birthdays at the top of root search
+        birthdays: true,
+        // Calendars to leave out, by name
+        ignoreCalendars: [],
       },
 
       snippets: {

@@ -21,6 +21,8 @@ enum Palette {
     static var snippets: NSColor { Theme.chart5 }
     static var files: NSColor { Theme.chart1 }
     static var shelf: NSColor { Theme.info }
+    static var messages: NSColor { Theme.good }
+    static var calendar: NSColor { Theme.chart4 }
     static var neutral: NSColor { Theme.mutedForeground }
 }
 

@@ -9,6 +9,10 @@
 	</dict>
 	<key>NSAppleEventsUsageDescription</key>
 	<string>hop uses Finder to empty the Trash and to move protected apps to the Trash.</string>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>hop shows your upcoming events and birthdays in search and lets you join calls.</string>
+	<key>NSCalendarsUsageDescription</key>
+	<string>hop shows your upcoming events and birthdays in search and lets you join calls.</string>
 	<key>NSDownloadsFolderUsageDescription</key>
 	<string>hop needs access to your Downloads folder to clear it when you ask.</string>
 	<key>NSFileProviderDomainUsageDescription</key>

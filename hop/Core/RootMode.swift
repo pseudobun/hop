@@ -19,6 +19,8 @@ final class RootMode: Mode {
     var permissionsMode: (() -> Mode)?
     /// A query that is a path (`~/…`, `/…`) opens this mode with the path kept.
     var pathMode: (() -> Mode)?
+    /// Events starting soon and birthdays, shown above the suggestions.
+    var upcoming: (() -> [Item])?
 
     private var items: [Item] = []
     private var candidates: [RankCandidate] = []
@@ -145,6 +147,7 @@ final class RootMode: Mode {
             setup.append(hint)
         }
         sections.append(ResultSection(title: "Setup", items: setup))
+        if let upcoming = upcoming?(), !upcoming.isEmpty { sections.append(ResultSection(title: "Upcoming", items: upcoming)) }
 
         let suggested = candidates.indices
             .filter { candidates[$0].frecency > 1 }

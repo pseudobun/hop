@@ -25,6 +25,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var clipboardHotkey: GlobalHotkey!
     private var shelves: ShelfController!
     private var shelfHotkeys: [GlobalHotkey] = []
+    private var calendar: CalendarController!
     private let bindings = HotkeyBindings()
     private var snippetService: SnippetService!
     private let expander = SnippetExpander()
@@ -70,6 +71,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         shelves = ShelfController(settings: settings)
         shelves.onChange = { [weak self] in self?.root?.rebuild() }
         services.shelves = shelves
+        calendar = CalendarController(settings: settings)
+        calendar.onChange = { [weak self] in
+            guard let self, launcher?.isVisible == true, launcher.query.isEmpty else { return }
+            launcher.reload()
+        }
+        services.calendar = calendar
         shelfHotkeys = [
             GlobalHotkey { [weak self] in self?.shelves.newShelf() },
             GlobalHotkey { [weak self] in self?.shelves.newShelfFromClipboard() },
@@ -101,6 +108,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         root.hyperError = { [weak self] in self?.hyper.lastError }
         root.hotkeyProblems = { [weak self] in self?.bindings.problems ?? [] }
+        root.upcoming = { [weak self] in self?.calendar.upcomingItems() ?? [] }
         bindings.run = { [weak self] key in self?.runBinding(key) }
         let makeFiles: () -> Mode = { FileSearchMode(settings: settings, frecency: frecency) }
         root.prefixModes = [(prefix: "kp ", make: makeKeePass), (prefix: "f ", make: makeFiles)]
@@ -109,6 +117,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         root.permissionsMode = makePermissions
         services.permissionsMode = makePermissions
         launcher = LauncherController(root: root)
+        services.hideLauncher = { [weak self] in self?.launcher.hide() }
         launcher.popToRootSeconds = { settings.data.general.popToRootSeconds }
         launcher.onItemPerformed = { item, index in
             if index == 0 && item.tracksFrecency { frecency.recordVisit(item.id) }
@@ -322,6 +331,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 clipboardHotkey.unregister()
             }
         }
+
+        if previous?.calendar != config.calendar { calendar.apply(config.calendar) }
 
         if previous?.shelf != config.shelf {
             shelves.apply(config.shelf)
