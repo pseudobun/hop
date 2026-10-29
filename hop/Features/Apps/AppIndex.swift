@@ -54,7 +54,16 @@ nonisolated enum AppScanner {
         return ["/Applications", "\(home)/Applications", "/System/Applications"]
     }
 
-    @concurrent static func scan() async -> [AppEntry] {
+    /// Blocking file-system and LaunchServices work runs on its own queue, never on the
+    /// Swift concurrency pool: a LaunchServices call that hangs would otherwise pin a pool
+    /// thread for good, and enough of them stall every other async task in hop.
+    static let queue = DispatchQueue(label: "hop.app-scan", qos: .userInitiated)
+
+    static func scan() async -> [AppEntry] {
+        await withCheckedContinuation { done in queue.async { done.resume(returning: scanBlocking()) } }
+    }
+
+    static func scanBlocking() -> [AppEntry] {
         var seen = Set<String>()
         var entries: [AppEntry] = []
         for scope in scopes {
@@ -158,22 +167,36 @@ final class AppIndex {
     private(set) var entries: [AppEntry] = []
     var onChange: (() -> Void)?
     private var stream: FSEventStreamRef?
-    private var scanTask: Task<Void, Never>?
+    private var scanning = false
+    private var rescanPending = false
 
     func start() {
         rescan()
         startWatching()
     }
 
+    /// One scan at a time; changes during a scan trigger one more afterwards.
     func rescan() {
-        scanTask?.cancel()
-        scanTask = Task {
-            let result = await AppScanner.scan()
-            guard !Task.isCancelled else { return }
-            if result != entries {
-                entries = result
-                onChange?()
-            }
+        guard !scanning else {
+            rescanPending = true
+            return
+        }
+        scanning = true
+        AppScanner.queue.async {
+            let result = AppScanner.scanBlocking()
+            DispatchQueue.main.async { [weak self] in self?.finished(result) }
+        }
+    }
+
+    private func finished(_ result: [AppEntry]) {
+        scanning = false
+        if result != entries {
+            entries = result
+            onChange?()
+        }
+        if rescanPending {
+            rescanPending = false
+            rescan()
         }
     }
 
