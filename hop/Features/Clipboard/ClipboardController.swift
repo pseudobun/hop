@@ -69,7 +69,12 @@ final class ClipboardController: NSObject, NSWindowDelegate, NSTableViewDataSour
     private var shownCount = 0
     private var filter: ClipboardFilter = .all
     private var deleteAllArmedUntil: Date?
-    private let thumbnails = NSCache<NSString, NSImage>()
+    /// 48 px row thumbnails (~9 KB each), made only for rows that are drawn.
+    private let thumbnails: NSCache<NSString, NSImage> = {
+        let c = NSCache<NSString, NSImage>()
+        c.countLimit = 200
+        return c
+    }()
     /// Adds text to the snippets file; false when it could not.
     var saveSnippet: ((String) -> Bool)?
     private static let frameName = "hop.clipboard"
@@ -112,6 +117,8 @@ final class ClipboardController: NSObject, NSWindowDelegate, NSTableViewDataSour
     func toggle() { panel.isVisible ? hide() : show() }
 
     func show() {
+        // A copy made in the last poll period shows up at the top right away.
+        monitor.check()
         store.prune(keepDays: config.keepDays, maxItems: config.maxItems)
         searchField.stringValue = ""
         filter = .all
@@ -130,6 +137,9 @@ final class ClipboardController: NSObject, NSWindowDelegate, NSTableViewDataSour
         guard panel.isVisible else { return }
         closeActionPanel()
         panel.orderOut(nil)
+        // The preview holds a full-size decoded image (or a long text); don't keep it while hidden.
+        imageView.image = nil
+        textView.textStorage?.setAttributedString(NSAttributedString())
     }
 
     func windowDidResignKey(_ notification: Notification) { hide() }
@@ -640,7 +650,8 @@ final class ClipboardController: NSObject, NSWindowDelegate, NSTableViewDataSour
         case .color:
             if let c = ClipColor.parse(item.text) { return .image(ClipColorView.swatch(c, size: 18)) }
         case .file:
-            if let path = item.filePaths?.first { return .image(NSWorkspace.shared.icon(forFile: path)) }
+            // Through IconCache: a small bitmap, not a workspace icon redrawn on every reload.
+            if let path = item.filePaths?.first { return .file(path) }
         case .link:
             return .symbol("link", tint: Theme.info)
         case .text:

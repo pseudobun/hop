@@ -2,34 +2,47 @@ import AppKit
 import EventKit
 
 /// Keeps the next few days of events at hand so root search can show what's coming
-/// without waiting on EventKit.
+/// without waiting on EventKit. There is no polling: events are re-read when EventKit says
+/// they changed, when the day changes, on return from sleep or a locked screen, and when
+/// the launcher opens a while after the last read. Relative times ("in 12 min") are worked
+/// out when rows are built, so they need no refresh.
 final class CalendarController {
     private let settings: AppSettings
     private var config: HopConfig.CalendarSettings { settings.data.calendar }
     private(set) var events: [CalendarEvent] = []
-    private var timer: Timer?
-    private var observer: NSObjectProtocol?
+    private var observers: [NSObjectProtocol] = []
     private var loading = false
+    /// A change came in during a read; read again when it is done.
+    private var again = false
+    private(set) var lastRefresh = Date.distantPast
     /// The cached events changed.
     var onChange: (() -> Void)?
+
+    /// Opening the launcher re-reads events older than this.
+    nonisolated static let showRefreshAge: TimeInterval = 60
+
+    /// Screen locked or asleep: changes wait until return, then one read catches up.
+    var isPaused = false {
+        didSet {
+            if oldValue && !isPaused { refresh() }
+        }
+    }
 
     init(settings: AppSettings) { self.settings = settings }
 
     func apply(_ config: HopConfig.CalendarSettings) {
         guard config.enabled else {
-            timer?.invalidate()
-            timer = nil
+            observers.forEach(NotificationCenter.default.removeObserver)
+            observers = []
             events = []
             return
         }
-        if observer == nil {
-            observer = NotificationCenter.default.addObserver(forName: .EKEventStoreChanged, object: nil, queue: .main) { [weak self] _ in
-                MainActor.assumeIsolated { _ = self?.refresh() }
-            }
-        }
-        if timer == nil {
-            timer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
-                MainActor.assumeIsolated { _ = self?.refresh() }
+        if observers.isEmpty {
+            // Day change also covers midnight passing while asleep (it is posted on wake).
+            for name in [Notification.Name.EKEventStoreChanged, .NSCalendarDayChanged, .NSSystemTimeZoneDidChange, .NSSystemClockDidChange] {
+                observers.append(NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                    MainActor.assumeIsolated { self?.changed() }
+                })
             }
         }
         if CalendarEvents.isUndetermined {
@@ -41,21 +54,45 @@ final class CalendarController {
         refresh()
     }
 
+    /// The launcher is about to show: catch up if nothing was read for a while.
+    func launcherWillShow(now: Date = Date()) {
+        guard Self.isStale(lastRefresh: lastRefresh, now: now) else { return }
+        refresh()
+    }
+
+    nonisolated static func isStale(lastRefresh: Date, now: Date) -> Bool {
+        now.timeIntervalSince(lastRefresh) >= showRefreshAge || now < lastRefresh
+    }
+
+    private func changed() {
+        if !isPaused { refresh() }
+    }
+
     /// Re-reads events; await the task to know they are in.
     @discardableResult
     func refresh() -> Task<Void, Never>? {
-        guard config.enabled, CalendarEvents.isAuthorized, !loading else { return nil }
+        guard config.enabled, CalendarEvents.isAuthorized else { return nil }
+        guard !loading else {
+            again = true
+            return nil
+        }
         loading = true
         let now = Date()
+        lastRefresh = now
         let start = Calendar.current.startOfDay(for: now)
         let end = start.addingTimeInterval(Double(max(2, config.days + 1)) * 86400)
         let ignored = Set(config.ignoreCalendars)
         return Task {
             let fresh = await CalendarEvents.events(from: start, to: end, ignoring: ignored)
             loading = false
-            guard fresh != events else { return }
-            events = fresh
-            onChange?()
+            if fresh != events {
+                events = fresh
+                onChange?()
+            }
+            if again {
+                again = false
+                refresh()
+            }
         }
     }
 

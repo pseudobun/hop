@@ -32,6 +32,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var snippetService: SnippetService!
     private let expander = SnippetExpander()
     private var expanderRetry: Timer?
+    private let activity = SystemActivity()
     private var statusItem: StatusItem?
     #if DEBUG
     private var debugBackdrop: NSWindow?
@@ -122,6 +123,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         services.hideLauncher = { [weak self] in self?.launcher.hide() }
         launcher.popToRootSeconds = { settings.data.general.popToRootSeconds }
         launcher.keepQueryFor = { settings.data.general.keepQueryFor }
+        launcher.onWillShow = { [weak self] in self?.calendar.launcherWillShow() }
         launcher.onItemPerformed = { item, index in
             if index == 0 && item.tracksFrecency { frecency.recordVisit(item.id) }
         }
@@ -153,6 +155,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         settings.onChange = { [weak self] old, new in self?.apply(new, previous: old) }
         settings.start()
         apply(settings.data, previous: nil)
+
+        activity.onChange = { [weak self] away in self?.setAway(away) }
+        activity.start()
 
         root.rebuild()
         apps.start()
@@ -426,12 +431,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         updateExpanderKeywords()
         if expander.start() { return }
         Log.app.notice("snippets: expansion waits for Accessibility")
-        expanderRetry = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
+        guard !activity.isAway else { return }
+        let retry = Timer(timeInterval: 5, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
                 guard let self, AXIsProcessTrusted(), self.expander.start() else { return }
                 self.expanderRetry?.invalidate()
                 self.expanderRetry = nil
             }
+        }
+        retry.tolerance = 2
+        RunLoop.main.add(retry, forMode: .common)
+        expanderRetry = retry
+    }
+
+    /// Screen locked, asleep or another user in front: periodic work stops until return.
+    private func setAway(_ away: Bool) {
+        clipboardMonitor.isPaused = away
+        calendar.isPaused = away
+        if away {
+            expanderRetry?.invalidate()
+            expanderRetry = nil
+        } else if !expander.isRunning {
+            // Starts it now if Accessibility was granted meanwhile, otherwise retries again.
+            updateExpander(services.settings.data.snippets)
         }
     }
 

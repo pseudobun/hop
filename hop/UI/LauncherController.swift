@@ -16,6 +16,8 @@ final class LauncherController: NSObject, LauncherContext, NSTableViewDataSource
     var popToRootSeconds: () -> Int = { 90 }
     /// Seconds the root query survives the launcher being hidden; 0 = always start empty.
     var keepQueryFor: () -> Int = { 10 }
+    /// Called at the start of every `show`, before the rows are built.
+    var onWillShow: (() -> Void)?
 
     private var rows: [Row] = []
     /// The mode `rows` were built for; a different mode gets a full reload (row tint, cell kinds).
@@ -111,6 +113,7 @@ final class LauncherController: NSObject, LauncherContext, NSTableViewDataSource
     func toggle() { isVisible ? hide() : show() }
 
     func show(query initial: String? = nil) {
+        onWillShow?()
         switch LauncherBehavior.reopen(elapsed: Date().timeIntervalSince(lastHidden), inSubMode: modes.count > 1,
                                        keepQueryFor: keepQueryFor(), popToRootSeconds: popToRootSeconds()) {
         case .restore: break

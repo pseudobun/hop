@@ -1,7 +1,8 @@
 import AppKit
 
 /// Cache of file and symbol icons; only visible rows ask for icons. File icons are
-/// flattened to small bitmaps (~8 KB each), so a few hundred apps stay cheap.
+/// flattened to small bitmaps (~8 KB each), so a few hundred apps stay cheap. Emptied
+/// when macOS reports memory pressure; rows re-render what they need on the next show.
 final class IconCache {
     static let shared = IconCache()
 
@@ -10,6 +11,15 @@ final class IconCache {
         c.countLimit = 512
         return c
     }()
+    private var pressure: DispatchSourceMemoryPressure?
+
+    init(watchMemoryPressure: Bool = true) {
+        guard watchMemoryPressure else { return }
+        let source = DispatchSource.makeMemoryPressureSource(eventMask: [.warning, .critical], queue: .main)
+        source.setEventHandler { [weak self] in MainActor.assumeIsolated { self?.purge() } }
+        source.resume()
+        pressure = source
+    }
 
     func image(for icon: ItemIcon?, size: CGFloat = 22) -> NSImage? {
         guard let icon else { return nil }
@@ -63,7 +73,10 @@ final class IconCache {
         }
     }
 
-    func purge() { cache.removeAllObjects() }
+    func purge() {
+        prewarmTask?.cancel()
+        cache.removeAllObjects()
+    }
 
     private var prewarmTask: Task<Void, Never>?
 
