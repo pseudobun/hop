@@ -26,6 +26,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var shelves: ShelfController!
     private var shelfHotkeys: [GlobalHotkey] = []
     private var calendar: CalendarController!
+    private let messageWatcher = MessageCodeWatcher()
+    private var messagesHotkey: GlobalHotkey!
     private let bindings = HotkeyBindings()
     private var snippetService: SnippetService!
     private let expander = SnippetExpander()
@@ -145,6 +147,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.launcher.hide()
             self?.notes.toggle()
         }
+        messagesHotkey = GlobalHotkey { [weak self] in self?.runBinding("messages.pasteCode") }
 
         settings.onChange = { [weak self] old, new in self?.apply(new, previous: old) }
         settings.start()
@@ -330,6 +333,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         if previous?.calendar != config.calendar { calendar.apply(config.calendar) }
 
+        if previous?.messages != config.messages {
+            messageWatcher.apply(config.messages)
+            let spec = config.messages.pasteHotkey
+            if config.messages.enabled, !spec.isEmpty, let parsed = HotkeySpec.parse(spec) {
+                if !messagesHotkey.register(keyCode: parsed.keyCode, modifiers: parsed.modifiers) {
+                    Log.app.error("Could not register messages hotkey \(spec, privacy: .public)")
+                }
+            } else {
+                if config.messages.enabled, !spec.isEmpty { Log.app.error("Invalid messages hotkey \(spec, privacy: .public)") }
+                messagesHotkey.unregister()
+            }
+        }
+
         if previous?.shelf != config.shelf {
             shelves.apply(config.shelf)
             let specs = [config.shelf.hotkey, config.shelf.clipboardHotkey, config.shelf.reopenHotkey]
@@ -352,7 +368,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if previous?.hotkeys != config.hotkeys || previous?.general.hotkey != config.general.hotkey
             || previous?.notes.hotkey != config.notes.hotkey || previous?.notes.enabled != config.notes.enabled
             || previous?.clipboard.hotkey != config.clipboard.hotkey || previous?.clipboard.enabled != config.clipboard.enabled
-            || previous?.shelf != config.shelf {
+            || previous?.shelf != config.shelf || previous?.messages != config.messages {
             var reserved = [(owner: "the hop hotkey", hotkey: config.general.hotkey)]
             if config.notes.enabled { reserved.append((owner: "the notes hotkey", hotkey: config.notes.hotkey)) }
             if config.clipboard.enabled { reserved.append((owner: "the clipboard hotkey", hotkey: config.clipboard.hotkey)) }
@@ -361,6 +377,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                       ("shelf.reopenHotkey", config.shelf.reopenHotkey)] where !spec.isEmpty {
                     reserved.append((owner: owner, hotkey: spec))
                 }
+            }
+            if config.messages.enabled && !config.messages.pasteHotkey.isEmpty {
+                reserved.append((owner: "messages.pasteHotkey", hotkey: config.messages.pasteHotkey))
             }
             bindings.apply(config.hotkeys, reserved: reserved)
             for p in bindings.problems { Log.app.error("hotkeys: \(p, privacy: .public)") }
@@ -484,6 +503,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         shelves?.saveNow()
         hyper.stop()
         expander.stop()
+        messageWatcher.stop()
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {

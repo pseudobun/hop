@@ -28,7 +28,42 @@ nonisolated enum MessageCodes {
         }
     }
 
+    /// Codes in rows after `rowID`, newest first, and the highest ROWID now in the table.
+    nonisolated struct Batch: Sendable, Equatable {
+        let lastRowID: Int64
+        let codes: [MessageCode]
+    }
+
+    /// What arrived after `rowID`; with nil, only where the table ends now (the baseline).
+    static func newer(than rowID: Int64?) async -> Result<Batch, Failure> {
+        await withCheckedContinuation { done in
+            queue.async { done.resume(returning: read(afterRowID: rowID, from: database.path)) }
+        }
+    }
+
     static func read(since: Date, from path: String) -> Result<[MessageCode], Failure> {
+        withDatabase(path) { db in
+            query(db, where: "m.date > ?", bind: appleTime(since))
+        }
+    }
+
+    /// `SELECT MAX(ROWID)` first: Messages writes the WAL for read receipts, typing and sync
+    /// far more often than a message arrives, and that check is one index lookup.
+    static func read(afterRowID rowID: Int64?, from path: String) -> Result<Batch, Failure> {
+        withDatabase(path) { db in
+            var stmt: OpaquePointer?
+            defer { sqlite3_finalize(stmt) }
+            guard sqlite3_prepare_v2(db, "SELECT COALESCE(MAX(ROWID), 0) FROM message", -1, &stmt, nil) == SQLITE_OK else {
+                return .failure(failure(db))
+            }
+            guard sqlite3_step(stmt) == SQLITE_ROW else { return .failure(failure(db)) }
+            let last = sqlite3_column_int64(stmt, 0)
+            guard let rowID, last > rowID else { return .success(Batch(lastRowID: last, codes: [])) }
+            return query(db, where: "m.ROWID > ?", bind: rowID).map { Batch(lastRowID: last, codes: $0) }
+        }
+    }
+
+    private static func withDatabase<T>(_ path: String, _ body: (OpaquePointer?) -> Result<T, Failure>) -> Result<T, Failure> {
         guard FileManager.default.isReadableFile(atPath: path) else { return .failure(.noAccess) }
         var db: OpaquePointer?
         defer { sqlite3_close(db) }
@@ -36,19 +71,26 @@ nonisolated enum MessageCodes {
             return .failure(.unreadable(String(cString: sqlite3_errmsg(db))))
         }
         sqlite3_busy_timeout(db, 2000)
+        return body(db)
+    }
+
+    private static func failure(_ db: OpaquePointer?) -> Failure {
+        let message = String(cString: sqlite3_errmsg(db))
+        return message.contains("authorization") ? .noAccess : .unreadable(message)
+    }
+
+    /// Received messages matching `condition` (one `?`, bound to `value`) that carry a code.
+    private static func query(_ db: OpaquePointer?, where condition: String, bind value: Int64) -> Result<[MessageCode], Failure> {
         let sql = """
             SELECT m.ROWID, m.date, m.text, m.attributedBody, COALESCE(h.id, '')
             FROM message m LEFT JOIN handle h ON h.ROWID = m.handle_id
-            WHERE m.is_from_me = 0 AND m.date > ?
+            WHERE m.is_from_me = 0 AND \(condition)
             ORDER BY m.date DESC LIMIT 500
             """
         var stmt: OpaquePointer?
         defer { sqlite3_finalize(stmt) }
-        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else {
-            let message = String(cString: sqlite3_errmsg(db))
-            return .failure(message.contains("authorization") ? .noAccess : .unreadable(message))
-        }
-        sqlite3_bind_int64(stmt, 1, appleTime(since))
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return .failure(failure(db)) }
+        sqlite3_bind_int64(stmt, 1, value)
         var codes: [MessageCode] = []
         while sqlite3_step(stmt) == SQLITE_ROW {
             var text = sqlite3_column_text(stmt, 2).map { String(cString: $0) } ?? ""
@@ -62,6 +104,13 @@ nonisolated enum MessageCodes {
                                      text: text, date: date(appleTime: sqlite3_column_int64(stmt, 1))))
         }
         return .success(codes)
+    }
+
+    /// Worth a notification: received within `window` seconds (not an old row synced in late
+    /// from another device, nor one dated far ahead by a skewed clock).
+    static func isFresh(_ code: MessageCode, now: Date, window: TimeInterval = 120) -> Bool {
+        let age = now.timeIntervalSince(code.date)
+        return age <= window && age >= -60
     }
 
     // MARK: - Dates (nanoseconds since 2001; seconds in old databases)

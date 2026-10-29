@@ -77,7 +77,8 @@ final class HUD {
     func warn(_ text: String) { show(text, symbol: "exclamationmark.triangle.fill", tone: .warning) }
 
     /// Without a tone, a checkmark is a success and any other symbol a notice.
-    func show(_ text: String, symbol: String = "checkmark.circle.fill", tone: Tone? = nil) {
+    /// `seconds` overrides how long it stays up.
+    func show(_ text: String, symbol: String = "checkmark.circle.fill", tone: Tone? = nil, seconds: Double? = nil) {
         let panel = self.panel ?? makePanel()
         self.panel = panel
         guard let glass = panel.contentView as? NSGlassEffectView,
@@ -105,7 +106,8 @@ final class HUD {
         hideTask?.cancel()
         hideTask = Task {
             // Long enough to read: 2.2 s, plus a little for longer messages.
-            try? await Task.sleep(for: .milliseconds(min(4000, 2200 + max(0, text.count - 30) * 40)))
+            let ms = seconds.map { Int($0 * 1000) } ?? min(4000, 2200 + max(0, text.count - 30) * 40)
+            try? await Task.sleep(for: .milliseconds(ms))
             guard !Task.isCancelled else { return }
             await NSAnimationContext.runAnimationGroup { ctx in
                 ctx.duration = 0.2
