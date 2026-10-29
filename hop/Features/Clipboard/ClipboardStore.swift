@@ -193,13 +193,26 @@ final class ClipboardStore {
     }
 }
 
-/// Watches the general pasteboard (macOS has no change notification, so it polls the
-/// change count twice a second) and records what gets copied.
+/// Watches the general pasteboard and records what gets copied. macOS has no change
+/// notification, so it polls the change count: twice a second for a while after a copy
+/// (copies come in bursts), once a second otherwise, and not at all while the screen is
+/// locked or the Mac asleep. Switching apps checks at once, so a copy is still credited
+/// to the app it came from, and hop checks before showing the history.
 final class ClipboardMonitor {
     private let store: ClipboardStore
     private let config: () -> HopConfig.Clipboard
     private var timer: Timer?
+    private var activation: NSObjectProtocol?
     private var lastChange = NSPasteboard.general.changeCount
+    private var lastChangeSeen = Date.distantPast
+    /// The app in front before the latest switch; a copy noticed on the switch came from it.
+    private weak var lastFront: NSRunningApplication?
+    private var running = false
+
+    nonisolated static let activeInterval: TimeInterval = 0.5
+    nonisolated static let idleInterval: TimeInterval = 1
+    /// How long after a copy polling stays at `activeInterval`.
+    nonisolated static let burst: TimeInterval = 30
 
     /// Pasteboard markers from apps that ask clipboard managers to look away
     /// (nspasteboard.org, 1Password, KeeWeb, TypeIt4Me, Keyboard Maestro).
@@ -214,39 +227,97 @@ final class ClipboardMonitor {
         self.config = config
     }
 
-    var isRunning: Bool { timer != nil }
+    /// Started (from config); polling may still be paused.
+    var isRunning: Bool { running }
+    /// Locked screen or sleep: no polling; resuming catches up on what was copied meanwhile.
+    var isPaused = false {
+        didSet {
+            guard isPaused != oldValue, running else { return }
+            if isPaused {
+                stopTimer()
+            } else {
+                check()
+                schedule()
+            }
+        }
+    }
+    /// The current polling period, nil while not polling.
+    var pollInterval: TimeInterval? { timer?.timeInterval }
+
+    nonisolated static func interval(sinceChange: TimeInterval) -> TimeInterval {
+        sinceChange < burst ? activeInterval : idleInterval
+    }
 
     func start() {
-        guard timer == nil else { return }
+        guard !running else { return }
+        running = true
         lastChange = NSPasteboard.general.changeCount
-        let t = Timer(timeInterval: 0.5, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated { self?.tick() }
+        lastFront = NSWorkspace.shared.frontmostApplication
+        activation = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main) { [weak self] note in
+            let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication
+            MainActor.assumeIsolated { self?.activated(app) }
         }
-        t.tolerance = 0.25
-        RunLoop.main.add(t, forMode: .common)
-        timer = t
+        if !isPaused { schedule() }
     }
 
     func stop() {
-        timer?.invalidate()
-        timer = nil
+        running = false
+        stopTimer()
+        if let activation { NSWorkspace.shared.notificationCenter.removeObserver(activation) }
+        activation = nil
     }
 
     /// hop wrote the pasteboard itself (paste from history): don't record it again.
     func ignoreCurrentChange() { lastChange = NSPasteboard.general.changeCount }
 
+    /// Records a copy made since the last poll, e.g. right before the history is shown.
+    func check() {
+        guard running, !isPaused else { return }
+        poll(source: NSWorkspace.shared.frontmostApplication)
+    }
+
+    private func activated(_ app: NSRunningApplication?) {
+        if !isPaused { poll(source: lastFront) }
+        lastFront = app
+    }
+
+    private func schedule(now: Date = Date()) {
+        let wanted = Self.interval(sinceChange: now.timeIntervalSince(lastChangeSeen))
+        guard timer?.timeInterval != wanted else { return }
+        stopTimer()
+        let t = Timer(timeInterval: wanted, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.tick() }
+        }
+        t.tolerance = wanted / 2
+        RunLoop.main.add(t, forMode: .common)
+        timer = t
+    }
+
+    private func stopTimer() {
+        timer?.invalidate()
+        timer = nil
+    }
+
     private func tick() {
+        poll(source: NSWorkspace.shared.frontmostApplication)
+        // Back to the slow period once a burst of copies is over.
+        schedule()
+    }
+
+    private func poll(source: NSRunningApplication?) {
         let pb = NSPasteboard.general
         guard pb.changeCount != lastChange else { return }
         lastChange = pb.changeCount
-        capture(pb)
+        lastChangeSeen = Date()
+        capture(pb, from: source)
+        if timer != nil { schedule() }
     }
 
-    private func capture(_ pb: NSPasteboard) {
+    private func capture(_ pb: NSPasteboard, from front: NSRunningApplication?) {
         let cfg = config()
         let types = Set((pb.types ?? []).map(\.rawValue))
         guard types.isDisjoint(with: Self.skipTypes) else { return }
-        let front = NSWorkspace.shared.frontmostApplication
         if let id = front?.bundleIdentifier, cfg.ignoreApps.contains(id) { return }
         let source = (front?.bundleIdentifier, front?.localizedName)
 
