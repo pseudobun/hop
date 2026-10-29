@@ -15,6 +15,9 @@ final class CalendarController {
     /// A change came in during a read; read again when it is done.
     private var again = false
     private(set) var lastRefresh = Date.distantPast
+    /// Last known Calendar access; nil until checked. Never checked on the main thread.
+    private(set) var access: EKAuthorizationStatus?
+    private var lastAccessCheck = Date.distantPast
     /// The cached events changed.
     var onChange: (() -> Void)?
 
@@ -24,7 +27,7 @@ final class CalendarController {
     /// Screen locked or asleep: changes wait until return, then one read catches up.
     var isPaused = false {
         didSet {
-            if oldValue && !isPaused { refresh() }
+            if oldValue && !isPaused { recheckAccess() }
         }
     }
 
@@ -45,17 +48,42 @@ final class CalendarController {
                 })
             }
         }
-        if CalendarEvents.isUndetermined {
+        Task {
             // Asked once, at the first launch with the feature on.
-            Task {
-                if await CalendarEvents.requestAccess() { refresh() }
-            }
+            if await checkAccess() == .notDetermined { _ = await requestAccess() }
+            refresh()
         }
-        refresh()
+    }
+
+    @discardableResult
+    func checkAccess() async -> EKAuthorizationStatus {
+        lastAccessCheck = Date()
+        let status = await CalendarEvents.status()
+        access = status
+        return status
+    }
+
+    /// Shows the macOS prompt; true when granted.
+    func requestAccess() async -> Bool {
+        let granted = await CalendarEvents.requestAccess()
+        access = granted ? .fullAccess : .denied
+        return granted
+    }
+
+    /// Access may have been granted in System Settings meanwhile.
+    private func recheckAccess() {
+        Task {
+            await checkAccess()
+            refresh()
+        }
     }
 
     /// The launcher is about to show: catch up if nothing was read for a while.
     func launcherWillShow(now: Date = Date()) {
+        guard access == .fullAccess else {
+            if Self.isStale(lastRefresh: lastAccessCheck, now: now) { recheckAccess() }
+            return
+        }
         guard Self.isStale(lastRefresh: lastRefresh, now: now) else { return }
         refresh()
     }
@@ -71,7 +99,7 @@ final class CalendarController {
     /// Re-reads events; await the task to know they are in.
     @discardableResult
     func refresh() -> Task<Void, Never>? {
-        guard config.enabled, CalendarEvents.isAuthorized else { return nil }
+        guard config.enabled, access == .fullAccess else { return nil }
         guard !loading else {
             again = true
             return nil
@@ -235,13 +263,14 @@ final class CalendarMode: Mode {
     func didEnter(_ context: LauncherContext) {
         self.context = context
         Task {
-            if !CalendarEvents.isAuthorized {
-                guard CalendarEvents.isUndetermined else {
+            let status = await controller.checkAccess()
+            if status != .fullAccess {
+                guard status == .notDetermined else {
                     denied = true
                     return context.reload()
                 }
                 context.suppressAutoHide = true
-                let granted = await CalendarEvents.requestAccess()
+                let granted = await controller.requestAccess()
                 context.suppressAutoHide = false
                 denied = !granted
             }

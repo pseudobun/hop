@@ -129,6 +129,10 @@ final class LauncherController: NSObject, LauncherContext, NSTableViewDataSource
         refresh(keepSelection: initial == nil)
         panel.positionOnMouseScreen()
         panel.orderFrontRegardless()
+        #if DEBUG
+        // Offscreen renders must not take keystrokes from whatever the user is typing in.
+        if UserDefaults.standard.bool(forKey: "DebugNoFocus") { return }
+        #endif
         panel.makeKey()
         panel.makeFirstResponder(activeField)
         activeField.currentEditor()?.selectAll(nil)
@@ -225,9 +229,11 @@ final class LauncherController: NSObject, LauncherContext, NSTableViewDataSource
         let oldRows = rows
         rows = newRows
         let mode = ObjectIdentifier(current)
-        let sameShape = rowsMode == mode && !oldRows.isEmpty
-            && zip(oldRows, newRows).allSatisfy { height(of: $0) == height(of: $1) }
-        guard sameShape else {
+        // Within one mode rows are updated in place even when a header and an item swap
+        // places (the fallback section moving as results change): those rows are reloaded
+        // and their heights noted, the rest keep their views.
+        let shared = min(oldRows.count, newRows.count)
+        guard rowsMode == mode, !oldRows.isEmpty else {
             rowsMode = mode
             table.reloadData()
             return
@@ -238,6 +244,12 @@ final class LauncherController: NSObject, LauncherContext, NSTableViewDataSource
         defer { CATransaction.commit() }
         if newRows.count < oldRows.count {
             table.removeRows(at: IndexSet(newRows.count..<oldRows.count), withAnimation: [])
+        }
+        // A header and an item that swapped places get fresh rows at their new height.
+        let resized = IndexSet((0..<shared).filter { height(of: oldRows[$0]) != height(of: newRows[$0]) })
+        if !resized.isEmpty {
+            table.removeRows(at: resized, withAnimation: [])
+            table.insertRows(at: resized, withAnimation: [])
         }
         var mismatched = IndexSet()
         table.enumerateAvailableRowViews { rowView, row in

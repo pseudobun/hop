@@ -256,6 +256,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
                 guard let self else { return }
                 launcher.show(query: defaults.string(forKey: "DebugQuery"))
+                // "s|sy|sys": typed one after another, to check in-place row updates.
+                for q in (defaults.string(forKey: "DebugQuerySteps") ?? "").split(separator: "|") { launcher.setQuery(String(q)) }
                 if defaults.bool(forKey: "DebugActions") {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in self?.launcher.debugOpenActionPanel() }
                 }

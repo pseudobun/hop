@@ -26,6 +26,14 @@ nonisolated enum CalendarEvents {
     private final class StoreBox: @unchecked Sendable { var store = EKEventStore() }
     private static let box = StoreBox()
 
+    /// Calendar access as macOS reports it. The check is a TCC round trip (~60 ms the first
+    /// time, and every time without access), so it runs on `queue`, not the main thread.
+    static func status() async -> EKAuthorizationStatus {
+        await withCheckedContinuation { done in
+            queue.async { done.resume(returning: EKEventStore.authorizationStatus(for: .event)) }
+        }
+    }
+
     static var isAuthorized: Bool { EKEventStore.authorizationStatus(for: .event) == .fullAccess }
     static var isUndetermined: Bool { EKEventStore.authorizationStatus(for: .event) == .notDetermined }
 
