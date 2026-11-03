@@ -98,6 +98,21 @@ nonisolated enum WireGuard {
         return r?.ok == true
     }
 
+    /// Stops every connected tunnel but `keep` and waits for them to go down, so the next
+    /// one starts on a clean route table. Returns the ones stopped.
+    @discardableResult
+    static func stopOthers(than keep: WireGuardTunnel, in tunnels: [WireGuardTunnel]? = nil) async -> [WireGuardTunnel] {
+        var all = tunnels ?? []
+        if tunnels == nil { all = await list() }
+        let others = all.filter { $0.serviceID != keep.serviceID && $0.isConnected }
+        var stopped: [WireGuardTunnel] = []
+        for t in others where await setConnected(t, false) { stopped.append(t) }
+        await withTaskGroup(of: Void.self) { group in
+            for t in stopped { group.addTask { _ = await waitUntilSettled(t, false, timeout: .seconds(10)) } }
+        }
+        return stopped
+    }
+
     /// Stops every connected tunnel; returns how many were stopped.
     static func disconnectAll() async -> Int {
         var n = 0
@@ -115,12 +130,15 @@ final class WireGuardMode: Mode {
     let placeholder = "Search tunnels…"
     private let showFlags: Bool
     private let sensitivity: Sensitivity
+    /// Activating one tunnel deactivates the others first.
+    private let exclusive: Bool
     private var tunnels: [WireGuardTunnel] = []
     private var loaded = false
     private weak var context: LauncherContext?
 
-    init(showFlags: Bool, sensitivity: Sensitivity) {
+    init(showFlags: Bool, sensitivity: Sensitivity, exclusive: Bool = true) {
         self.showFlags = showFlags
+        self.exclusive = exclusive
         self.sensitivity = sensitivity
     }
 
@@ -189,6 +207,11 @@ final class WireGuardMode: Mode {
                  accessory: t.isConnected || t.isTransitioning ? nil : "Deactivated",
                  actions: t.isTransitioning ? [] : [Action(title: t.isConnected ? "Deactivate" : "Activate") { [weak self] in
                      let on = !t.isConnected
+                     if on && self?.exclusive == true {
+                         let others = self?.tunnels.filter { $0.isConnected && $0.serviceID != t.serviceID } ?? []
+                         others.forEach { self?.setStatus("Disconnecting", of: $0) }
+                         await WireGuard.stopOthers(than: t, in: others)
+                     }
                      guard await WireGuard.setConnected(t, on) else {
                          return .failWithHUD("scutil could not \(on ? "start" : "stop") \(t.name)")
                      }
@@ -208,7 +231,8 @@ enum WireGuardCommands {
             Item(id: "wireguard.tunnels", title: "WireGuard", subtitle: "Connect or disconnect tunnels",
                  icon: .tile("network.badge.shield.half.filled", Palette.wireguard), accessory: "Command",
                  actions: [Action(title: "Show Tunnels") {
-                     .push(WireGuardMode(showFlags: config.wireguard.showFlags, sensitivity: config.general.sensitivity))
+                     .push(WireGuardMode(showFlags: config.wireguard.showFlags, sensitivity: config.general.sensitivity,
+                                         exclusive: config.wireguard.exclusive))
                  }], pushesMode: true),
             Item(id: "wireguard.disconnectAll", title: "Disconnect All WireGuard Tunnels",
                  icon: .tile("network.slash", Palette.wireguard), accessory: "Command",

@@ -235,10 +235,24 @@ final class WireGuardBar: NSView, LauncherStrip {
     private func toggle(_ t: WireGuardTunnel) {
         guard let current = tunnels.first(where: { $0.serviceID == t.serviceID }), !current.isTransitioning else { return }
         let on = !current.isConnected
+        // Exclusive: the tunnels that are up go down first, then this one comes up.
+        let others = on && config().exclusive
+            ? tunnels.filter { $0.isConnected && $0.serviceID != t.serviceID && !tracking.contains($0.serviceID) } : []
         tracking.insert(t.serviceID)
         setStatus(on ? "Connecting" : "Disconnecting", of: t)
+        for o in others {
+            tracking.insert(o.serviceID)
+            setStatus("Disconnecting", of: o)
+        }
         Task {
             defer { tracking.remove(t.serviceID) }
+            if !others.isEmpty {
+                let stopped = await WireGuard.stopOthers(than: t, in: others)
+                for o in others {
+                    tracking.remove(o.serviceID)
+                    setStatus(stopped.contains(o) ? "Disconnected" : "Connected", of: o)
+                }
+            }
             guard await WireGuard.setConnected(t, on) else {
                 HUD.shared.fail("scutil could not \(on ? "start" : "stop") \(t.name)")
                 setStatus(on ? "Disconnected" : "Connected", of: t)

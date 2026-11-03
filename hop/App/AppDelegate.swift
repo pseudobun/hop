@@ -131,7 +131,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         wireGuardBar.config = { settings.data.wireguard }
         wireGuardBar.onShowAll = { [weak self] in
             let wg = settings.data.wireguard
-            self?.launcher.push(WireGuardMode(showFlags: wg.showFlags, sensitivity: settings.data.general.sensitivity))
+            self?.launcher.push(WireGuardMode(showFlags: wg.showFlags, sensitivity: settings.data.general.sensitivity,
+                                              exclusive: wg.exclusive))
         }
         launcher.setStrip(wireGuardBar)
         #if DEBUG

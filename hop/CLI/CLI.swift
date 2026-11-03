@@ -88,7 +88,7 @@ enum CLI {
           clip copy <n|query>                 Put an entry back on the clipboard
           config path | check | show          Inspect ~/.config/hop/config.json5
           hyper status | map | unmap          Caps Lock → F20 key mapping (unmap after a crash)
-          wg list | up <name> | down <name> | down-all   WireGuard tunnels (WireGuard.app)
+          wg list | up <name> [--keep] | down <name> | down-all   WireGuard tunnels (WireGuard.app; up stops the others unless --keep)
           kp dbs | search [query] | get <entry> [--field F] [--db NAME]   KeePassXC (unlocks per call)
               --field: username (default), url, title, password, totp, notes
               password, totp and notes need keepass.cliAccess: true; --password-stdin reads the
@@ -260,7 +260,7 @@ enum CLI {
                             "fallbacks": c.general.fallbacks, "openAtLogin": c.general.openAtLogin,
                             "menuBarIcon": c.general.menuBarIcon],
                 "hyperKey": ["enabled": c.hyperKey.enabled, "quickPressEscape": c.hyperKey.quickPressEscape],
-                "wireguard": ["enabled": c.wireguard.enabled, "showFlags": c.wireguard.showFlags,
+                "wireguard": ["enabled": c.wireguard.enabled, "showFlags": c.wireguard.showFlags, "exclusive": c.wireguard.exclusive,
                               "bar": c.wireguard.bar, "barTunnels": c.wireguard.barTunnels],
                 "keepass": ["enabled": c.keepass.enabled, "databases": c.keepass.allDatabases.map { ["name": $0.label, "path": $0.path, "password": $0.password.rawValue] },
                             "autoLock": c.keepass.autoLock, "lockAfterMinutes": c.keepass.lockAfterMinutes, "cliAccess": c.keepass.cliAccess, "favicons": c.keepass.favicons],
@@ -386,8 +386,11 @@ enum CLI {
             return 0
         case "up", "down":
             guard !name.isEmpty, let t = find() else { return Output.fail("no tunnel named \(name)") }
-            guard await WireGuard.setConnected(t, sub == "up") else { return Output.fail("scutil failed for \(t.name)") }
             let on = sub == "up"
+            if on && AppSettings().data.wireguard.exclusive && !a.flags.contains("keep") {
+                for o in await WireGuard.stopOthers(than: t, in: tunnels) { print("\(o.name): deactivated") }
+            }
+            guard await WireGuard.setConnected(t, on) else { return Output.fail("scutil failed for \(t.name)") }
             print("\(t.name): \(on ? "activating" : "deactivating")…")
             let last = await WireGuard.waitUntilSettled(t, on)
             guard last == (on ? "Connected" : "Disconnected") else {
@@ -399,7 +402,7 @@ enum CLI {
             print("disconnected \(await WireGuard.disconnectAll())")
             return 0
         default:
-            return Output.fail("usage: hop wg list | up <name> | down <name> | down-all")
+            return Output.fail("usage: hop wg list | up <name> [--keep] | down <name> | down-all")
         }
     }
 
