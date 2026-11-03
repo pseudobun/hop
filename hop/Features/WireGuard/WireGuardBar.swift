@@ -1,15 +1,44 @@
 import AppKit
+import Carbon.HIToolbox
 
 /// A row under the root search field that the launcher shows when it has something in it.
 protocol LauncherStrip: NSView {
     /// Hidden while false (nothing to show, or the feature is off).
     var hasContent: Bool { get }
-    /// Called when `hasContent` changes, so the launcher can collapse or expand the row.
+    /// Keys go to the strip (a selector in it) instead of the results.
+    var isFocused: Bool { get }
+    /// What ↵ does to the selected element while focused, for the footer.
+    var focusedActionTitle: String? { get }
+    /// Called when `hasContent` or `isFocused` changes, so the launcher can update the row and footer.
     var onContentChange: (() -> Void)? { get set }
     /// Keys the strip owns while the root search is in front; true consumes the event.
     func handle(_ event: NSEvent) -> Bool
     func launcherDidShow()
     func launcherDidHide()
+}
+
+extension HotkeySpec {
+    /// Same key (by key code, so any keyboard layout) and exactly the same modifiers.
+    func matches(_ event: NSEvent) -> Bool {
+        var mods: UInt32 = 0
+        let flags = event.modifierFlags.intersection(KeyCombo.relevant)
+        if flags.contains(.command) { mods |= UInt32(cmdKey) }
+        if flags.contains(.control) { mods |= UInt32(controlKey) }
+        if flags.contains(.option) { mods |= UInt32(optionKey) }
+        if flags.contains(.shift) { mods |= UInt32(shiftKey) }
+        return UInt32(event.keyCode) == keyCode && mods == modifiers
+    }
+
+    /// "⌃⌥⇧⌘J" for a keycap.
+    var display: String {
+        var s = ""
+        if modifiers & UInt32(controlKey) != 0 { s += "⌃" }
+        if modifiers & UInt32(optionKey) != 0 { s += "⌥" }
+        if modifiers & UInt32(shiftKey) != 0 { s += "⇧" }
+        if modifiers & UInt32(cmdKey) != 0 { s += "⌘" }
+        let name = Self.keyCodes.first { $0.value == Int(keyCode) && $0.key != "enter" }?.key ?? "?"
+        return s + (name.count == 1 ? name.uppercased() : name.capitalized)
+    }
 }
 
 nonisolated extension WireGuard {
@@ -25,7 +54,8 @@ nonisolated extension WireGuard {
     }
 }
 
-/// Tunnels as pills under the search field: status at a glance, click or ⌃1…⌃9 to toggle.
+/// Tunnels as pills under the search field: status at a glance, click to toggle, or
+/// `wireguard.keys.focus` to select one with ←→ and toggle it with ↵.
 /// Polls `scutil --nc list` only while the launcher is open.
 final class WireGuardBar: NSView, LauncherStrip {
     var onContentChange: (() -> Void)?
@@ -37,6 +67,25 @@ final class WireGuardBar: NSView, LauncherStrip {
         didSet { if hasContent != oldValue { onContentChange?() } }
     }
 
+    /// Selected pill while the bar has the keys; nil when the search field has them.
+    private var selected: Int? {
+        didSet {
+            guard selected != oldValue else { return }
+            updateSelection()
+            onContentChange?()
+        }
+    }
+
+    var isFocused: Bool { selected != nil }
+
+    var focusedActionTitle: String? {
+        guard let i = selected, i < tunnels.count else { return nil }
+        let t = tunnels[i]
+        return t.isTransitioning ? nil : t.isConnected ? "Deactivate \(t.name)" : "Activate \(t.name)"
+    }
+
+    private var keys: HopConfig.WireGuard.Keys { config().keys }
+
     private var tunnels: [WireGuardTunnel] = []
     /// Tunnels being started or stopped from here: polling leaves their state alone.
     private var tracking: Set<String> = []
@@ -44,6 +93,7 @@ final class WireGuardBar: NSView, LauncherStrip {
     private let icon = NSImageView()
     private let stack = NSStackView()
     private let more = WireGuardPill()
+    private let hint = NSTextField(labelWithString: "")
     private var pills: [WireGuardPill] = []
     private var fittedWidth: CGFloat = -1
 
@@ -56,7 +106,9 @@ final class WireGuardBar: NSView, LauncherStrip {
         stack.spacing = 6
         stack.detachesHiddenViews = true
         more.onClick = { [weak self] in self?.onShowAll?() }
-        for v in [icon, stack] as [NSView] {
+        hint.font = Theme.mono(10, 500)
+        hint.textColor = Theme.mutedForeground
+        for v in [icon, stack, hint] as [NSView] {
             v.translatesAutoresizingMaskIntoConstraints = false
             addSubview(v)
         }
@@ -65,6 +117,8 @@ final class WireGuardBar: NSView, LauncherStrip {
             icon.centerYAnchor.constraint(equalTo: centerYAnchor),
             stack.leadingAnchor.constraint(equalTo: icon.trailingAnchor, constant: 10),
             stack.centerYAnchor.constraint(equalTo: centerYAnchor),
+            hint.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -18),
+            hint.centerYAnchor.constraint(equalTo: centerYAnchor),
         ])
     }
 
@@ -89,7 +143,10 @@ final class WireGuardBar: NSView, LauncherStrip {
         }
     }
 
-    func launcherDidHide() { stop() }
+    func launcherDidHide() {
+        stop()
+        selected = nil
+    }
 
     private func stop() {
         poll?.cancel()
@@ -97,11 +154,64 @@ final class WireGuardBar: NSView, LauncherStrip {
     }
 
     func handle(_ event: NSEvent) -> Bool {
-        guard hasContent, event.modifierFlags.intersection(KeyCombo.relevant) == .control,
-              let c = event.charactersIgnoringModifiers, let n = Int(c), (1...9).contains(n), n <= tunnels.count
-        else { return false }
-        toggle(tunnels[n - 1])
+        guard hasContent else { return false }
+        let keys = keys
+        if let spec = HotkeySpec.parse(keys.focus), spec.matches(event) {
+            selected = selected == nil ? firstSelection : nil
+            return true
+        }
+        if let spec = HotkeySpec.parse(keys.disconnectAll), spec.matches(event) {
+            disconnectAll()
+            return true
+        }
+        if !keys.direct.isEmpty {
+            for n in 1...min(9, tunnels.count) {
+                if let spec = HotkeySpec.parse("\(keys.direct)+\(n)"), spec.matches(event) {
+                    toggle(tunnels[n - 1])
+                    return true
+                }
+            }
+        }
+        guard let i = selected else { return false }
+        let bare = event.modifierFlags.intersection(KeyCombo.relevant).isEmpty
+        let shift = event.modifierFlags.intersection(KeyCombo.relevant) == .shift
+        switch event.keyCode {
+        case 123 where bare, 48 where shift: selected = step(from: i, by: -1) // ←, ⇧Tab
+        case 124 where bare, 48 where bare: selected = step(from: i, by: 1) // →, Tab
+        case 36 where bare, 76 where bare, 49 where bare: // ↵, Space
+            if i < tunnels.count { toggle(tunnels[i]) } else { onShowAll?() }
+        case 53, 125, 126: selected = nil // Esc, ↓, ↑: back to the results
+        default:
+            // Anything else is typing: hand the keys back to the search field.
+            selected = nil
+            return false
+        }
         return true
+    }
+
+    /// Visible pills (and "+N") in order, as indices into `tunnels`; `tunnels.count` is "+N".
+    private var selectable: [Int] {
+        pills.indices.filter { !pills[$0].isHidden } + (more.isHidden ? [] : [tunnels.count])
+    }
+
+    /// The active tunnel, else the first.
+    private var firstSelection: Int? {
+        let s = selectable
+        return s.first { $0 < tunnels.count && tunnels[$0].isConnected } ?? s.first
+    }
+
+    private func step(from i: Int, by d: Int) -> Int {
+        let s = selectable
+        guard let at = s.firstIndex(of: i) else { return s.first ?? i }
+        return s[(at + d + s.count) % s.count]
+    }
+
+    #if DEBUG
+    func debugFocus() { selected = firstSelection }
+    #endif
+
+    private func disconnectAll() {
+        for t in tunnels where t.isConnected && !tracking.contains(t.serviceID) { toggle(t) }
     }
 
     // MARK: - State
@@ -151,17 +261,19 @@ final class WireGuardBar: NSView, LauncherStrip {
         pills = []
         for (i, t) in tunnels.enumerated() {
             let pill = WireGuardPill()
+            let direct = keys.direct.isEmpty || i >= 9 ? nil : HotkeySpec.parse("\(keys.direct)+\(i + 1)")?.display
             pill.configure(title: showFlags ? "\(t.flag) \(t.name)" : t.name,
                            state: t.isTransitioning ? .busy : t.isConnected ? .on : .off,
-                           key: i < 9 ? "⌃\(i + 1)" : nil)
+                           key: direct, status: true)
             pill.toolTip = "\(t.name): \(t.label)"
             pill.onClick = { [weak self] in self?.toggle(t) }
             stack.addArrangedSubview(pill)
             pills.append(pill)
         }
-        more.configure(title: "+0", state: .off, key: nil)
+        more.configure(title: "+0", state: .off, key: nil, status: false)
         more.toolTip = "All WireGuard tunnels"
         stack.addArrangedSubview(more)
+        hint.stringValue = HotkeySpec.parse(keys.focus)?.display ?? ""
         fittedWidth = -1
         needsLayout = true
         let anyOn = tunnels.contains { $0.isConnected }
@@ -178,12 +290,12 @@ final class WireGuardBar: NSView, LauncherStrip {
     private func fit() {
         fittedWidth = bounds.width
         // Leading inset, icon, gap; trailing inset.
-        let available = bounds.width - (22 + icon.fittingSize.width + 10) - 18
+        let available = bounds.width - (22 + icon.fittingSize.width + 10) - 18 - (hint.stringValue.isEmpty ? 0 : hint.fittingSize.width + 12)
         let gap = stack.spacing
         let widths = pills.map(\.fittingSize.width)
         var shown = Set(tunnels.indices.filter { tunnels[$0].isConnected || tunnels[$0].isTransitioning })
         var used = shown.reduce(0) { $0 + widths[$1] + gap }
-        more.configure(title: "+\(pills.count)", state: .off, key: nil)
+        more.configure(title: "+\(pills.count)", state: .off, key: nil, status: false)
         let moreWidth = more.fittingSize.width + gap
         let all = widths.reduce(0) { $0 + $1 + gap }
         // In order, stopping at the first that does not fit, with room left for "+N".
@@ -194,8 +306,16 @@ final class WireGuardBar: NSView, LauncherStrip {
         }
         for (i, pill) in pills.enumerated() { pill.isHidden = !shown.contains(i) }
         let hidden = pills.count - shown.count
-        more.configure(title: "+\(hidden)", state: .off, key: nil)
+        more.configure(title: "+\(hidden)", state: .off, key: nil, status: false)
         more.isHidden = hidden == 0
+        if let i = selected, !selectable.contains(i) { selected = firstSelection }
+        updateSelection()
+    }
+
+    private func updateSelection() {
+        for (i, pill) in pills.enumerated() { pill.isSelected = selected == i }
+        more.isSelected = selected == tunnels.count
+        hint.textColor = selected == nil ? Theme.mutedForeground : Theme.info
     }
 
 }
@@ -210,6 +330,12 @@ final class WireGuardPill: NSView {
     private let label = NSTextField(labelWithString: "")
     private let keyLabel = NSTextField(labelWithString: "")
     private var state = State.off
+    private var tone = Theme.mutedForeground
+
+    /// Keyboard selection in the bar: an info-coloured ring.
+    var isSelected = false {
+        didSet { if isSelected != oldValue { applyColors() } }
+    }
 
     override init(frame: NSRect) {
         super.init(frame: frame)
@@ -240,22 +366,20 @@ final class WireGuardPill: NSView {
 
     required init?(coder: NSCoder) { fatalError() }
 
-    func configure(title: String, state: State, key: String?) {
+    func configure(title: String, state: State, key: String?, status: Bool) {
         self.title = title
         self.state = state
         label.stringValue = title
         keyLabel.stringValue = key ?? ""
         keyLabel.isHidden = key == nil
-        let tone: NSColor = switch state {
+        tone = switch state {
         case .on: Theme.good
         case .busy: Theme.warn
         case .off: Theme.mutedForeground
         }
-        dot.isHidden = key == nil // the "+N" pill has no status
+        dot.isHidden = !status // the "+N" pill has no status
         dot.layer?.backgroundColor = (state == .off ? Theme.mutedForeground.withAlphaComponent(0.5) : tone).cgColor
-        label.textColor = state == .off ? Theme.mutedForeground : Theme.foreground
-        layer?.backgroundColor = (state == .off ? Theme.foreground.withAlphaComponent(0.05) : tone.withAlphaComponent(0.14)).cgColor
-        layer?.borderColor = (state == .off ? Theme.border : tone.withAlphaComponent(0.35)).cgColor
+        applyColors()
         dot.layer?.removeAnimation(forKey: "pulse")
         if state == .busy {
             let pulse = CABasicAnimation(keyPath: "opacity")
@@ -266,6 +390,14 @@ final class WireGuardPill: NSView {
             pulse.repeatCount = .infinity
             dot.layer?.add(pulse, forKey: "pulse")
         }
+    }
+
+    private func applyColors() {
+        label.textColor = state == .off && !isSelected ? Theme.mutedForeground : Theme.foreground
+        layer?.backgroundColor = (state == .off ? Theme.foreground.withAlphaComponent(isSelected ? 0.10 : 0.05)
+            : tone.withAlphaComponent(isSelected ? 0.22 : 0.14)).cgColor
+        layer?.borderColor = (isSelected ? Theme.info : state == .off ? Theme.border : tone.withAlphaComponent(0.35)).cgColor
+        layer?.borderWidth = isSelected ? 1.5 : 0.5
     }
 
     override func mouseDown(with event: NSEvent) {}

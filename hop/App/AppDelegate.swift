@@ -134,6 +134,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.launcher.push(WireGuardMode(showFlags: wg.showFlags, sensitivity: settings.data.general.sensitivity))
         }
         launcher.setStrip(wireGuardBar)
+        #if DEBUG
+        if UserDefaults.standard.bool(forKey: "DebugWireGuardFocus") {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { wireGuardBar.debugFocus() }
+        }
+        #endif
         launcher.onItemPerformed = { item, index in
             if index == 0 && item.tracksFrecency { frecency.recordVisit(item.id) }
         }

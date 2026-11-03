@@ -78,6 +78,7 @@ final class LauncherController: NSObject, LauncherContext, NSTableViewDataSource
         let shown = stripShown
         stripHolder.isHidden = !shown
         stripHeight.constant = shown ? Self.stripRowHeight : 0
+        updateFooter()
     }
 
     // MARK: - LauncherContext
@@ -333,6 +334,12 @@ final class LauncherController: NSObject, LauncherContext, NSTableViewDataSource
     }
 
     private func updateFooter() {
+        if current === root, let strip, strip.isFocused {
+            footerTitle.attributedStringValue = strip.focusedActionTitle.map { Keycap.label($0, keys: "↵") } ?? NSAttributedString()
+            footerActions.attributedStringValue = Keycap.label("Back", keys: "esc")
+            footerActions.isHidden = false
+            return
+        }
         footerTitle.attributedStringValue = selectedItem?.actions.first.map { Keycap.label($0.title, keys: "↵") } ?? NSAttributedString()
         footerActions.attributedStringValue = Keycap.label("Actions", keys: ["→", "⌘K"])
         footerActions.isHidden = (selectedItem?.actions.count ?? 0) < 2

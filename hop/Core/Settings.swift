@@ -30,6 +30,16 @@ nonisolated struct HopConfig: Decodable, Equatable, Sendable {
         var bar = true
         /// Names shown in the bar, in this order; empty shows every tunnel.
         var barTunnels: [String] = []
+        var keys = Keys()
+
+        /// Launcher keys for the bar, in hotkey syntax ("cmd+j"); "" turns one off.
+        nonisolated struct Keys: Decodable, Equatable, Sendable {
+            /// Moves the keys into the bar: ←→ select, ↵ toggles, Esc back.
+            var focus = "cmd+j"
+            var disconnectAll = "cmd+shift+j"
+            /// Modifiers for 1…9 that toggle a tunnel straight away, e.g. "alt+cmd"; "" = off.
+            var direct = ""
+        }
     }
 
     nonisolated struct KeePass: Decodable, Equatable, Sendable {
@@ -313,13 +323,24 @@ nonisolated extension HopConfig.HyperKey {
 }
 
 nonisolated extension HopConfig.WireGuard {
-    private enum Keys: String, CodingKey { case enabled, showFlags, bar, barTunnels }
+    private enum Fields: String, CodingKey { case enabled, showFlags, bar, barTunnels, keys }
     init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: Keys.self), d = Self()
+        let c = try decoder.container(keyedBy: Fields.self), d = Self()
         enabled = try c.value(.enabled, d.enabled)
         showFlags = try c.value(.showFlags, d.showFlags)
         bar = try c.value(.bar, d.bar)
         barTunnels = try c.value(.barTunnels, d.barTunnels)
+        keys = try c.value(.keys, d.keys)
+    }
+}
+
+nonisolated extension HopConfig.WireGuard.Keys {
+    private enum Keys: String, CodingKey { case focus, disconnectAll, direct }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: Keys.self), d = Self()
+        focus = try c.value(.focus, d.focus)
+        disconnectAll = try c.value(.disconnectAll, d.disconnectAll)
+        direct = try c.value(.direct, d.direct)
     }
 }
 
@@ -641,10 +662,18 @@ final class AppSettings {
         enabled: true,
         // Flag from a tunnel name prefix: "si-home" → 🇸🇮
         showFlags: true,
-        // Tunnels as pills under the search field: click or ⌃1…⌃9 to toggle
+        // Tunnels as pills under the search field, click one to toggle it
         bar: true,
         // Which tunnels the bar shows, in order; [] shows all, e.g. ["si-home", "Office"]
         barTunnels: [],
+        // Keys in the launcher, hotkey syntax; "" turns one off
+        keys: {
+          // Select in the bar: ←→ (Tab) move, ↵ or Space toggles, Esc goes back
+          focus: "cmd+j",
+          disconnectAll: "cmd+shift+j",
+          // Modifiers for 1…9 to toggle a tunnel at once, e.g. "alt+cmd"
+          direct: "",
+        },
       },
 
       keepass: {

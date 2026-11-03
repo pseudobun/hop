@@ -46,6 +46,10 @@ struct WireGuardTests {
         let c = try decoder.decode(HopConfig.self, from: Data("{ wireguard: { bar: false, barTunnels: ['si-home'] } }".utf8))
         let template = try decoder.decode(HopConfig.self, from: Data(AppSettings.template.utf8))
         #expect(template.wireguard.bar && template.wireguard.barTunnels.isEmpty)
+        #expect(template.wireguard.keys == HopConfig.WireGuard.Keys())
+        let k = try decoder.decode(HopConfig.self, from: Data("{ wireguard: { keys: { focus: 'alt+w', direct: 'alt+cmd' } } }".utf8))
+        #expect(k.wireguard.keys.focus == "alt+w" && k.wireguard.keys.direct == "alt+cmd" && k.wireguard.keys.disconnectAll == "cmd+shift+j")
+        #expect(HotkeySpec.parse("cmd+j")?.display == "⌘J" && HotkeySpec.parse("alt+cmd+1")?.display == "⌥⌘1")
         #expect(!c.wireguard.bar && c.wireguard.barTunnels == ["si-home"])
         #expect(HopConfig().wireguard.bar && HopConfig().wireguard.barTunnels.isEmpty)
     }
