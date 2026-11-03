@@ -97,6 +97,21 @@ struct EmojiTests {
         #expect(EmojiMode.codePoints("👍🏽") == "U+1F44D U+1F3FD" && EmojiMode.codePoints("❤️") == "U+2764")
     }
 
+    @Test func choosesSkinTone() throws {
+        let usage = EmojiUsage(store: JSONStore(url: FileManager.default.temporaryDirectory.appending(path: "hop-emoji-\(UUID().uuidString).json")))
+        let mode = EmojiMode(usage: usage, skinTone: .medium, index: Self.index)
+        let thumbs = try #require(mode.sections(for: "thumbs up")[0].items.first)
+        #expect(thumbs.actions.contains { $0.title == "Choose Skin Tone" })
+        #expect(!(mode.sections(for: "fire")[0].items.first?.actions.contains { $0.title == "Choose Skin Tone" } ?? true))
+
+        let tones = EmojiToneMode(index: Self.index, entry: Self.index.entry(for: "👍")!, usage: usage, selected: .medium)
+        let glyphs = tones.sections(for: "")[0].items.map { item -> String in
+            if case .emoji(let e) = item.icon { e } else { "" }
+        }
+        #expect(glyphs == ["👍🏽", "👍", "👍🏻", "👍🏼", "👍🏾", "👍🏿"])
+        #expect(tones.sections(for: "dark")[0].items.map(\.subtitle) == ["Medium-Dark", "Dark"])
+    }
+
     @Test func configDefaults() throws {
         let decoder = JSONDecoder()
         decoder.allowsJSON5 = true

@@ -209,43 +209,109 @@ final class EmojiMode: Mode {
         return sections
     }
 
-    /// One cell: ↵ pastes into the app behind hop, ⌘C copies.
+    /// One cell: ↵ pastes into the app behind hop, ⌘C copies, ⌘T picks a skin tone.
     func item(_ index: EmojiIndex, _ i: Int, id: String) -> Item {
         let entry = index.entries[i]
         let emoji = index.applying(skinTone, to: entry)
         let name = entry.name.prefix(1).uppercased() + entry.name.dropFirst()
-        let usage = usage, base = entry.emoji
-        let record = { usage.record(base) }
+        let usage = usage, base = entry.emoji, tone = skinTone
+        var actions = Self.actions(emoji, name: name, record: { usage.record(base) }) { [weak self] in self?.context?.dismiss() }
+        if entry.takesSkinTone {
+            actions.append(Action(title: "Choose Skin Tone", symbol: "hand.raised", shortcut: .cmd("t")) {
+                .push(EmojiToneMode(index: index, entry: i, usage: usage, selected: tone))
+            })
+        }
         return Item(id: id, title: name, subtitle: entry.keywords.prefix(5).joined(separator: " · "), icon: .emoji(emoji),
-                    actions: [
-                        Action(title: "Paste Emoji", symbol: "doc.on.clipboard") { [weak self] in
-                            record()
-                            self?.context?.dismiss()
-                            if !(await Pasteboard.paste(emoji, concealed: false)) {
-                                HUD.shared.show("Copied. Allow hop in Accessibility to paste")
-                            }
-                            return .stay
-                        },
-                        Action(title: "Copy Emoji", symbol: "doc.on.doc", shortcut: .cmd("c")) {
-                            record()
-                            Pasteboard.copy(emoji)
-                            return .dismissWithHUD("Copied \(emoji)")
-                        },
-                        Action(title: "Copy Name", symbol: "textformat", shortcut: .cmd("c", .shift)) {
-                            Pasteboard.copy(name)
-                            return .dismissWithHUD("Copied \(name)")
-                        },
-                        Action(title: "Copy Unicode Code", symbol: "number", shortcut: .cmd("c", .option)) {
-                            let code = Self.codePoints(emoji)
-                            Pasteboard.copy(code)
-                            return .dismissWithHUD("Copied \(code)")
-                        },
-                    ], tracksFrecency: false)
+                    actions: actions, tracksFrecency: false)
+    }
+
+    /// Paste, copy, copy name, copy code; `dismiss` hides the launcher before pasting.
+    static func actions(_ emoji: String, name: String, record: @escaping () -> Void,
+                        dismiss: @escaping () -> Void) -> [Action] {
+        [
+            Action(title: "Paste Emoji", symbol: "doc.on.clipboard") {
+                record()
+                dismiss()
+                if !(await Pasteboard.paste(emoji, concealed: false)) {
+                    HUD.shared.show("Copied. Allow hop in Accessibility to paste")
+                }
+                return .stay
+            },
+            Action(title: "Copy Emoji", symbol: "doc.on.doc", shortcut: .cmd("c")) {
+                record()
+                Pasteboard.copy(emoji)
+                return .dismissWithHUD("Copied \(emoji)")
+            },
+            Action(title: "Copy Name", symbol: "textformat", shortcut: .cmd("c", .shift)) {
+                Pasteboard.copy(name)
+                return .dismissWithHUD("Copied \(name)")
+            },
+            Action(title: "Copy Unicode Code", symbol: "number", shortcut: .cmd("c", .option)) {
+                let code = codePoints(emoji)
+                Pasteboard.copy(code)
+                return .dismissWithHUD("Copied \(code)")
+            },
+        ]
     }
 
     /// "U+1F44D U+1F3FD", without variation selectors.
     static func codePoints(_ emoji: String) -> String {
         emoji.unicodeScalars.filter { $0.value != 0xFE0F }
             .map { "U+" + String($0.value, radix: 16, uppercase: true) }.joined(separator: " ")
+    }
+}
+
+/// One emoji in every skin tone (⌘T on a cell); typing filters by tone ("dark").
+final class EmojiToneMode: Mode {
+    let title: String? = "Skin Tone"
+    let tint: NSColor? = Palette.emoji
+    let placeholder = "Filter skin tones… (light, medium, dark)"
+    var layout: ResultLayout { .grid(columns: SkinTone.allCases.count) }
+
+    private let index: EmojiIndex
+    private let entry: Int
+    private let usage: EmojiUsage
+    /// The configured tone, listed first so ↵ keeps today's behaviour.
+    private let selected: SkinTone
+    private weak var context: LauncherContext?
+
+    init(index: EmojiIndex, entry: Int, usage: EmojiUsage, selected: SkinTone) {
+        self.index = index
+        self.entry = entry
+        self.usage = usage
+        self.selected = selected
+    }
+
+    func didEnter(_ context: LauncherContext) { self.context = context }
+
+    func sections(for query: String) -> [ResultSection] {
+        let e = index.entries[entry]
+        let base = e.name.prefix(1).uppercased() + e.name.dropFirst()
+        let q = query.trimmingCharacters(in: .whitespaces).lowercased()
+        let tones = [selected] + SkinTone.allCases.filter { $0 != selected }
+        let usage = usage
+        let items = tones.compactMap { tone -> Item? in
+            guard q.isEmpty || tone.label.lowercased().contains(q) else { return nil }
+            let emoji = index.applying(tone, to: e)
+            let name = tone == .none ? base : "\(base): \(tone.label.lowercased()) skin tone"
+            return Item(id: "emoji.tone.\(tone.rawValue)", title: name, subtitle: tone.label, icon: .emoji(emoji),
+                        actions: EmojiMode.actions(emoji, name: name, record: { usage.record(e.emoji) }) { [weak self] in
+                            self?.context?.dismiss()
+                        }, tracksFrecency: false)
+        }
+        return [ResultSection(title: nil, items: items)]
+    }
+}
+
+extension SkinTone {
+    var label: String {
+        switch self {
+        case .none: "Default"
+        case .light: "Light"
+        case .mediumLight: "Medium-Light"
+        case .medium: "Medium"
+        case .mediumDark: "Medium-Dark"
+        case .dark: "Dark"
+        }
     }
 }
