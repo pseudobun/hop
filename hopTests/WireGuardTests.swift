@@ -18,6 +18,14 @@ struct WireGuardTests {
         #expect(t.filter(\.isConnected).count == 1)
     }
 
+    @Test func statusLabels() {
+        #expect(WireGuard.label(for: "Connecting") == "Activating…")
+        #expect(WireGuard.label(for: "Connected") == "Activated")
+        #expect(WireGuard.label(for: "Disconnecting") == "Deactivating…")
+        #expect(WireGuard.label(for: "Disconnected") == "Deactivated")
+        #expect(WireGuard.isTransitioning("Reasserting") && !WireGuard.isTransitioning("Connected"))
+    }
+
     @Test func flags() {
         #expect(WireGuard.flag(for: "si-home") == "🇸🇮")
         #expect(WireGuard.flag(for: "gb09-london") == "🇬🇧")

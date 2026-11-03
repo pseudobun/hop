@@ -386,7 +386,13 @@ enum CLI {
         case "up", "down":
             guard !name.isEmpty, let t = find() else { return Output.fail("no tunnel named \(name)") }
             guard await WireGuard.setConnected(t, sub == "up") else { return Output.fail("scutil failed for \(t.name)") }
-            print("\(t.name): \(sub == "up" ? "connecting" : "disconnecting")")
+            let on = sub == "up"
+            print("\(t.name): \(on ? "activating" : "deactivating")…")
+            let last = await WireGuard.waitUntilSettled(t, on)
+            guard last == (on ? "Connected" : "Disconnected") else {
+                return Output.fail("\(t.name): \(last.map(WireGuard.label(for:)) ?? "unknown")")
+            }
+            print("\(t.name): \(on ? "activated" : "deactivated")")
             return 0
         case "down-all":
             print("disconnected \(await WireGuard.disconnectAll())")

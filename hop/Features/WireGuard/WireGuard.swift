@@ -9,6 +9,10 @@ nonisolated struct WireGuardTunnel: Sendable, Equatable {
     let status: String
 
     var flag: String { WireGuard.flag(for: name) }
+    /// scutil reports Connecting / Disconnecting / Reasserting while the extension works.
+    var isTransitioning: Bool { WireGuard.isTransitioning(status) }
+    /// WireGuard.app wording: Activating → Activated, Deactivating → Deactivated.
+    var label: String { WireGuard.label(for: status) }
 }
 
 /// Port of github.com/raycast/extensions/extensions/wireguard (MIT): list via
@@ -37,6 +41,46 @@ nonisolated enum WireGuard {
         let code = m.1.uppercased()
         guard code.unicodeScalars.allSatisfy({ $0.value >= 65 && $0.value <= 90 }) else { return pirate }
         return String(String.UnicodeScalarView(code.unicodeScalars.compactMap { Unicode.Scalar(0x1F1A5 + $0.value) }))
+    }
+
+    static func isTransitioning(_ status: String) -> Bool {
+        ["Connecting", "Disconnecting", "Reasserting"].contains(status)
+    }
+
+    static func label(for status: String) -> String {
+        switch status {
+        case "Connected": "Activated"
+        case "Connecting", "Reasserting": "Activating…"
+        case "Disconnecting": "Deactivating…"
+        case "Disconnected": "Deactivated"
+        default: status
+        }
+    }
+
+    /// First line of `scutil --nc status <id>`: Connected, Connecting, Disconnecting, Disconnected…
+    static func status(of tunnel: WireGuardTunnel) async -> String? {
+        guard let r = try? await ProcessRunner.run(scutil, ["--nc", "status", tunnel.serviceID], timeout: .seconds(5)), r.ok,
+              let first = r.out.split(separator: "\n").first else { return nil }
+        return first.trimmingCharacters(in: .whitespaces)
+    }
+
+    /// `scutil --nc start|stop` returns at once; poll until the extension reaches `on`, settles
+    /// elsewhere, or `timeout` passes. Calls `progress` with each status seen; returns the last one.
+    static func waitUntilSettled(_ tunnel: WireGuardTunnel, _ on: Bool, timeout: Duration = .seconds(20),
+                                 progress: (String) async -> Void = { _ in }) async -> String? {
+        let start = ContinuousClock.now
+        let target = on ? "Connected" : "Disconnected"
+        var last: String?
+        while ContinuousClock.now - start < timeout {
+            if let s = await status(of: tunnel) {
+                if s != last { await progress(s) }
+                last = s
+                // Right after start/stop scutil may still report the old state for a moment.
+                if s == target || (!isTransitioning(s) && ContinuousClock.now - start > .seconds(2)) { break }
+            }
+            try? await Task.sleep(for: .milliseconds(300))
+        }
+        return last
     }
 
     static func list() async -> [WireGuardTunnel] {
@@ -91,6 +135,36 @@ final class WireGuardMode: Mode {
         }
     }
 
+    private func chip(for t: WireGuardTunnel) -> Chip? {
+        if t.isTransitioning { return Chip(text: t.label, tone: .warn) }
+        return t.isConnected ? Chip(text: t.label, tone: .good) : nil
+    }
+
+    private func setStatus(_ status: String, of t: WireGuardTunnel) {
+        guard let i = tunnels.firstIndex(where: { $0.serviceID == t.serviceID }) else { return }
+        tunnels[i] = WireGuardTunnel(name: t.name, serviceID: t.serviceID, isConnected: status == "Connected", status: status)
+        context?.reload()
+    }
+
+    /// Shows Activating…/Deactivating… on the row until scutil reports the tunnel settled.
+    private func track(_ t: WireGuardTunnel, _ on: Bool) {
+        setStatus(on ? "Connecting" : "Disconnecting", of: t)
+        Task {
+            let last = await WireGuard.waitUntilSettled(t, on) { [weak self] s in
+                if WireGuard.isTransitioning(s) || s == (on ? "Connected" : "Disconnected") { self?.setStatus(s, of: t) }
+            }
+            refresh()
+            switch last {
+            case (on ? "Connected" : "Disconnected"):
+                context?.showHUD("\(t.name) \(on ? "activated" : "deactivated")")
+            case let s? where WireGuard.isTransitioning(s):
+                context?.showHUD("\(t.name) is still \(WireGuard.label(for: s).lowercased())")
+            default:
+                context?.showHUD("\(t.name) did not \(on ? "activate" : "deactivate")")
+            }
+        }
+    }
+
     func sections(for query: String) -> [ResultSection] {
         var list = tunnels
         if !query.isEmpty {
@@ -104,15 +178,18 @@ final class WireGuardMode: Mode {
                 icon: .symbol("exclamationmark.triangle"), actions: [], tracksFrecency: false)])]
         }
         let items = list.map { t in
-            Item(id: "wg." + t.serviceID, title: showFlags ? "\(t.flag) \(t.name)" : t.name, subtitle: t.status,
-                 icon: .tile(t.isConnected ? "lock.shield.fill" : "shield.slash.fill", t.isConnected ? Theme.good : Palette.neutral),
-                 accessory: t.isConnected ? nil : "Disconnected",
-                 actions: [Action(title: t.isConnected ? "Disconnect" : "Connect") { [weak self] in
-                     let ok = await WireGuard.setConnected(t, !t.isConnected)
-                     self?.refresh(after: .seconds(1))
-                     guard ok else { return .failWithHUD("scutil could not \(t.isConnected ? "stop" : "start") \(t.name)") }
-                     return .dismissWithHUD("\(t.name) is \(t.isConnected ? "disconnected" : "connecting")")
-                 }], tracksFrecency: false, chip: t.isConnected ? Chip(text: "Connected", tone: .good) : nil)
+            Item(id: "wg." + t.serviceID, title: showFlags ? "\(t.flag) \(t.name)" : t.name, subtitle: t.label,
+                 icon: .tile(t.isTransitioning ? "shield.lefthalf.filled" : t.isConnected ? "lock.shield.fill" : "shield.slash.fill",
+                             t.isTransitioning ? Theme.warn : t.isConnected ? Theme.good : Palette.neutral),
+                 accessory: t.isConnected || t.isTransitioning ? nil : "Deactivated",
+                 actions: t.isTransitioning ? [] : [Action(title: t.isConnected ? "Deactivate" : "Activate") { [weak self] in
+                     let on = !t.isConnected
+                     guard await WireGuard.setConnected(t, on) else {
+                         return .failWithHUD("scutil could not \(on ? "start" : "stop") \(t.name)")
+                     }
+                     self?.track(t, on)
+                     return .stay
+                 }], tracksFrecency: false, chip: chip(for: t))
         }
         return [ResultSection(title: "Tunnels", items: items)]
     }
