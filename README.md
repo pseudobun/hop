@@ -23,7 +23,7 @@ A tiny native macOS launcher. Pure Swift + AppKit, no WebKit. ~3.5 MB binary, ~4
 - Kill Process: search running processes, quit, force kill or kill as administrator
 - Caps Lock as Hyper key (⌃⌥⌘⇧), optional tap-for-Escape
 - Five gentle Caps Lock LED blinks on launch/restart (where macOS supports the LED override), without changing Caps Lock's typing state
-- WireGuard: connect, disconnect, disconnect all (WireGuard.app tunnels)
+- WireGuard: tunnels as pills under the search field with live status (green on, amber activating); click or ⌃1…⌃9 toggles, "+N" opens the full list. `wireguard.barTunnels` picks and orders them, `wireguard.bar: false` hides the bar. Also connect, disconnect, disconnect all as commands (WireGuard.app tunnels)
 - Notes on ⌥. : a keyboard-first floating window over a folder of Markdown files (an Obsidian vault works as is). Search titles and text, live Markdown styling, ⌘E preview with tables, tasks, `[[links]]`, back / forward, pinned notes on top, move to Trash, new notes saved straight into the vault
 - Clipboard History on ⇧⌥C, centred like the launcher: text, images, links, colours and files you copied, list on the left and a preview on the right (rendered Markdown, code, colour swatch with HEX / RGB / HSL, images), source app and stats. ↵ pastes into the app you were in, ⌘↵ copies, ⇧⌘P pins, ⌃X deletes, ⌘K for the rest, ⌘P filters by type
 - Snippets: type a keyword anywhere (`;mail`) and it becomes the snippet, or search them in hop. Raycast's placeholders (`{clipboard}`, `{date format="…" offset="+1d"}`, `{time}`, `{uuid}`, `{cursor}`, `{argument}`, `{snippet}`, `{calculator}`, `| trim | uppercase` …), checked against Raycast's own parser

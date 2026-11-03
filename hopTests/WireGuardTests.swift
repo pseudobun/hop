@@ -32,4 +32,21 @@ struct WireGuardTests {
         #expect(WireGuard.flag(for: "Office") == "🏴‍☠️")
         #expect(WireGuard.flag(for: "12-x") == "🏴‍☠️")
     }
+
+    @Test func barOrder() {
+        let t = WireGuard.parse(Self.sample)
+        // Stable by name, not connected-first, so ⌃N keeps meaning the same tunnel.
+        #expect(WireGuard.barOrder(t, pinned: []).map(\.name) == ["gb09-london", "Office", "si-home"])
+        #expect(WireGuard.barOrder(t, pinned: ["office", "si-home", "missing"]).map(\.name) == ["Office", "si-home"])
+    }
+
+    @Test func barConfig() throws {
+        let decoder = JSONDecoder()
+        decoder.allowsJSON5 = true
+        let c = try decoder.decode(HopConfig.self, from: Data("{ wireguard: { bar: false, barTunnels: ['si-home'] } }".utf8))
+        let template = try decoder.decode(HopConfig.self, from: Data(AppSettings.template.utf8))
+        #expect(template.wireguard.bar && template.wireguard.barTunnels.isEmpty)
+        #expect(!c.wireguard.bar && c.wireguard.barTunnels == ["si-home"])
+        #expect(HopConfig().wireguard.bar && HopConfig().wireguard.barTunnels.isEmpty)
+    }
 }

@@ -41,6 +41,10 @@ final class LauncherController: NSObject, LauncherContext, NSTableViewDataSource
     private let emptyLabel = NSTextField(labelWithString: "No results")
     private let actionPanel = ActionPanelView()
     private var actionPanelHeight: NSLayoutConstraint!
+    /// Optional row under the search field, shown in the root search only (WireGuard tunnels).
+    private var strip: LauncherStrip?
+    private let stripHolder = NSView()
+    private var stripHeight: NSLayoutConstraint!
 
     init(root: Mode) {
         self.root = root
@@ -49,6 +53,31 @@ final class LauncherController: NSObject, LauncherContext, NSTableViewDataSource
         buildViews()
         panel.delegate = self
         panel.keyHandler = { [weak self] in self?.handleKey($0) ?? false }
+    }
+
+    func setStrip(_ view: LauncherStrip) {
+        strip?.removeFromSuperview()
+        strip = view
+        view.translatesAutoresizingMaskIntoConstraints = false
+        stripHolder.addSubview(view)
+        NSLayoutConstraint.activate([
+            view.leadingAnchor.constraint(equalTo: stripHolder.leadingAnchor),
+            view.trailingAnchor.constraint(equalTo: stripHolder.trailingAnchor),
+            view.topAnchor.constraint(equalTo: stripHolder.topAnchor),
+            view.heightAnchor.constraint(equalToConstant: Self.stripRowHeight),
+        ])
+        view.onContentChange = { [weak self] in self?.updateStrip() }
+        updateStrip()
+    }
+
+    private static let stripRowHeight: CGFloat = 34
+
+    private var stripShown: Bool { current === root && strip?.hasContent == true }
+
+    private func updateStrip() {
+        let shown = stripShown
+        stripHolder.isHidden = !shown
+        stripHeight.constant = shown ? Self.stripRowHeight : 0
     }
 
     // MARK: - LauncherContext
@@ -132,6 +161,7 @@ final class LauncherController: NSObject, LauncherContext, NSTableViewDataSource
         refresh(keepSelection: initial == nil)
         panel.positionOnMouseScreen()
         panel.orderFrontRegardless()
+        strip?.launcherDidShow()
         #if DEBUG
         // Offscreen renders must not take keystrokes from whatever the user is typing in.
         if UserDefaults.standard.bool(forKey: "DebugNoFocus") { return }
@@ -165,6 +195,7 @@ final class LauncherController: NSObject, LauncherContext, NSTableViewDataSource
         guard panel.isVisible else { return }
         closeActionPanel()
         panel.orderOut(nil)
+        strip?.launcherDidHide()
         lastHidden = Date()
     }
 
@@ -189,6 +220,7 @@ final class LauncherController: NSObject, LauncherContext, NSTableViewDataSource
         modePill.layer?.backgroundColor = tone.withAlphaComponent(0.15).cgColor
         modePill.textColor = tone
         modePill.isHidden = current.title == nil
+        updateStrip()
         accessoryHolder.arrangedSubviews.forEach { $0.removeFromSuperview() }
         if let accessory = current.accessoryView { accessoryHolder.addArrangedSubview(accessory) }
         panel.makeFirstResponder(activeField)
@@ -316,6 +348,7 @@ final class LauncherController: NSObject, LauncherContext, NSTableViewDataSource
             if bare && (event.keyCode == 123 || event.keyCode == 48) { closeActionPanel(); return true }
             if actionPanel.handle(event) { return true }
         }
+        if current === root, let strip, strip.hasContent, strip.handle(event) { return true }
         let mods = event.modifierFlags.intersection(KeyCombo.relevant)
         switch event.keyCode {
         case 125 where gridColumns != nil: grid.move(rows: 1); return true
@@ -613,18 +646,24 @@ final class LauncherController: NSObject, LauncherContext, NSTableViewDataSource
         grid.onActivate = { [weak self] item in
             if let a = item.actions.first { self?.perform(a, of: item, index: 0) }
         }
-        for v in [header, topDivider, scroll, grid, emptyLabel, bottomDivider, footer, actionPanel] as [NSView] {
+        stripHolder.isHidden = true
+        for v in [header, stripHolder, topDivider, scroll, grid, emptyLabel, bottomDivider, footer, actionPanel] as [NSView] {
             v.translatesAutoresizingMaskIntoConstraints = false
             content.addSubview(v)
         }
         actionPanelHeight = actionPanel.heightAnchor.constraint(equalToConstant: 100)
+        stripHeight = stripHolder.heightAnchor.constraint(equalToConstant: 0)
         NSLayoutConstraint.activate([
             header.topAnchor.constraint(equalTo: content.topAnchor),
             header.leadingAnchor.constraint(equalTo: content.leadingAnchor),
             header.trailingAnchor.constraint(equalTo: content.trailingAnchor),
             header.heightAnchor.constraint(equalToConstant: 62),
             fields.heightAnchor.constraint(equalToConstant: 30),
-            topDivider.topAnchor.constraint(equalTo: header.bottomAnchor),
+            stripHolder.topAnchor.constraint(equalTo: header.bottomAnchor, constant: -6),
+            stripHolder.leadingAnchor.constraint(equalTo: content.leadingAnchor),
+            stripHolder.trailingAnchor.constraint(equalTo: content.trailingAnchor),
+            stripHeight,
+            topDivider.topAnchor.constraint(equalTo: stripHolder.bottomAnchor),
             topDivider.leadingAnchor.constraint(equalTo: content.leadingAnchor),
             topDivider.trailingAnchor.constraint(equalTo: content.trailingAnchor),
             scroll.topAnchor.constraint(equalTo: topDivider.bottomAnchor),

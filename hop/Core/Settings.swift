@@ -26,6 +26,10 @@ nonisolated struct HopConfig: Decodable, Equatable, Sendable {
     nonisolated struct WireGuard: Decodable, Equatable, Sendable {
         var enabled = true
         var showFlags = true
+        /// Tunnels as pills under the root search field.
+        var bar = true
+        /// Names shown in the bar, in this order; empty shows every tunnel.
+        var barTunnels: [String] = []
     }
 
     nonisolated struct KeePass: Decodable, Equatable, Sendable {
@@ -309,11 +313,13 @@ nonisolated extension HopConfig.HyperKey {
 }
 
 nonisolated extension HopConfig.WireGuard {
-    private enum Keys: String, CodingKey { case enabled, showFlags }
+    private enum Keys: String, CodingKey { case enabled, showFlags, bar, barTunnels }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: Keys.self), d = Self()
         enabled = try c.value(.enabled, d.enabled)
         showFlags = try c.value(.showFlags, d.showFlags)
+        bar = try c.value(.bar, d.bar)
+        barTunnels = try c.value(.barTunnels, d.barTunnels)
     }
 }
 
@@ -635,6 +641,10 @@ final class AppSettings {
         enabled: true,
         // Flag from a tunnel name prefix: "si-home" → 🇸🇮
         showFlags: true,
+        // Tunnels as pills under the search field: click or ⌃1…⌃9 to toggle
+        bar: true,
+        // Which tunnels the bar shows, in order; [] shows all, e.g. ["si-home", "Office"]
+        barTunnels: [],
       },
 
       keepass: {

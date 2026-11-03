@@ -84,6 +84,11 @@ nonisolated enum WireGuard {
     }
 
     static func list() async -> [WireGuardTunnel] {
+        #if DEBUG
+        // A saved `scutil --nc list` output, for screenshots on a Mac without tunnels.
+        if let path = UserDefaults.standard.string(forKey: "DebugWireGuardList"),
+           let text = try? String(contentsOfFile: path, encoding: .utf8) { return parse(text) }
+        #endif
         guard let r = try? await ProcessRunner.run(scutil, ["--nc", "list"], timeout: .seconds(10)), r.ok else { return [] }
         return parse(r.out)
     }

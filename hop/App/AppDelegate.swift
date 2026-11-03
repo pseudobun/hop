@@ -127,6 +127,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         launcher.popToRootSeconds = { settings.data.general.popToRootSeconds }
         launcher.keepQueryFor = { settings.data.general.keepQueryFor }
         launcher.onWillShow = { [weak self] in self?.calendar.launcherWillShow() }
+        let wireGuardBar = WireGuardBar()
+        wireGuardBar.config = { settings.data.wireguard }
+        wireGuardBar.onShowAll = { [weak self] in
+            let wg = settings.data.wireguard
+            self?.launcher.push(WireGuardMode(showFlags: wg.showFlags, sensitivity: settings.data.general.sensitivity))
+        }
+        launcher.setStrip(wireGuardBar)
         launcher.onItemPerformed = { item, index in
             if index == 0 && item.tracksFrecency { frecency.recordVisit(item.id) }
         }
