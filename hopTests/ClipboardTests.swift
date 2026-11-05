@@ -55,6 +55,10 @@ struct ClipboardClassifierTests {
     @Test func searchAndGroups() {
         let item = ClipboardItem(kind: .text, text: "ssh pseudobun@olympus", sourceName: "Ghostty", hash: "h")
         #expect(item.matches("olympus SSH") && item.matches("ghostty") && item.matches("text") && !item.matches("minsky"))
+        let accented = ClipboardItem(kind: .text, text: "Pošljem predlog", hash: "a")
+        #expect(accented.matches("POSLJEM") && accented.matches("pošl"))
+        let long = ClipboardItem(kind: .text, text: String(repeating: "x", count: 50_000), hash: "l")
+        #expect(long.title.count == ClipboardItem.titleLimit + 1)
         let now = Date()
         #expect(ClipboardGroups.title(for: now.addingTimeInterval(-60), now: now) == "Today")
         #expect(ClipboardGroups.title(for: now.addingTimeInterval(-86_400 * 3), now: now) == "This Week")

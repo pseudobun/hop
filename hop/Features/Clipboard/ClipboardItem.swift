@@ -59,18 +59,43 @@ nonisolated struct ClipboardItem: Codable, Sendable, Equatable, Identifiable {
             let first = (paths.first.map { ($0 as NSString).lastPathComponent }) ?? "File"
             return paths.count > 1 ? "\(first) +\(paths.count - 1)" : first
         default:
-            let line = text.split(whereSeparator: \.isNewline).first.map(String.init) ?? text
-            let trimmed = line.trimmingCharacters(in: .whitespaces)
-            return trimmed.isEmpty ? text.trimmingCharacters(in: .whitespacesAndNewlines) : trimmed
+            // First non-empty line, found without splitting the whole (possibly huge) text.
+            let start = text.firstIndex { !$0.isNewline } ?? text.endIndex
+            let end = text[start...].firstIndex(where: \.isNewline) ?? text.endIndex
+            var line = text[start..<end].trimmingCharacters(in: .whitespaces)
+            if line.isEmpty { line = String(text.prefix(Self.titleLimit * 4)).trimmingCharacters(in: .whitespacesAndNewlines) }
+            return line.count > Self.titleLimit ? String(line.prefix(Self.titleLimit)) + "…" : line
         }
     }
 
+    /// A list row never needs more; a 100 KB one-line copy made every redraw slow.
+    static let titleLimit = 300
+
     /// Search: every word must appear in the text, file names, source app or kind.
     func matches(_ query: String) -> Bool {
-        let words = query.split(whereSeparator: \.isWhitespace)
+        matches(words: Self.queryWords(query), searchText: searchText)
+    }
+
+    /// Case- and diacritic-folded text, file names and title; the slow part of a search,
+    /// so the history caches it per entry.
+    var searchText: NSString {
+        Self.fold([text, title, (filePaths ?? []).joined(separator: " ")].joined(separator: "\n")) as NSString
+    }
+
+    /// `words` from `queryWords`, `searchText` this entry's (possibly cached) `searchText`.
+    /// NSString literal search: ~3× faster than String.contains over a long history.
+    func matches(words: [String], searchText: NSString) -> Bool {
         guard !words.isEmpty else { return true }
-        let haystack = [text, title, sourceName ?? "", kind.label, (filePaths ?? []).joined(separator: " ")].joined(separator: "\n")
-        return words.allSatisfy { haystack.range(of: $0, options: [.caseInsensitive, .diacriticInsensitive]) != nil }
+        let meta = Self.fold((sourceName ?? "") + "\n" + kind.label)
+        return words.allSatisfy { searchText.range(of: $0, options: .literal).location != NSNotFound || meta.contains($0) }
+    }
+
+    static func queryWords(_ query: String) -> [String] {
+        query.split(whereSeparator: \.isWhitespace).map { fold(String($0)) }
+    }
+
+    static func fold(_ s: String) -> String {
+        s.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: nil)
     }
 }
 

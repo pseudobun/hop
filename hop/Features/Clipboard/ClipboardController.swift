@@ -75,6 +75,14 @@ final class ClipboardController: NSObject, NSWindowDelegate, NSTableViewDataSour
         c.countLimit = 200
         return c
     }()
+    /// Folded search text per entry id (an entry's text never changes).
+    private var searchTexts: [String: NSString] = [:]
+    /// Preview statistics per entry id.
+    private var textStats: [String: TextStats] = [:]
+    /// Source app icons per bundle id.
+    private var sourceIcons: [String: NSImage] = [:]
+    /// The preview shows at most this many characters; rendering more made selection lag.
+    private static let previewLimit = 20_000
     /// Adds text to the snippets file; false when it could not.
     var saveSnippet: ((String) -> Bool)?
     private static let frameName = "hop.clipboard"
@@ -120,6 +128,9 @@ final class ClipboardController: NSObject, NSWindowDelegate, NSTableViewDataSour
         // A copy made in the last poll period shows up at the top right away.
         monitor.check()
         store.prune(keepDays: config.keepDays, maxItems: config.maxItems)
+        let ids = Set(store.items.map(\.id))
+        searchTexts = searchTexts.filter { ids.contains($0.key) }
+        textStats = textStats.filter { ids.contains($0.key) }
         searchField.stringValue = ""
         filter = .all
         filterPopup.selectItem(withTitle: filter.rawValue)
@@ -152,7 +163,8 @@ final class ClipboardController: NSObject, NSWindowDelegate, NSTableViewDataSour
 
     private func reload(keepSelection: Bool) {
         let previous = keepSelection ? selectedItem?.id : nil
-        let visible = store.items.filter { filter.includes($0) && $0.matches(query) }
+        let words = ClipboardItem.queryWords(query)
+        let visible = store.items.filter { filter.includes($0) && (words.isEmpty || $0.matches(words: words, searchText: searchText(for: $0))) }
         shownCount = visible.count
         rows = []
         let pinned = filter == .pinned ? [] : visible.filter(\.pinned)
@@ -178,6 +190,13 @@ final class ClipboardController: NSObject, NSWindowDelegate, NSTableViewDataSour
         emptyLabel.stringValue = store.items.isEmpty ? "Nothing copied yet" : "No matches"
         let total = store.items.count
         countLabel.attributedStringValue = Theme.labelString(shownCount == total ? "\(total) items" : "\(shownCount) of \(total)")
+    }
+
+    private func searchText(for item: ClipboardItem) -> NSString {
+        if let s = searchTexts[item.id] { return s }
+        let s = item.searchText
+        searchTexts[item.id] = s
+        return s
     }
 
     private var selectedItem: ClipboardItem? {
@@ -519,20 +538,23 @@ final class ClipboardController: NSObject, NSWindowDelegate, NSTableViewDataSour
             }
             showText(s)
         case .text:
-            let presentation = ClipboardClassifier.presentation(of: item.text)
+            let shown = item.bytes > Self.previewLimit && item.text.count > Self.previewLimit
+                ? String(item.text.prefix(Self.previewLimit)) + "\n…" : item.text
+            let presentation = ClipboardClassifier.presentation(of: shown)
             switch presentation {
             case .markdown:
-                showText(NotesPreviewView.render(item.text))
+                showText(NotesPreviewView.render(shown))
             case .code:
-                showText(NSAttributedString(string: item.text, attributes: [.font: Theme.mono(12.5), .foregroundColor: Theme.foreground]))
+                showText(NSAttributedString(string: shown, attributes: [.font: Theme.mono(12.5), .foregroundColor: Theme.foreground]))
             case .prose:
                 let p = NSMutableParagraphStyle()
                 p.lineSpacing = 3
-                showText(NSAttributedString(string: item.text, attributes: [
+                showText(NSAttributedString(string: shown, attributes: [
                     .font: Theme.sans(14), .foregroundColor: Theme.foreground, .paragraphStyle: p,
                 ]))
             }
-            let stats = TextStats(item.text)
+            let stats = textStats[item.id] ?? TextStats(item.text)
+            textStats[item.id] = stats
             let typeName = switch presentation {
             case .markdown: "Markdown"
             case .code: "Code"
@@ -572,8 +594,8 @@ final class ClipboardController: NSObject, NSWindowDelegate, NSTableViewDataSour
             v.lineBreakMode = .byTruncatingMiddle
             v.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
             var views: [NSView] = [l, NSView()]
-            if label == "Source", let id = sourceBundleID, let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: id) {
-                let icon = NSImageView(image: NSWorkspace.shared.icon(forFile: appURL.path))
+            if label == "Source", let id = sourceBundleID, let image = sourceIcon(id) {
+                let icon = NSImageView(image: image)
                 icon.widthAnchor.constraint(equalToConstant: 16).isActive = true
                 icon.heightAnchor.constraint(equalToConstant: 16).isActive = true
                 views.append(icon)
@@ -592,6 +614,14 @@ final class ClipboardController: NSObject, NSWindowDelegate, NSTableViewDataSour
             infoStack.addArrangedSubview(rule)
             rule.widthAnchor.constraint(equalTo: infoStack.widthAnchor).isActive = true
         }
+    }
+
+    private func sourceIcon(_ bundleID: String) -> NSImage? {
+        if let cached = sourceIcons[bundleID] { return cached }
+        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) else { return nil }
+        let icon = NSWorkspace.shared.icon(forFile: url.path)
+        sourceIcons[bundleID] = icon
+        return icon
     }
 
     private static let dateFormatter: DateFormatter = {
