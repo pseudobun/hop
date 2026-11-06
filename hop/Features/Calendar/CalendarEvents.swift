@@ -19,6 +19,27 @@ nonisolated struct CalendarEvent: Sendable, Equatable, Codable {
     func isOngoing(at now: Date) -> Bool { start <= now && now < end }
 }
 
+private nonisolated struct CalendarEventKey: Hashable { let title: String; let start: Date; let end: Date; let allDay: Bool }
+
+nonisolated extension [CalendarEvent] {
+    /// One event per title and time: the same meeting in two calendars, or a birthday macOS
+    /// generated twice for one contact. The copy with a call link wins; order is kept.
+    func deduplicated() -> [CalendarEvent] {
+        var index: [CalendarEventKey: Int] = [:]
+        var out: [CalendarEvent] = []
+        for e in self {
+            let key = CalendarEventKey(title: e.title.trimmingCharacters(in: .whitespaces).lowercased(), start: e.start, end: e.end, allDay: e.isAllDay)
+            if let i = index[key] {
+                if out[i].joinURL == nil, e.joinURL != nil { out[i] = e }
+            } else {
+                index[key] = out.count
+                out.append(e)
+            }
+        }
+        return out
+    }
+}
+
 /// Reads events from Calendar (EventKit). All EventKit work runs on one serial queue.
 nonisolated enum CalendarEvents {
     private static let queue = DispatchQueue(label: "hop.calendar", qos: .userInitiated)
@@ -55,6 +76,7 @@ nonisolated enum CalendarEvents {
                 guard !calendars.isEmpty else { return done.resume(returning: []) }
                 let predicate = store.predicateForEvents(withStart: from, end: to, calendars: calendars)
                 let events = store.events(matching: predicate).map(convert).sorted { $0.start < $1.start }
+                    .deduplicated()
                 done.resume(returning: events)
             }
         }

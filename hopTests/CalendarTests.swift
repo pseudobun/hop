@@ -38,6 +38,17 @@ struct CalendarTests {
         #expect(b.tomorrow.map(\.title) == ["Bor"])
     }
 
+    @Test func dropsDuplicateEvents() {
+        let a = event("Standup", in: 10)
+        let copy = CalendarEvent(id: "other", title: "standup ", start: a.start, end: a.end, isAllDay: false, isBirthday: false,
+                                 calendar: "Google", color: [], location: "", joinURL: URL(string: "https://meet.google.com/x"))
+        let later = event("Standup", in: 60)
+        let result = [a, event("Ana", in: 0, allDay: true, birthday: true), copy, later,
+                      event("Ana", in: 0, allDay: true, birthday: true)].deduplicated()
+        #expect(result.map(\.id) == ["other", "Ana", "Standup"])
+        #expect(result.first?.joinURL != nil)
+    }
+
     @Test func birthdayNames() {
         #expect(CalendarEvents.birthdayName("Ana Novak’s Birthday") == "Ana Novak")
         #expect(CalendarEvents.birthdayName("Jonas' Birthday") == "Jonas")
