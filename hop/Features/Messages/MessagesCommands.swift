@@ -45,6 +45,10 @@ final class MessageCodesMode: Mode {
     private let sensitivity: Sensitivity
     private var result: Result<[MessageCode], MessageCodes.Failure>?
     private weak var context: LauncherContext?
+    /// Re-reads the list while it's open, so a code arriving now shows up without leaving.
+    private lazy var monitor = MessagesDatabaseMonitor(delay: .milliseconds(300)) { [weak self] in self?.load() }
+    private var loading = false
+    private var dirty = false
 
     init(days: Int, sensitivity: Sensitivity) {
         self.days = days
@@ -53,11 +57,41 @@ final class MessageCodesMode: Mode {
 
     func didEnter(_ context: LauncherContext) {
         self.context = context
+        context.setLoading(true)
+        load { context.setLoading(false) }
+        monitor.start()
+    }
+
+    func didExit() {
+        monitor.stop()
+    }
+
+    private func load(then done: (() -> Void)? = nil) {
+        guard !loading else {
+            dirty = true
+            return
+        }
+        loading = true
         Task {
-            context.setLoading(true)
-            result = await MessageCodes.recent(since: Date().addingTimeInterval(-Double(days) * 86400))
-            context.setLoading(false)
-            context.reload()
+            let fresh = await MessageCodes.recent(since: Date().addingTimeInterval(-Double(days) * 86400))
+            loading = false
+            done?()
+            monitor.rearm()
+            if case .failure(.noAccess) = fresh { monitor.stop() }
+            let previous = result
+            if fresh != previous, let context {
+                result = fresh
+                // A new code on top takes the selection; otherwise keep the row the user is on.
+                if case .success(let old) = previous, case .success(let new) = fresh, new.first?.id != old.first?.id {
+                    context.setQuery(context.query)
+                } else {
+                    context.reload()
+                }
+            }
+            if dirty {
+                dirty = false
+                monitor.changed()
+            }
         }
     }
 
