@@ -22,7 +22,7 @@ final class ShelfPanel: NSPanel {
         isMovableByWindowBackground = true
         isReleasedWhenClosed = false
         animationBehavior = .utilityWindow
-        appearance = Theme.darkAppearance
+        appearance = Theme.appearance
     }
 
     override var canBecomeKey: Bool { true }
@@ -520,7 +520,7 @@ final class Shelf: NSObject, NSWindowDelegate, NSDraggingSource {
 
     func buildMenu() -> NSMenu {
         let menu = NSMenu()
-        menu.appearance = Theme.darkAppearance
+        menu.appearance = Theme.appearance
         for entry in menuEntries() {
             guard let entry else {
                 menu.addItem(.separator())

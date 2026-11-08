@@ -16,7 +16,8 @@
     fallbacks: ["chatgpt", "google", "github"],
     openAtLogin: true,
     menuBarIcon: true,
-    // "og" or "modern" (system fonts, softer contrast); hop restarts to switch
+    // "og", "og-light", "modern", "solarpunk" or "cyberpunk"; also the Theme command.
+    // hop restarts to switch
     theme: "og",
   },
 

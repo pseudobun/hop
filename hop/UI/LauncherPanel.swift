@@ -128,7 +128,7 @@ final class HUD {
         p.ignoresMouseEvents = true
         p.collectionBehavior = [.transient, .ignoresCycle, .canJoinAllSpaces, .fullScreenAuxiliary]
         p.isReleasedWhenClosed = false
-        p.appearance = Theme.darkAppearance
+        p.appearance = Theme.appearance
         let glass = NSGlassEffectView()
         glass.cornerRadius = 20
         glass.tintColor = Theme.background.withAlphaComponent(0.78)

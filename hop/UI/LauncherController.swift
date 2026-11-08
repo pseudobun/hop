@@ -550,7 +550,7 @@ final class LauncherController: NSObject, LauncherContext, NSTableViewDataSource
     // MARK: - Layout
 
     private func buildViews() {
-        panel.appearance = Theme.darkAppearance
+        panel.appearance = Theme.appearance
         let glass = NSGlassEffectView()
         glass.cornerRadius = panel.frameCornerRadius
         glass.tintColor = Theme.background.withAlphaComponent(0.78)

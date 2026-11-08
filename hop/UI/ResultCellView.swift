@@ -213,7 +213,7 @@ final class CalculationCellView: NSTableCellView {
 
         swatch.wantsLayer = true
         swatch.layer?.cornerRadius = 8
-        swatch.layer?.borderColor = NSColor.white.withAlphaComponent(0.2).cgColor
+        swatch.layer?.borderColor = Theme.wash(0.2).cgColor
         swatch.layer?.borderWidth = 1
         swatch.isHidden = true
         swatch.translatesAutoresizingMaskIntoConstraints = false

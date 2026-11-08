@@ -33,6 +33,7 @@ enum Registry {
     static func commands(_ services: Services) -> [Item] {
         var items: [Item] = []
         items += SystemCommands.items(services)
+        items += ThemeCommands.items(services)
         items += WireGuardCommands.items(services)
         items += KeePassCommands.items(services)
         items += BookmarkCommands.items(services)

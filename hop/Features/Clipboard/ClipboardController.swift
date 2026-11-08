@@ -24,7 +24,7 @@ final class ClipboardPanel: NSPanel {
         isReleasedWhenClosed = false
         animationBehavior = .none
         minSize = NSSize(width: 640, height: 380)
-        appearance = Theme.darkAppearance
+        appearance = Theme.appearance
     }
 
     override var canBecomeKey: Bool { true }
@@ -928,7 +928,7 @@ final class ClipColorView: NSView {
             let path = NSBezierPath(roundedRect: rect.insetBy(dx: 1, dy: 1), xRadius: 5, yRadius: 5)
             NSColor(srgbRed: c.red, green: c.green, blue: c.blue, alpha: c.alpha).setFill()
             path.fill()
-            NSColor.white.withAlphaComponent(0.25).setStroke()
+            Theme.wash(0.25).setStroke()
             path.lineWidth = 1
             path.stroke()
             return true

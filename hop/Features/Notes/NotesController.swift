@@ -29,7 +29,7 @@ final class NotesPanel: NSPanel {
         isMovableByWindowBackground = true
         isReleasedWhenClosed = false
         minSize = NSSize(width: 460, height: 300)
-        appearance = Theme.darkAppearance
+        appearance = Theme.appearance
     }
 
     override var canBecomeKey: Bool { true }
@@ -1275,7 +1275,7 @@ final class NotesController: NSObject, NSWindowDelegate, NSTableViewDataSource, 
         // Sidebar: search, list, count.
         let searchBox = NSView()
         searchBox.wantsLayer = true
-        searchBox.layer?.backgroundColor = NSColor.white.withAlphaComponent(0.06).cgColor
+        searchBox.layer?.backgroundColor = Theme.wash(0.06).cgColor
         searchBox.layer?.cornerRadius = 8
         let glassIcon = NSImageView(image: NSImage(systemSymbolName: "magnifyingglass", accessibilityDescription: nil)!)
         glassIcon.contentTintColor = Theme.mutedForeground

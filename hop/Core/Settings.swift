@@ -15,11 +15,13 @@ nonisolated struct HopConfig: Decodable, Equatable, Sendable {
         var fallbacks = ["chatgpt", "google", "github"]
         var openAtLogin = true
         var menuBarIcon = true
-        /// "og" (Outfit + Geist Mono, warm black) or "modern" (system fonts, softer contrast).
+        /// "og", "og-light", "modern", "solarpunk" or "cyberpunk"; see Theme.
         var theme: ThemeName = .og
 
         nonisolated enum ThemeName: String, Decodable, Equatable, Sendable, CaseIterable {
-            case og, modern
+            case og
+            case ogLight = "og-light"
+            case modern, solarpunk, cyberpunk
         }
     }
 
@@ -657,7 +659,8 @@ final class AppSettings {
         fallbacks: ["chatgpt", "google", "github"],
         openAtLogin: true,
         menuBarIcon: true,
-        // "og" or "modern" (system fonts, softer contrast); hop restarts to switch
+        // "og", "og-light", "modern", "solarpunk" or "cyberpunk"; also the Theme command.
+        // hop restarts to switch
         theme: "og",
       },
 

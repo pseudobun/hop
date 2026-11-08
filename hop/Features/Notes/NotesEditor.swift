@@ -192,7 +192,7 @@ enum MarkdownTheme {
                 storage.addAttribute(.backgroundColor, value: Theme.warn.withAlphaComponent(0.22), range: r)
             case .code:
                 storage.addAttributes([.font: Theme.mono(13.5), .foregroundColor: Theme.chart1,
-                                       .backgroundColor: NSColor.white.withAlphaComponent(0.06)], range: r)
+                                       .backgroundColor: Theme.wash(0.06)], range: r)
             case .codeBlock:
                 storage.addAttributes([.font: Theme.mono(13.5), .foregroundColor: Theme.foreground.withAlphaComponent(0.85)], range: r)
             case .quote:
@@ -332,10 +332,10 @@ final class NotesPreviewView: NSTextView {
                                              startingColumn: column, columnSpan: 1)
                 block.setWidth(8, type: .absoluteValueType, for: .padding)
                 block.setWidth(0.5, type: .absoluteValueType, for: .border)
-                block.setBorderColor(Theme.background.blended(withFraction: 0.1, of: .white) ?? Theme.muted)
+                block.setBorderColor(Theme.background.blended(withFraction: 0.1, of: Theme.foreground) ?? Theme.muted)
                 // AppKit table backgrounds need opaque colors (clear can render white).
                 block.backgroundColor = row == 0 ? Theme.card
-                    : row % 2 == 0 ? Theme.background.blended(withFraction: 0.025, of: .white) : Theme.background
+                    : row % 2 == 0 ? Theme.background.blended(withFraction: 0.025, of: Theme.foreground) : Theme.background
                 block.verticalAlignment = .topAlignment
                 let cell = NSMutableAttributedString(attributedString: render(source))
                 cell.removeAttribute(.hopHeadingSource, range: NSRange(location: 0, length: cell.length))

@@ -280,6 +280,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 }
                 if defaults.string(forKey: "DebugPush") == "permissions" { launcher.push(makePermissions()) }
                 if defaults.string(forKey: "DebugPush") == "emoji" { launcher.push(EmojiCommands.mode(services)) }
+                if defaults.string(forKey: "DebugPush") == "theme" { launcher.push(ThemeMode(services: services)) }
                 if defaults.string(forKey: "DebugPush") == "kill" { launcher.push(KillProcessMode(sensitivity: settings.data.general.sensitivity)) }
                 if let path = defaults.string(forKey: "DebugLauncherRender") {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { DebugSnapshot.render(self.launcher.panel, to: path) }
