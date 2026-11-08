@@ -134,20 +134,22 @@ What it reads (all read only):
 |---|---|---|
 | Claude Code | `~/.claude/sessions/<pid>.json` of running processes (`busy`, `waiting`, `idle`), the same records `claude agents --json` prints | `~/.claude/projects/<cwd>/<session>.jsonl`, the last 384 KB |
 | OpenCode (v2) | `session_v2` in `~/.local/share/opencode/opencode.db`: busy after its last idle is running; a pending tool means it waits for permission; an `opencode` process in the folder means idle, none means finished | `session_message` rows of the same database |
-| SSH hosts | the host's `~/.claude/sessions` (processes still alive) and `tmux list-panes`, over `ssh host bash -l -s` every `remoteRefreshSeconds` while the panel is open | the selected session's transcript tail, fetched over ssh |
+| SSH hosts | the host's `~/.claude/sessions` (processes still alive), the `--sdk-url` of `claude rc` children (`ps`) and `tmux list-panes`, over `ssh host bash -l -s` every `remoteRefreshSeconds` while the panel is open | the selected session's transcript tail, fetched over ssh |
 
 FSEvents on `~/.claude/sessions`, `~/.claude/projects` and the OpenCode folder update the list and the open transcript as they change; nothing polls. Finished sessions stay listed for `agents.historyHours`.
 
 New sessions (⌘N, or "New Agent Session" in hop) run in tmux, so they keep going after hop quits and you can attach from any terminal. hop names them `hop-cc-<folder>-<4 hex>` / `hop-oc-…`; locally tmux gets your login shell's PATH, remotely the script runs under `bash -l` (a fish login shell never parses it). Claude Code starts with `--name` and, with `agents.claude.remoteControl` (on by default), `--remote-control`, so the Claude app and claude.ai/code can continue it from the phone; OpenCode starts with `--prompt`. A finished session can be resumed in tmux (`claude --resume`, `opencode --session`). A folder Claude Code has not been trusted in yet stops at its trust question: attach (⌘↵) to answer it.
+
+Sessions served by `claude rc` (Remote Control server mode, here or on a host) run headless, with no terminal to attach: they are listed as `rc` (view only) with status and transcript, and ↵ / ⌘↵ open them in Claude (claude.ai/code). Rows say `tmux` when a terminal can attach. For a session you can both attach over ssh and continue in the Claude app, start it from hop (⌘N: tmux plus `claude --remote-control`).
 
 | Agents key | |
 |---|---|
 | ⇧⌘Space | open, focus, or close when focused |
 | type | filter by title, folder, host, provider, status |
 | ↑ ↓ | select a session |
-| ↵ | first action: attach (in tmux), resume (finished), else open on claude.ai |
-| ⌘↵ | attach a terminal to its tmux session (Ghostty, iTerm, Terminal; `agents.terminal`) / resume a finished one |
-| ⌘O | open a remote-control session on claude.ai/code |
+| ↵ | first action: attach (in tmux), open in Claude (`claude rc`), resume (finished), else open in Claude |
+| ⌘↵ | attach a terminal to its tmux session (Ghostty, iTerm, Terminal; `agents.terminal`) / open a `claude rc` session in Claude / resume a finished one |
+| ⌘O | open a remote-control session in Claude (claude.ai/code) |
 | ⌘N | new session: ⌘P provider, ⌘T this Mac or a host, folder with recent projects (Tab completes paths), optional prompt, ↵ starts |
 | ⌘K | actions: also show transcript in Finder (⇧⌘F), copy session id (⇧⌘C) or folder (⌥⌘C), refresh (⌘R) |
 | ⌃X twice | stop a tmux session hop started (`hop-…`), and the agent in it |

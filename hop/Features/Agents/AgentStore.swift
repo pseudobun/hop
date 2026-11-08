@@ -257,7 +257,8 @@ final class AgentStore {
         for r in records {
             live.insert(r.sessionID)
             let url = ClaudeSessions.transcriptURL(sessionID: r.sessionID, cwd: r.cwd)
-            out.append(ClaudeSessions.session(r, summary: url.flatMap { summary($0, bytes: 384 * 1024) }, transcript: url))
+            out.append(ClaudeSessions.session(r, summary: url.flatMap { summary($0, bytes: 384 * 1024) }, transcript: url,
+                                              remoteID: remoteControlID(pid: r.pid, started: r.startedAt)))
         }
         let since = Date().addingTimeInterval(-Double(max(1, historyHours)) * 3600)
         for (url, modified) in ClaudeSessions.recentTranscripts(since: since) {
@@ -266,6 +267,42 @@ final class AgentStore {
             out.append(ClaudeSessions.finished(url, modified: modified, summary: s))
         }
         return out
+    }
+
+    /// `claude rc` child ids by pid and start time (a process's arguments never change, a pid
+    /// can be reused). Touched on `queue` only.
+    nonisolated(unsafe) private static var remoteIDs: [String: String?] = [:]
+
+    /// The claude.ai session a local process serves, from its `--sdk-url` argument.
+    nonisolated static func remoteControlID(pid: Int32, started: Date?) -> String? {
+        let key = "\(pid)@\(started?.timeIntervalSince1970 ?? 0)"
+        if let hit = remoteIDs[key] { return hit }
+        guard let args = processArguments(pid) else { return nil }
+        let id = ClaudeSessions.remoteControlID(arguments: args)
+        if remoteIDs.count > 200 { remoteIDs.removeAll() }
+        remoteIDs[key] = id
+        return id
+    }
+
+    /// A process's argv (KERN_PROCARGS2: argc, exec path, padding, then the arguments).
+    nonisolated static func processArguments(_ pid: Int32) -> [String]? {
+        var mib: [Int32] = [CTL_KERN, KERN_PROCARGS2, pid]
+        var size = 0
+        guard sysctl(&mib, 3, nil, &size, nil, 0) == 0, size > 4 else { return nil }
+        var buf = [UInt8](repeating: 0, count: size)
+        guard sysctl(&mib, 3, &buf, &size, nil, 0) == 0, size > 4 else { return nil }
+        let argc = Int(buf.withUnsafeBytes { $0.loadUnaligned(as: Int32.self) })
+        var i = 4
+        while i < size, buf[i] != 0 { i += 1 }
+        while i < size, buf[i] == 0 { i += 1 }
+        var args: [String] = []
+        while args.count < argc, i < size {
+            let start = i
+            while i < size, buf[i] != 0 { i += 1 }
+            args.append(String(decoding: buf[start..<i], as: UTF8.self))
+            i += 1
+        }
+        return args
     }
 
     /// A transcript tail, parsed again only when the file changed.
@@ -293,7 +330,9 @@ final class AgentStore {
             return .failure(Failure(text: line))
         }
         let list = AgentCommands.parseRemoteList(r.out)
-        let sessions = list.records.map { ClaudeSessions.session($0, summary: nil, transcript: nil, host: host.label) }
+        let sessions = list.records.map {
+            ClaudeSessions.session($0, summary: nil, transcript: nil, host: host.label, remoteID: list.remoteIDs[$0.pid])
+        }
         // Remote processes are not ours to inspect: match tmux panes by pid only.
         return .success(attach(panes: list.panes, to: sessions, host: host.label, parent: { _ in nil }))
     }

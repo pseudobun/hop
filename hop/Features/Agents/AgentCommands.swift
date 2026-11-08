@@ -74,7 +74,8 @@ nonisolated enum AgentCommands {
 
     // MARK: - Watching remote hosts
 
-    /// Live Claude Code sessions (registry records of running processes) and tmux panes.
+    /// Live Claude Code sessions (registry records of running processes), the `--sdk-url` of
+    /// `claude rc` children (pid and URL only, no other arguments) and tmux panes.
     static let remoteListScript = """
         for f in "$HOME"/.claude/sessions/*.json; do
           [ -f "$f" ] || continue
@@ -82,6 +83,11 @@ nonisolated enum AgentCommands {
           case "$p" in *[!0-9]*) continue ;; esac
           kill -0 "$p" 2>/dev/null || continue
           printf 'S\\t'; tr -d '\\n' < "$f"; echo
+        done
+        ps -eo pid=,args= 2>/dev/null | while read -r p a; do
+          case "$a" in *--sdk-url*) ;; *) continue ;; esac
+          u="${a#*--sdk-url}"; u="${u#=}"; u="${u# }"; u="${u%% *}"
+          printf 'P\\t%s\\t%s\\n' "$p" "$u"
         done
         command -v tmux >/dev/null 2>&1 && tmux list-panes -a -F 'T|\(TmuxPane.format)' 2>/dev/null
         exit 0
@@ -101,6 +107,8 @@ nonisolated enum AgentCommands {
     struct RemoteList: Equatable, Sendable {
         var records: [ClaudeSessions.Record] = []
         var panes: [TmuxPane] = []
+        /// claude.ai session ("cse_…") of each `claude rc` child, by pid.
+        var remoteIDs: [Int32: String] = [:]
     }
 
     static func parseRemoteList(_ text: String) -> RemoteList {
@@ -108,6 +116,11 @@ nonisolated enum AgentCommands {
         for line in text.split(whereSeparator: \.isNewline) {
             if line.hasPrefix("S\t") {
                 if let r = ClaudeSessions.parseRecord(Data(line.dropFirst(2).utf8)), r.kind != "daemon" { out.records.append(r) }
+            } else if line.hasPrefix("P\t") {
+                let parts = line.split(separator: "\t", maxSplits: 2).map(String.init)
+                if parts.count == 3, let pid = Int32(parts[1]), let id = ClaudeSessions.remoteControlID(sdkURL: parts[2]) {
+                    out.remoteIDs[pid] = id
+                }
             } else if line.hasPrefix("T|") {
                 out.panes += TmuxPane.parse(String(line))
             }

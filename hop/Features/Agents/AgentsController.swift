@@ -163,7 +163,8 @@ final class AgentsController: NSObject, NSWindowDelegate, NSTableViewDataSource,
     private func matches(_ s: AgentSession) -> Bool {
         let q = query
         guard !q.isEmpty else { return true }
-        let hay = [s.title, s.shortCwd, s.host ?? "this mac", s.provider.label, s.tmux ?? "", s.status.label].joined(separator: " ").lowercased()
+        let hay = [s.title, s.shortCwd, s.host ?? "this mac", s.provider.label, s.tmux ?? "", s.status.label,
+                   s.kind == .remoteControl ? "rc remote control" : "", s.isViewOnly ? "view only" : ""].joined(separator: " ").lowercased()
         return q.split(separator: " ").allSatisfy { hay.contains($0) }
     }
 
@@ -258,8 +259,9 @@ final class AgentsController: NSObject, NSWindowDelegate, NSTableViewDataSource,
         var meta = [s.provider.label, s.host ?? "This Mac", s.shortCwd]
         if let m = s.model { meta.append(m) }
         if let t = s.tmux { meta.append("tmux \(t)") }
+        else if s.isViewOnly { meta.append(s.kind == .remoteControl ? "Remote Control · view only" : "Not in tmux · view only") }
         metaLabel.stringValue = meta.joined(separator: "  ·  ")
-        metaLabel.toolTip = "Session \(s.id)" + (s.transcript.map { "\n\($0)" } ?? "")
+        metaLabel.toolTip = "Session \(s.id)" + (s.remoteID.map { "\nclaude.ai \($0)" } ?? "") + (s.transcript.map { "\n\($0)" } ?? "")
         let c = chipFor(s) ?? Chip(text: "Finished \(AgentNames.age(s.lastActivity, now: Date())) ago", tone: .neutral)
         chip.attributedStringValue = Theme.labelString(c.text, color: c.color)
     }
@@ -363,13 +365,15 @@ final class AgentsController: NSObject, NSWindowDelegate, NSTableViewDataSource,
             start(spawn, host: host(s))
             return .stay
         } : nil
+        // A `claude rc` child has no terminal: continuing it in Claude is the main action.
+        let primaryWeb = s.kind == .remoteControl && s.isViewOnly
         let web: Action? = s.webURL.map { url in
-            Action(title: "Open on claude.ai", symbol: "safari", shortcut: .cmd("o")) {
+            Action(title: "Open in Claude", symbol: "safari", shortcut: primaryWeb ? .ret(.command) : .cmd("o")) {
                 NSWorkspace.shared.open(url)
                 return .stay
             }
         }
-        list += [attach, resume, web].compactMap { $0 }
+        list += (primaryWeb ? [web, attach, resume] : [attach, resume, web]).compactMap { $0 }
         if s.isLocal, let path = s.transcript {
             list.append(Action(title: "Show Transcript in Finder", symbol: "folder", shortcut: .cmd("f", .shift)) {
                 NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)])
@@ -643,7 +647,8 @@ final class AgentsController: NSObject, NSWindowDelegate, NSTableViewDataSource,
         // A long first prompt would push the folder out of the row.
         let title = s.title.count > 34 ? s.title.prefix(33).trimmingCharacters(in: .whitespaces) + "…" : s.title
         return Item(id: s.key, title: title, subtitle: subtitle, icon: .tile(symbol, tint),
-                    accessory: AgentNames.age(s.lastActivity, now: Date()), actions: [], chip: chipFor(s))
+                    accessory: [s.accessTag, AgentNames.age(s.lastActivity, now: Date())].compactMap { $0 }.joined(separator: " · "),
+                    actions: [], chip: chipFor(s))
     }
 
     private func chipFor(_ s: AgentSession) -> Chip? {
@@ -651,7 +656,7 @@ final class AgentsController: NSObject, NSWindowDelegate, NSTableViewDataSource,
         case .waiting: Chip(text: s.detail ?? "Needs you", tone: .warn)
         case .running where s.id.hasPrefix("tmux:"): Chip(text: "In tmux", tone: .info)
         case .running: Chip(text: s.detail.map { "Running \($0)" } ?? "Running", tone: .info)
-        case .idle: Chip(text: s.tmux != nil ? "Idle · tmux" : "Idle", tone: .neutral)
+        case .idle: Chip(text: "Idle", tone: .neutral)
         case .finished: s.detail.map { Chip(text: $0, tone: .bad) }
         }
     }
@@ -845,6 +850,15 @@ final class AgentsController: NSObject, NSWindowDelegate, NSTableViewDataSource,
     }
 
     func debugOpenActions() { toggleActionPanel() }
+
+    /// One line per listed session: host, provider, kind, claude.ai id, tmux, status, title.
+    func debugDump() -> String {
+        store.sessions.map { s in
+            [s.host ?? "local", s.provider.rawValue, s.kind.rawValue, s.remoteID ?? "-", s.tmux ?? "-",
+             s.isViewOnly ? "view-only" : (s.isAttachable ? "attachable" : "-"), s.status.label, s.webURL?.absoluteString ?? "-", s.title]
+                .joined(separator: "\t")
+        }.joined(separator: "\n") + "\n"
+    }
 
     /// "claude|~/repos/hop|prompt|host": starts a session as the form would, with a fixed tmux name.
     func debugStart(_ spec: String, tmuxName: String) {

@@ -20,6 +20,15 @@ nonisolated enum AgentProvider: String, CaseIterable, Sendable, Codable {
     }
 }
 
+/// How a session runs, which decides what hop can do with it.
+nonisolated enum AgentKind: String, Sendable {
+    /// A terminal session (in tmux or not).
+    case terminal
+    /// A headless child of `claude rc` (Remote Control server mode): no terminal to attach,
+    /// continued in the Claude app or on claude.ai/code.
+    case remoteControl
+}
+
 /// What a session is doing, in the order the panel lists them.
 nonisolated enum AgentStatus: Int, Comparable, Sendable {
     /// Waiting for you: a permission prompt or a question.
@@ -93,6 +102,9 @@ nonisolated struct AgentSession: Equatable, Sendable {
     /// Short extra detail for the status: "Bash permission", "failed".
     var detail: String?
     var model: String?
+    var kind: AgentKind = .terminal
+    /// The claude.ai session a Remote Control child serves ("cse_…").
+    var remoteID: String? = nil
 
     /// Stable across refreshes, for keeping the selection.
     var key: String { "\(host ?? "local")/\(provider.rawValue)/\(id)" }
@@ -104,10 +116,26 @@ nonisolated struct AgentSession: Equatable, Sendable {
         isLocal ? (cwd as NSString).abbreviatingWithTildeInPath : cwd
     }
 
-    /// claude.ai/code/<id> for remote-control sessions.
+    /// claude.ai/code/session_<id> for remote-control sessions. Claude Code builds the same
+    /// link: `/code/` plus the id with a "cse_" prefix turned into "session_".
     var webURL: URL? {
-        guard let bridgeID, !bridgeID.isEmpty else { return nil }
-        return URL(string: "https://claude.ai/code/\(bridgeID)")
+        let id = bridgeID.flatMap { $0.isEmpty ? nil : $0 } ?? remoteID.map(ClaudeSessions.compatSessionID)
+        guard let id, !id.isEmpty else { return nil }
+        return URL(string: "https://claude.ai/code/\(id)")
+    }
+
+    /// A terminal can attach to it: it runs in tmux.
+    var isAttachable: Bool { tmux != nil }
+
+    /// Live but not in tmux (a `claude rc` child, or a terminal hop cannot reach): watch only.
+    var isViewOnly: Bool { status != .finished && tmux == nil }
+
+    /// Short row tag for how it can be reached: "tmux" (attach), "rc" (view only, open in
+    /// Claude), "view only"; nil once finished. The detail header spells it out.
+    var accessTag: String? {
+        if isAttachable { return "tmux" }
+        guard isViewOnly else { return nil }
+        return kind == .remoteControl ? "rc" : "view only"
     }
 
     /// Waiting first, then running, idle and finished; newest first within each.

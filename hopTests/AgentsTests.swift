@@ -238,6 +238,88 @@ struct AgentsTests {
         #expect(AgentCommands.isSafeTmuxName("hop-cc-a-1") && !AgentCommands.isSafeTmuxName("a b") && !AgentCommands.isSafeTmuxName(""))
     }
 
+    // MARK: - Remote Control server mode
+
+    @Test func remoteControlChildIsParsedFromItsArguments() {
+        let line = "/Users/me/.local/share/claude/versions/9.9.9 --print --sdk-url https://api.anthropic.com/v1/code/sessions/cse_test123 "
+            + "--session-id cse_test123 --input-format stream-json --output-format stream-json --replay-user-messages"
+        #expect(ClaudeSessions.remoteControlID(commandLine: line) == "cse_test123")
+        #expect(ClaudeSessions.remoteControlID(arguments: ["claude", "--print", "--sdk-url=https://example.test/v1/code/sessions/session_test123"])
+            == "cse_test123")
+        #expect(ClaudeSessions.remoteControlID(commandLine: "claude rc --chrome") == nil)
+        #expect(ClaudeSessions.remoteControlID(commandLine: "claude --remote-control my-name") == nil)
+        #expect(ClaudeSessions.remoteControlID(arguments: ["claude", "--sdk-url"]) == nil)
+        #expect(ClaudeSessions.remoteControlID(sdkURL: "https://example.test/other") == nil)
+        #expect(ClaudeSessions.compatSessionID("cse_test123") == "session_test123" && ClaudeSessions.compatSessionID("session_x") == "session_x")
+        #expect(ClaudeSessions.infraSessionID("session_test123") == "cse_test123")
+    }
+
+    @Test func remoteControlSessionsAreViewOnly() throws {
+        let json = #"{"pid":321,"sessionId":"uuid-rc","cwd":"/Users/me/app","kind":"interactive","entrypoint":"sdk-cli","status":"idle","bridgeSessionId":"session_test123"}"#
+        let r = try #require(ClaudeSessions.parseRecord(Data(json.utf8)))
+        #expect(r.entrypoint == "sdk-cli")
+
+        let rc = ClaudeSessions.session(r, summary: nil, transcript: nil, remoteID: "cse_test123")
+        #expect(rc.kind == .remoteControl && rc.remoteID == "cse_test123" && rc.isViewOnly && !rc.isAttachable)
+        #expect(rc.webURL == URL(string: "https://claude.ai/code/session_test123") && rc.accessTag == "rc")
+
+        // No command line to read: a driven process with a bridge id and no tmux still counts.
+        let fallback = ClaudeSessions.session(r, summary: nil, transcript: nil)
+        #expect(fallback.kind == .remoteControl && fallback.remoteID == "cse_test123")
+
+        var bare = rc
+        bare.bridgeID = nil
+        #expect(bare.webURL == URL(string: "https://claude.ai/code/session_test123"))
+
+        // `claude --remote-control` in tmux: attachable, a terminal session that also has a link.
+        let tmuxJSON = #"{"pid":322,"sessionId":"uuid-t","cwd":"/x","entrypoint":"cli","tmux":"hop-cc-x-0001","bridgeSessionId":"session_test456"}"#
+        let terminal = ClaudeSessions.session(try #require(ClaudeSessions.parseRecord(Data(tmuxJSON.utf8))), summary: nil, transcript: nil)
+        #expect(terminal.kind == .terminal && terminal.remoteID == nil && terminal.isAttachable && !terminal.isViewOnly)
+        #expect(terminal.accessTag == "tmux" && terminal.webURL == URL(string: "https://claude.ai/code/session_test456"))
+
+        let plain = #"{"pid":323,"sessionId":"uuid-p","cwd":"/x","entrypoint":"cli","status":"busy"}"#
+        let headless = ClaudeSessions.session(try #require(ClaudeSessions.parseRecord(Data(plain.utf8))), summary: nil, transcript: nil)
+        #expect(headless.kind == .terminal && headless.isViewOnly && headless.accessTag == "view only" && headless.webURL == nil)
+        var done = headless
+        done.status = .finished
+        #expect(!done.isViewOnly && done.accessTag == nil)
+    }
+
+    @Test func remoteListingCarriesRemoteControlIDs() {
+        #expect(AgentCommands.remoteListScript.contains("ps -eo pid=,args="))
+        let list = AgentCommands.parseRemoteList("""
+            S\t{"pid":321,"sessionId":"uuid-rc","cwd":"/home/me/app","kind":"interactive","entrypoint":"sdk-cli","status":"busy"}
+            S\t{"pid":322,"sessionId":"uuid-t","cwd":"/home/me","kind":"interactive","entrypoint":"cli"}
+            P\t321\thttps://api.anthropic.com/v1/code/sessions/cse_test123
+            P\t999\tnot-a-session-url
+            P\tx\thttps://api.anthropic.com/v1/code/sessions/cse_bad
+            T|hop-cc-home-0001|322|1794139000|/home/me
+            """)
+        #expect(list.remoteIDs == [321: "cse_test123"])
+        let sessions = list.records.map {
+            ClaudeSessions.session($0, summary: nil, transcript: nil, host: "my-server", remoteID: list.remoteIDs[$0.pid])
+        }
+        let out = AgentStore.attach(panes: list.panes, to: sessions, host: "my-server", parent: { _ in nil })
+        #expect(out.map(\.kind) == [.remoteControl, .terminal])
+        #expect(out[0].remoteID == "cse_test123" && out[0].isViewOnly && out[0].host == "my-server")
+        #expect(out[1].tmux == "hop-cc-home-0001" && out[1].isAttachable)
+    }
+
+    @Test func remoteListScriptRunsInBash() throws {
+        // The script's ps loop prints only pid and --sdk-url value of matching processes.
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: "/bin/bash")
+        p.arguments = ["-c", #"a='/bin/claude --print --sdk-url https://example.test/v1/code/sessions/cse_test123 --session-id cse_test123'; "#
+            + #"u="${a#*--sdk-url}"; u="${u#=}"; u="${u# }"; u="${u%% *}"; printf 'P\t%s\t%s\n' 42 "$u""#]
+        let out = Pipe()
+        p.standardOutput = out
+        try p.run()
+        p.waitUntilExit()
+        let text = String(decoding: out.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+        #expect(AgentCommands.parseRemoteList(text).remoteIDs == [42: "cse_test123"])
+        #expect(AgentCommands.remoteListScript.contains(#"u="${a#*--sdk-url}"; u="${u#=}"; u="${u# }"; u="${u%% *}""#))
+    }
+
     // MARK: - Config
 
     @Test func agentsConfig() throws {

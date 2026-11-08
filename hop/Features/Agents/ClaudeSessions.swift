@@ -17,6 +17,8 @@ nonisolated enum ClaudeSessions {
         var bridgeSessionID: String?
         /// The tmux session Claude Code says it runs in.
         var tmux: String?
+        /// "cli", or "sdk-cli" for processes another program drives (a `claude rc` child).
+        var entrypoint: String? = nil
     }
 
     static var home: URL { FileManager.default.homeDirectoryForCurrentUser.appending(path: ".claude") }
@@ -34,7 +36,7 @@ nonisolated enum ClaudeSessions {
                       name: (o["name"] as? String).flatMap { $0.isEmpty ? nil : $0 }, status: o["status"] as? String,
                       updatedAt: date("updatedAt") ?? date("statusUpdatedAt"), startedAt: date("startedAt"),
                       bridgeSessionID: (o["bridgeSessionId"] as? String).flatMap { $0.isEmpty ? nil : $0 },
-                      tmux: tmuxSessionName(o["tmux"] as? String))
+                      tmux: tmuxSessionName(o["tmux"] as? String), entrypoint: o["entrypoint"] as? String)
     }
 
     /// Records whose process is still alive; the supervising `daemon` itself is left out.
@@ -56,6 +58,39 @@ nonisolated enum ClaudeSessions {
     }
 
     static func processAlive(_ pid: Int32) -> Bool { pid > 0 && (kill(pid, 0) == 0 || errno == EPERM) }
+
+    // MARK: - Remote Control server mode
+
+    /// The claude.ai session a `claude rc` child serves. The server starts each one headless as
+    /// `claude --print --sdk-url https://…/v1/code/sessions/cse_… --session-id cse_… …`.
+    static func remoteControlID(arguments: [String]) -> String? {
+        for (i, a) in arguments.enumerated() {
+            if a == "--sdk-url", i + 1 < arguments.count { return remoteControlID(sdkURL: arguments[i + 1]) }
+            if a.hasPrefix("--sdk-url=") { return remoteControlID(sdkURL: String(a.dropFirst("--sdk-url=".count))) }
+        }
+        return nil
+    }
+
+    /// Same, from a `ps -o args=` line.
+    static func remoteControlID(commandLine: String) -> String? {
+        remoteControlID(arguments: commandLine.split(whereSeparator: \.isWhitespace).map(String.init))
+    }
+
+    /// "cse_…" from an `--sdk-url` value (`…/code/sessions/cse_…`, or the session_ spelling).
+    static func remoteControlID(sdkURL: String) -> String? {
+        guard let m = sdkURL.firstMatch(of: /\/sessions\/(cse|session)_([A-Za-z0-9_-]+)/) else { return nil }
+        return "cse_" + m.2
+    }
+
+    /// The id claude.ai/code links use: Claude Code turns "cse_" into "session_" (same body).
+    static func compatSessionID(_ id: String) -> String {
+        id.hasPrefix("cse_") ? "session_" + id.dropFirst(4) : id
+    }
+
+    /// The registry's bridge id in "cse_" spelling.
+    static func infraSessionID(_ id: String) -> String {
+        id.hasPrefix("session_") ? "cse_" + id.dropFirst(8) : id
+    }
 
     // MARK: - Transcripts
 
@@ -230,17 +265,21 @@ nonisolated enum ClaudeSessions {
     // MARK: - Sessions
 
     /// A live process's session, its status from the registry and details from the transcript.
-    static func session(_ r: Record, summary: Summary?, transcript: URL?, host: String? = nil) -> AgentSession {
+    /// `remoteID`: from the process's `--sdk-url`, when it is a `claude rc` child. Without
+    /// the command line, a driven (`sdk-cli`) process with a bridge id and no tmux counts too.
+    static func session(_ r: Record, summary: Summary?, transcript: URL?, host: String? = nil, remoteID: String? = nil) -> AgentSession {
         let status = AgentStatus.claude(r.status)
         var detail: String?
         if status == .waiting, let tool = summary?.pendingTool { detail = "\(tool) permission" }
         if status == .running, let tool = summary?.pendingTool { detail = tool }
         let title = r.name ?? summary?.title ?? summary?.lastPrompt.map { String($0.prefix(80)) } ?? String(r.sessionID.prefix(8))
         let activity = [r.updatedAt, summary?.lastActivity].compactMap { $0 }.max() ?? r.startedAt ?? .distantPast
+        let driven = r.entrypoint == "sdk-cli" && r.tmux == nil && r.bridgeSessionID != nil
+        let rc = remoteID ?? (driven ? r.bridgeSessionID.map(infraSessionID) : nil)
         return AgentSession(provider: .claude, id: r.sessionID, host: host, title: title,
                             cwd: r.cwd.isEmpty ? (summary?.cwd ?? "") : r.cwd, status: status, lastActivity: activity,
                             pid: r.pid, tmux: r.tmux, bridgeID: r.bridgeSessionID, transcript: transcript?.path,
-                            detail: detail, model: summary?.model)
+                            detail: detail, model: summary?.model, kind: rc == nil ? .terminal : .remoteControl, remoteID: rc)
     }
 
     /// A finished session from its transcript alone.
