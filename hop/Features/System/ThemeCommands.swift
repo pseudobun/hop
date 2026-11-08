@@ -1,6 +1,7 @@
 import AppKit
 
-/// "Theme": pick one of hop's themes; it is written to `general.theme` and hop restarts.
+/// "Theme": pick one of hop's themes. The selected row previews it live; ↵ writes it to
+/// `general.theme`, where the config watcher applies it everywhere.
 enum ThemeCommands {
     static func items(_ services: Services) -> [Item] {
         [
@@ -19,6 +20,16 @@ final class ThemeMode: Mode {
     private let services: Services
 
     init(services: Services) { self.services = services }
+
+    /// Leaving without picking goes back to the saved theme.
+    func didExit() { services.previewTheme?(services.settings.data.general.theme) }
+
+    func selectionDidChange(_ item: Item?) {
+        guard let id = item?.id, id.hasPrefix("theme."),
+              let name = HopConfig.General.ThemeName(rawValue: String(id.dropFirst("theme.".count)))
+        else { return }
+        services.previewTheme?(name)
+    }
 
     func sections(for query: String) -> [ResultSection] {
         let q = query.trimmingCharacters(in: .whitespaces).lowercased()
@@ -40,17 +51,14 @@ final class ThemeMode: Mode {
 
     private static func apply(_ name: HopConfig.General.ThemeName, services: Services) -> ActionResult {
         let settings = services.settings
-        if settings.data.general.theme == name { return .pop }
+        if settings.data.general.theme == name { return .dismiss }
         guard let text = try? String(contentsOf: settings.url, encoding: .utf8),
               let updated = ConfigEdit.settingTheme(in: text, to: name.rawValue),
               (try? updated.write(to: settings.url, atomically: true, encoding: .utf8)) != nil
         else { return .failWithHUD("Could not write the theme to the config") }
-        // The watcher would notice too; loading now restarts hop without waiting for it.
-        Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(150))
-            settings.load()
-        }
-        return .dismissWithHUD("\(Theme.spec(name).label) — restarting hop")
+        // The watcher would notice too; loading now applies it before the launcher closes.
+        settings.load()
+        return .dismissWithHUD("Theme: \(Theme.spec(name).label)")
     }
 }
 

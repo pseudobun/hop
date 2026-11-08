@@ -33,6 +33,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private weak var bindingMode: Mode?
     private var bindingKey: String?
     private var snippetService: SnippetService!
+    private var wireGuardBar: WireGuardBar?
     private let expander = SnippetExpander()
     private var expanderRetry: Timer?
     private let activity = SystemActivity()
@@ -63,9 +64,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         services.keepassMode = makeKeePass
         services.keepass = keepass
-        notes = NotesController(settings: settings)
-        notes.openConfig = { [weak self] in self?.services.openConfig() }
-        services.notes = notes
+        makeNotes()
         var clipDir = AppPaths.file("Clipboard")
         #if DEBUG
         if let dir = UserDefaults.standard.string(forKey: "DebugClipboardDir") { clipDir = URL(fileURLWithPath: dir) }
@@ -73,8 +72,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         clipboardStore = ClipboardStore(dir: clipDir)
         clipboardStore.load()
         clipboardMonitor = ClipboardMonitor(store: clipboardStore) { settings.data.clipboard }
-        clipboard = ClipboardController(store: clipboardStore, monitor: clipboardMonitor, settings: settings)
-        services.clipboard = clipboard
+        makeClipboard()
         shelves = ShelfController(settings: settings)
         shelves.onChange = { [weak self] in self?.root?.rebuild() }
         services.shelves = shelves
@@ -95,10 +93,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         snippetService.presentArguments = { [weak self] mode in
             self?.launcher.show()
             self?.launcher.push(mode)
-        }
-        clipboard.saveSnippet = { text in
-            let first = text.split(whereSeparator: \.isNewline).first.map(String.init) ?? text
-            return snippetsFile.append(Snippet(name: String(first.trimmingCharacters(in: .whitespaces).prefix(40)), text: text))
         }
         snippetsFile.onChange = { [weak self] in
             self?.updateExpanderKeywords()
@@ -128,6 +122,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         launcher.popToRootSeconds = { settings.data.general.popToRootSeconds }
         launcher.keepQueryFor = { settings.data.general.keepQueryFor }
         launcher.onWillShow = { [weak self] in self?.calendar.launcherWillShow() }
+        // A theme previewed in the picker lasts while the launcher is up.
+        launcher.onDidHide = { [weak self] in self?.preview(theme: settings.data.general.theme) }
+        services.previewTheme = { [weak self] in self?.preview(theme: $0) }
         let wireGuardBar = WireGuardBar()
         wireGuardBar.config = { settings.data.wireguard }
         wireGuardBar.onShowAll = { [weak self] in
@@ -136,6 +133,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                               exclusive: wg.exclusive))
         }
         launcher.setStrip(wireGuardBar)
+        self.wireGuardBar = wireGuardBar
         #if DEBUG
         if UserDefaults.standard.bool(forKey: "DebugWireGuardFocus") {
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { wireGuardBar.debugFocus() }
@@ -281,6 +279,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 if defaults.string(forKey: "DebugPush") == "permissions" { launcher.push(makePermissions()) }
                 if defaults.string(forKey: "DebugPush") == "emoji" { launcher.push(EmojiCommands.mode(services)) }
                 if defaults.string(forKey: "DebugPush") == "theme" { launcher.push(ThemeMode(services: services)) }
+                if let q = defaults.string(forKey: "DebugPushQuery") { launcher.setQuery(q) }
                 if defaults.string(forKey: "DebugPush") == "kill" { launcher.push(KillProcessMode(sensitivity: settings.data.general.sensitivity)) }
                 if let path = defaults.string(forKey: "DebugLauncherRender") {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { DebugSnapshot.render(self.launcher.panel, to: path) }
@@ -303,8 +302,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Applies config changes: hotkey, login item, menu bar icon, feature commands.
     private func apply(_ config: HopConfig, previous: HopConfig?) {
         if let previous, previous.general.theme != config.general.theme {
-            relaunch()
-            return
+            // After the action that saved it has finished with the launcher.
+            DispatchQueue.main.async { [weak self] in self?.applyTheme(config.general.theme) }
         }
         if previous?.hyperKey != config.hyperKey {
             hyper.update(enabled: config.hyperKey.enabled, quickPressEscape: config.hyperKey.quickPressEscape)
@@ -584,13 +583,43 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 }
 
 extension AppDelegate {
-    /// Views take their colours and fonts when they are built: a new theme needs a fresh start.
-    func relaunch() {
-        let path = Bundle.main.bundleURL.path
-        let task = Process()
-        task.executableURL = URL(fileURLWithPath: "/bin/sh")
-        task.arguments = ["-c", "sleep 0.5; /usr/bin/open \"$0\"", path]
-        try? task.run()
-        NSApp.terminate(nil)
+    func makeNotes() {
+        notes = NotesController(settings: services.settings)
+        notes.openConfig = { [weak self] in self?.services.openConfig() }
+        services.notes = notes
+    }
+
+    func makeClipboard() {
+        clipboard = ClipboardController(store: clipboardStore, monitor: clipboardMonitor, settings: services.settings)
+        clipboard.saveSnippet = { [weak self] text in
+            guard let file = self?.snippetService?.file else { return false }
+            let first = text.split(whereSeparator: \.isNewline).first.map(String.init) ?? text
+            return file.append(Snippet(name: String(first.trimmingCharacters(in: .whitespaces).prefix(40)), text: text))
+        }
+        services.clipboard = clipboard
+    }
+
+    /// Views take their colours and fonts when they are built: the launcher is built again
+    /// in `name`, keeping its mode, query and selection. Notes and Clipboard follow in `applyTheme`.
+    func preview(theme name: HopConfig.General.ThemeName) {
+        guard Theme.variant != name else { return }
+        Theme.variant = name
+        wireGuardBar?.retheme()
+        launcher.retheme()
+    }
+
+    /// A saved theme: the launcher, Notes, Clipboard and root items in it, no restart.
+    /// Open shelves keep theirs until closed; new ones use it.
+    func applyTheme(_ name: HopConfig.General.ThemeName) {
+        preview(theme: name)
+        let notesShown = notes.isVisible, clipboardShown = clipboard.isVisible
+        notes.hide()
+        clipboard.hide()
+        makeNotes()
+        makeClipboard()
+        if notesShown { notes.show() }
+        if clipboardShown { clipboard.show() }
+        root.rebuild()
+        if launcher.isVisible { launcher.reload() } else { launcher.prepare() }
     }
 }

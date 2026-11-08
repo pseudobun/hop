@@ -92,7 +92,7 @@ final class WireGuardBar: NSView, LauncherStrip {
     private var poll: Task<Void, Never>?
     private let icon = NSImageView()
     private let stack = NSStackView()
-    private let more = WireGuardPill()
+    private var more = WireGuardPill()
     private let hint = NSTextField(labelWithString: "")
     private var pills: [WireGuardPill] = []
     private var fittedWidth: CGFloat = -1
@@ -123,6 +123,15 @@ final class WireGuardBar: NSView, LauncherStrip {
     }
 
     required init?(coder: NSCoder) { fatalError() }
+
+    /// Pills, hint and icon again in the current Theme.
+    func retheme() {
+        more = WireGuardPill()
+        more.onClick = { [weak self] in self?.onShowAll?() }
+        hint.font = Theme.mono(10, 500)
+        hint.textColor = Theme.mutedForeground
+        rebuild()
+    }
 
     // MARK: - LauncherStrip
 

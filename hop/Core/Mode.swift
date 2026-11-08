@@ -46,6 +46,8 @@ protocol Mode: AnyObject {
     func submit(_ query: String) -> ActionResult?
     /// Tab: a completed query (e.g. a path), or nil for the default Tab behaviour.
     func complete(_ query: String) -> String?
+    /// The selected row changed (keys, mouse or a reload).
+    func selectionDidChange(_ item: Item?)
 }
 
 extension Mode {
@@ -57,4 +59,5 @@ extension Mode {
     func didExit() {}
     func submit(_ query: String) -> ActionResult? { nil }
     func complete(_ query: String) -> String? { nil }
+    func selectionDidChange(_ item: Item?) {}
 }

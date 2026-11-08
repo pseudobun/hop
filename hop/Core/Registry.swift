@@ -14,6 +14,8 @@ final class Services {
     var snippets: SnippetService?
     var shelves: ShelfController?
     var calendar: CalendarController?
+    /// Shows the app in a theme without saving it (the Theme picker's preview).
+    var previewTheme: ((HopConfig.General.ThemeName) -> Void)?
     /// Hides the launcher, e.g. before pasting into the app behind it.
     var hideLauncher: (() -> Void)?
     /// Opens the config file in the user's editor, at the parse error when there is one.

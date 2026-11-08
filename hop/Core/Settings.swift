@@ -659,8 +659,7 @@ final class AppSettings {
         fallbacks: ["chatgpt", "google", "github"],
         openAtLogin: true,
         menuBarIcon: true,
-        // "og", "og-light", "modern", "solarpunk" or "cyberpunk"; also the Theme command.
-        // hop restarts to switch
+        // "og", "og-light", "modern", "solarpunk" or "cyberpunk"; the Theme command previews them
         theme: "og",
       },
 

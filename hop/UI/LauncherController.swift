@@ -18,6 +18,7 @@ final class LauncherController: NSObject, LauncherContext, NSTableViewDataSource
     var keepQueryFor: () -> Int = { 10 }
     /// Called at the start of every `show`, before the rows are built.
     var onWillShow: (() -> Void)?
+    var onDidHide: (() -> Void)?
 
     private var rows: [Row] = []
     /// The mode `rows` were built for; a different mode gets a full reload (row tint, cell kinds).
@@ -27,23 +28,23 @@ final class LauncherController: NSObject, LauncherContext, NSTableViewDataSource
     private var autoHideSuppression = 0
 
     // Views
-    private let searchField = NSTextField()
-    private let secureField = NSSecureTextField()
-    private let modePill = NSTextField(labelWithString: "")
-    private let accessoryHolder = NSStackView()
-    private let spinner = NSProgressIndicator()
-    private let table = NSTableView()
-    private let scroll = NSScrollView()
+    private var searchField = NSTextField()
+    private var secureField = NSSecureTextField()
+    private var modePill = NSTextField(labelWithString: "")
+    private var accessoryHolder = NSStackView()
+    private var spinner = NSProgressIndicator()
+    private var table = NSTableView()
+    private var scroll = NSScrollView()
     /// Stands in for the table when the mode's layout is a grid (emoji).
-    private let grid = GridResultsView()
-    private let footerTitle = NSTextField(labelWithString: "")
-    private let footerActions = NSTextField(labelWithString: "Actions  ⌘K")
-    private let emptyLabel = NSTextField(labelWithString: "No results")
-    private let actionPanel = ActionPanelView()
+    private var grid = GridResultsView()
+    private var footerTitle = NSTextField(labelWithString: "")
+    private var footerActions = NSTextField(labelWithString: "Actions  ⌘K")
+    private var emptyLabel = NSTextField(labelWithString: "No results")
+    private var actionPanel = ActionPanelView()
     private var actionPanelHeight: NSLayoutConstraint!
     /// Optional row under the search field, shown in the root search only (WireGuard tunnels).
     private var strip: LauncherStrip?
-    private let stripHolder = NSView()
+    private var stripHolder = NSView()
     private var stripHeight: NSLayoutConstraint!
 
     init(root: Mode) {
@@ -71,6 +72,36 @@ final class LauncherController: NSObject, LauncherContext, NSTableViewDataSource
     }
 
     private static let stripRowHeight: CGFloat = 34
+
+    /// Builds every view again with the current Theme, keeping the mode stack, the query
+    /// and the selected row; the strip moves over as it is (it rethemes itself).
+    func retheme() {
+        let text = query
+        let selectedID = selectedItem?.id
+        let actionsOpen = !actionPanel.isHidden
+        searchField = NSTextField()
+        secureField = NSSecureTextField()
+        modePill = NSTextField(labelWithString: "")
+        accessoryHolder = NSStackView()
+        spinner = NSProgressIndicator()
+        table = NSTableView()
+        scroll = NSScrollView()
+        grid = GridResultsView()
+        footerTitle = NSTextField(labelWithString: "")
+        footerActions = NSTextField(labelWithString: "Actions  ⌘K")
+        emptyLabel = NSTextField(labelWithString: "No results")
+        actionPanel = ActionPanelView()
+        stripHolder = NSView()
+        buildViews()
+        if let s = strip { strip = nil; setStrip(s) }
+        rows = []
+        rowsMode = nil
+        enterCurrentMode(query: text)
+        if loadingCount > 0 { spinner.startAnimation(nil) }
+        refresh(selecting: selectedID)
+        activeField.currentEditor()?.moveToEndOfDocument(nil)
+        if actionsOpen { openActionPanel() }
+    }
 
     private var stripShown: Bool { current === root && strip?.hasContent == true }
 
@@ -198,6 +229,7 @@ final class LauncherController: NSObject, LauncherContext, NSTableViewDataSource
         panel.orderOut(nil)
         strip?.launcherDidHide()
         lastHidden = Date()
+        onDidHide?()
     }
 
     func windowDidResignKey(_ notification: Notification) {
@@ -231,8 +263,8 @@ final class LauncherController: NSObject, LauncherContext, NSTableViewDataSource
         if case .grid(let columns) = current.layout { columns } else { nil }
     }
 
-    private func refresh(keepSelection: Bool = false) {
-        let previousID = keepSelection ? selectedItem?.id : nil
+    private func refresh(keepSelection: Bool = false, selecting id: String? = nil) {
+        let previousID = id ?? (keepSelection ? selectedItem?.id : nil)
         let sections = current.sections(for: query)
         scroll.isHidden = gridColumns != nil
         grid.isHidden = gridColumns == nil
@@ -334,6 +366,7 @@ final class LauncherController: NSObject, LauncherContext, NSTableViewDataSource
     }
 
     private func updateFooter() {
+        current.selectionDidChange(selectedItem)
         if current === root, let strip, strip.isFocused {
             footerTitle.attributedStringValue = strip.focusedActionTitle.map { Keycap.label($0, keys: "↵") } ?? NSAttributedString()
             footerActions.attributedStringValue = Keycap.label("Back", keys: "esc")
