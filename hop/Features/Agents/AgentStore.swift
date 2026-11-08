@@ -324,7 +324,8 @@ final class AgentStore {
         let since = Date().addingTimeInterval(-Double(max(1, historyHours)) * 3600)
         for (url, modified) in ClaudeSessions.recentTranscripts(since: since) {
             let id = url.deletingPathExtension().lastPathComponent
-            guard !live.contains(id), let s = summary(url, bytes: 64 * 1024), !s.entries.isEmpty || s.title != nil else { continue }
+            guard !live.contains(id), let s = summary(url, bytes: 64 * 1024), !s.entries.isEmpty || s.title != nil,
+                  (s.lastActivity ?? modified) > since else { continue }
             out.append(ClaudeSessions.finished(url, modified: modified, summary: s))
         }
         return out
