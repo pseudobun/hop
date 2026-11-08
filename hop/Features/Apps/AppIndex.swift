@@ -217,3 +217,13 @@ final class AppIndex {
         stream = s
     }
 }
+
+/// Opens apps off the main thread: LaunchServices blocks the caller while Gatekeeper asks
+/// whether to open a newly downloaded app, which would freeze hop until it is answered.
+nonisolated enum AppLauncher {
+    private static let queue = DispatchQueue(label: "hop.app-launch", qos: .userInitiated, attributes: .concurrent)
+
+    static func open(_ url: URL) {
+        queue.async { NSWorkspace.shared.open(url) }
+    }
+}

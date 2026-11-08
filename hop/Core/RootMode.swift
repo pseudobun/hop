@@ -232,7 +232,7 @@ final class RootMode: Mode {
             .map(NotesCommands.display) ?? kindName
         var actions = [
             Action(title: entry.kind == .application ? "Open Application" : "Open Settings") {
-                NSWorkspace.shared.open(entry.openURL)
+                AppLauncher.open(entry.openURL)
                 return .dismiss
             },
         ]

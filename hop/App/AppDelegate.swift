@@ -549,7 +549,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if let id = app.bundleID, let front = NSWorkspace.shared.frontmostApplication, front.bundleIdentifier == id {
             front.hide()
         } else {
-            NSWorkspace.shared.open(app.openURL)
+            AppLauncher.open(app.openURL)
         }
     }
 
