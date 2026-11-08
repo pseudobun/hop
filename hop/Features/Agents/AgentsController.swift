@@ -27,8 +27,28 @@ final class AgentsPanel: NSPanel {
         appearance = Theme.darkAppearance
     }
 
+    /// A regular app window instead of the floating panel: in the Dock and ⌘Tab, one Space,
+    /// traffic lights, behind other windows when they take focus.
+    private(set) var windowed = false
+
+    func setWindowed(_ on: Bool) {
+        windowed = on
+        if on {
+            styleMask.remove(.nonactivatingPanel)
+            styleMask.formUnion([.closable, .miniaturizable])
+        } else {
+            styleMask.insert(.nonactivatingPanel)
+            styleMask.subtract([.closable, .miniaturizable])
+        }
+        for b in [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton] { standardWindowButton(b)?.isHidden = !on }
+        isFloatingPanel = !on
+        level = on ? .normal : .floating
+        collectionBehavior = on ? [.managed, .participatesInCycle, .fullScreenPrimary]
+                                : [.canJoinAllSpaces, .fullScreenAuxiliary, .ignoresCycle]
+    }
+
     override var canBecomeKey: Bool { true }
-    override var canBecomeMain: Bool { false }
+    override var canBecomeMain: Bool { windowed }
 
     override func sendEvent(_ event: NSEvent) {
         if event.type == .keyDown, let keyHandler, keyHandler(event) { return }
@@ -58,6 +78,11 @@ final class AgentsController: NSObject, NSWindowDelegate, NSTableViewDataSource,
     private var detailShownFor: AgentSession?
     private var ageTimer: Timer?
     private static let frameName = "hop.agents"
+    private static let windowedKey = "hop.agents.windowed"
+    private static let archivedKey = "hop.agents.archived"
+    /// Session keys hidden with ⌘⌫; searching "archived" lists them.
+    private var archived = Set(UserDefaults.standard.stringArray(forKey: archivedKey) ?? [])
+    private var deleteArmed: (key: String, until: Date)?
 
     // Views
     private let searchField = NSTextField()
@@ -87,6 +112,7 @@ final class AgentsController: NSObject, NSWindowDelegate, NSTableViewDataSource,
         buildViews()
         panel.delegate = self
         panel.keyHandler = { [weak self] in self?.handleKey($0) ?? false }
+        if UserDefaults.standard.bool(forKey: Self.windowedKey) { panel.setWindowed(true) }
         if !panel.setFrameUsingName(Self.frameName) { panel.positionOnMouseScreen() }
         panel.setFrameAutosaveName(Self.frameName)
         store.onChange = { [weak self] in self?.storeChanged() }
@@ -109,18 +135,24 @@ final class AgentsController: NSObject, NSWindowDelegate, NSTableViewDataSource,
     }
 
     func show(newSession: Bool = false) {
-        panel.level = config.floating ? .floating : .normal
+        if !panel.windowed { panel.level = config.floating ? .floating : .normal }
         let wasVisible = panel.isVisible
         if !wasVisible {
             searchField.stringValue = ""
             closeActionPanel()
-            if !panel.isOnActiveScreenWithMouse { panel.positionOnMouseScreen() }
+            if !panel.windowed && !panel.isOnActiveScreenWithMouse { panel.positionOnMouseScreen() }
             store.start()
             reload()
             startAgeTimer()
         }
-        panel.orderFrontRegardless()
-        panel.makeKey()
+        if panel.windowed {
+            NSApp.setActivationPolicy(.regular)
+            NSApp.activate()
+            panel.makeKeyAndOrderFront(nil)
+        } else {
+            panel.orderFrontRegardless()
+            panel.makeKey()
+        }
         if newSession { openForm() } else if form.isHidden { panel.makeFirstResponder(searchField) }
     }
 
@@ -130,6 +162,7 @@ final class AgentsController: NSObject, NSWindowDelegate, NSTableViewDataSource,
         closePromptBar()
         if !form.isHidden { closeForm() }
         panel.orderOut(nil)
+        if panel.windowed { NSApp.setActivationPolicy(.accessory) }
         store.stop()
         ageTimer?.invalidate()
         ageTimer = nil
@@ -140,6 +173,25 @@ final class AgentsController: NSObject, NSWindowDelegate, NSTableViewDataSource,
     }
 
     func windowDidResize(_ notification: Notification) { updateFooter() }
+
+    func windowShouldClose(_ sender: NSWindow) -> Bool {
+        hide()
+        return false
+    }
+
+    /// ⌘⇧W: floating panel ↔ regular window.
+    private func toggleWindowed() {
+        let on = !panel.windowed
+        UserDefaults.standard.set(on, forKey: Self.windowedKey)
+        panel.setWindowed(on)
+        if on {
+            show()
+        } else {
+            NSApp.setActivationPolicy(.accessory)
+            show()
+        }
+        HUD.shared.show(on ? "Agents: window" : "Agents: floating panel", symbol: on ? "macwindow" : "macwindow.on.rectangle")
+    }
 
     private func startAgeTimer() {
         ageTimer?.invalidate()
@@ -170,7 +222,7 @@ final class AgentsController: NSObject, NSWindowDelegate, NSTableViewDataSource,
         guard !q.isEmpty else { return true }
         let hay = [s.title, s.shortCwd, s.host ?? "this mac", s.provider.label, s.tmux ?? "", s.status.label,
                    s.kind == .remoteControl ? "rc remote control" : "", s.isViewOnly ? "view only" : "", s.needsTrust ? "trust folder" : "",
-                   s.herdrPane != nil ? "herdr" : "", s.herdrName ?? ""].joined(separator: " ").lowercased()
+                   s.herdrPane != nil ? "herdr" : "", s.herdrName ?? "", archived.contains(s.key) ? "archived" : ""].joined(separator: " ").lowercased()
         return q.split(separator: " ").allSatisfy { hay.contains($0) }
     }
 
@@ -186,7 +238,8 @@ final class AgentsController: NSObject, NSWindowDelegate, NSTableViewDataSource,
     }
 
     private func reload() {
-        let visible = store.sessions.filter(matches)
+        let showArchived = query.split(separator: " ").contains("archived")
+        let visible = store.sessions.filter { archived.contains($0.key) == showArchived && matches($0) }
         rows = []
         var last: AgentStatus?
         for s in visible {
@@ -435,6 +488,24 @@ final class AgentsController: NSObject, NSWindowDelegate, NSTableViewDataSource,
             self?.refreshAll()
             return .stay
         })
+        list.append(Action(title: panel.windowed ? "Use Floating Panel" : "Open as Window", symbol: "macwindow",
+                           shortcut: .cmd("w", .shift)) { [weak self] in
+            self?.toggleWindowed()
+            return .stay
+        })
+        let isArchived = archived.contains(s.key)
+        list.append(Action(title: isArchived ? "Unarchive" : "Archive", symbol: "archivebox",
+                           shortcut: KeyCombo(key: .delete, modifiers: [.command])) { [weak self] in
+            self?.setArchived(s, !isArchived)
+            return .stay
+        })
+        if s.isLocal, s.status == .finished, s.provider == .claude, s.transcript != nil {
+            list.append(Action(title: "Delete Transcript…", symbol: "trash", shortcut: KeyCombo(key: .delete, modifiers: [.command, .shift]),
+                               style: .destructive) { [weak self] in
+                self?.delete(s)
+                return .stay
+            })
+        }
         if let name = s.tmux, name.hasPrefix("hop-") {
             list.append(Action(title: "Stop tmux Session…", symbol: "xmark.octagon", shortcut: KeyCombo(key: .character("x"), modifiers: .control),
                                style: .destructive) { [weak self] in
@@ -460,6 +531,33 @@ final class AgentsController: NSObject, NSWindowDelegate, NSTableViewDataSource,
         store.refresh(force: true)
         store.refreshRemote()
         if let s = selectedSession { loadDetail(s, delay: 0) }
+    }
+
+    private func setArchived(_ s: AgentSession, _ on: Bool) {
+        if on { archived.insert(s.key) } else { archived.remove(s.key) }
+        UserDefaults.standard.set(Array(archived), forKey: Self.archivedKey)
+        HUD.shared.show(on ? "Archived · search \"archived\" to see it" : "Unarchived", symbol: "archivebox")
+        reload()
+    }
+
+    /// Two presses within four seconds: the transcript goes to the Trash (recoverable there).
+    private func delete(_ s: AgentSession) {
+        guard let path = s.transcript else { return }
+        if let armed = deleteArmed, armed.key == s.key, armed.until > Date() {
+            deleteArmed = nil
+            do {
+                try FileManager.default.trashItem(at: URL(fileURLWithPath: path), resultingItemURL: nil)
+                archived.remove(s.key)
+                UserDefaults.standard.set(Array(archived), forKey: Self.archivedKey)
+                HUD.shared.show("Moved \(s.title) to Trash", symbol: "trash.fill")
+            } catch {
+                HUD.shared.fail(error.localizedDescription)
+            }
+            refreshAll()
+            return
+        }
+        deleteArmed = (s.key, Date().addingTimeInterval(4))
+        HUD.shared.show("Press ⌘⇧⌫ again to move the transcript to Trash", symbol: "trash")
     }
 
     /// Two presses within four seconds: the agent in it ends.
@@ -658,6 +756,7 @@ final class AgentsController: NSObject, NSWindowDelegate, NSTableViewDataSource,
         if KeyCombo.cmd("k").matches(event) { toggleActionPanel(); return true }
         if KeyCombo.cmd("n").matches(event) { openForm(); return true }
         if KeyCombo.cmd("r").matches(event) { refreshAll(); return true }
+        if KeyCombo.cmd("w", .shift).matches(event) { toggleWindowed(); return true }
         if let s = selectedSession {
             for (i, action) in actions(for: s).enumerated() {
                 if i == 0 && KeyCombo.ret().matches(event) { run(action); return true }
