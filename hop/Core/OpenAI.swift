@@ -90,7 +90,7 @@ enum OpenAICommands {
 /// The OpenAI API key in the login Keychain. Read once and kept in memory; Keychain
 /// calls are IPC, so the first read happens off the main thread.
 nonisolated enum OpenAIKey {
-    static let service = "dev.hop.app.openai"
+    static let service = AppPaths.bundleID + ".openai"
     private static let account = "api-key"
     private static let queue = DispatchQueue(label: "hop.openai-key")
     /// Only touched on `queue`.

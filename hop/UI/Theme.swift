@@ -1,9 +1,8 @@
 import AppKit
 import CoreText
 
-/// The olympus dashboard design system (olympus-dashboard/packages/ui globals.css,
-/// dark theme), translated to AppKit: dark-first, dense and quiet; colours are
-/// tokens only; Outfit for language, Geist Mono for values and labels.
+/// hop's design system, translated to AppKit: dark-first, dense and quiet; colours
+/// are tokens only; Outfit for language, Geist Mono for values and labels.
 enum Theme {
     private static func rgb(_ r: CGFloat, _ g: CGFloat, _ b: CGFloat, _ a: CGFloat = 1) -> NSColor {
         NSColor(srgbRed: r, green: g, blue: b, alpha: a)

@@ -117,7 +117,7 @@ nonisolated struct HopConfig: Decodable, Equatable, Sendable {
         var enabled = true
         var hotkey = "alt+."
         /// Folder of Markdown files; an Obsidian vault works as is.
-        var folder = "~/Library/Mobile Documents/iCloud~md~obsidian/Documents/obsidian"
+        var folder = "~/Notes"
         /// Where new notes go, relative to `folder`.
         var newNoteFolder = "Inbox"
         /// Start of every new note; `{{title}}` and `{{date}}` are filled in.
@@ -808,7 +808,7 @@ final class AppSettings {
         databases: [
           {
             name: "Personal",
-            path: "~/Documents/Passwords.kdbx",
+            path: "~/Passwords.kdbx",
             // Optional key file
             keyFile: "",
             // Where the master password comes from (see below)
@@ -860,8 +860,9 @@ final class AppSettings {
         enabled: true,
         // Opens the floating notes window from anywhere
         hotkey: "alt+.",
-        // Folder of Markdown files; an Obsidian vault works as is
-        folder: "~/Library/Mobile Documents/iCloud~md~obsidian/Documents/obsidian",
+        // Folder of Markdown files; an Obsidian vault works as is, e.g. one in iCloud Drive:
+        // "~/Library/Mobile Documents/iCloud~md~obsidian/Documents/<vault>"
+        folder: "~/Notes",
         // Where ⌘N puts new notes, relative to folder
         newNoteFolder: "Inbox",
         // Start of every new note; {{title}} and {{date}} are filled in
@@ -1002,7 +1003,7 @@ final class AppSettings {
         },
         // Machines reached over SSH: sessions there are listed, new ones start there in tmux
         hosts: [
-          // { name: "zeus", ssh: "zeus", cwd: "~", projects: ["~/apps/lutraid"] },
+          // { name: "my-server", ssh: "my-server", cwd: "~", projects: ["~/code/app"] },
         ],
       },
 

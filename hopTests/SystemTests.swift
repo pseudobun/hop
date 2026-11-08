@@ -97,7 +97,7 @@ struct ConfigTests {
 
     @Test func templateParsesToDefaults() throws {
         var expected = HopConfig()
-        expected.keepass.databases = [.init(name: "Personal", path: "~/Documents/Passwords.kdbx")]
+        expected.keepass.databases = [.init(name: "Personal", path: "~/Passwords.kdbx")]
         #expect(try Self.decode(AppSettings.template) == expected)
     }
 

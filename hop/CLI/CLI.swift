@@ -666,8 +666,7 @@ enum CLI {
         guard !paths.isEmpty else { return Output.fail("usage: hop shelf <path…>") }
         let missing = paths.filter { !FileManager.default.fileExists(atPath: $0) }
         guard missing.isEmpty else { return Output.fail("no such file: \(missing.joined(separator: ", "))") }
-        // Run through the /opt/homebrew/bin symlink, Bundle.main is not the app bundle.
-        let id = Bundle.main.bundleIdentifier ?? "dev.hop.app"
+        let id = AppPaths.bundleID
         guard !NSRunningApplication.runningApplications(withBundleIdentifier: id).isEmpty else {
             return Output.fail("hop is not running")
         }

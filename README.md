@@ -2,7 +2,7 @@
 
 <h1>hop</h1>
 
-A tiny native macOS launcher. Pure Swift + AppKit, no WebKit. ~3.5 MB binary, ~40 MB RAM, 0 % idle CPU. Styled with the olympus dashboard design system (Outfit, Geist Mono, DS tokens).
+A tiny native macOS launcher. Pure Swift + AppKit, no WebKit. ~3.5 MB binary, ~40 MB RAM, 0 % idle CPU. Dark, dense and quiet: Outfit for text, Geist Mono for values, colours from a small set of design tokens.
 
 </div>
 
@@ -44,7 +44,19 @@ Requires macOS 26 on Apple Silicon (Release builds are arm64 only).
 just install   # Release build → /Applications/hop.app, CLI → /opt/homebrew/bin/hop
 ```
 
-With an Apple Development identity in the keychain the build is signed, so the Accessibility grant survives updates. Otherwise it is ad-hoc signed (grants reset on every rebuild).
+With an Apple Development identity in the keychain and a team in `Local.xcconfig` the build is signed, so the Accessibility grant survives updates. Otherwise it is ad-hoc signed (grants reset on every rebuild).
+
+### Building your own copy
+
+```sh
+git clone <this repo> hop && cd hop
+cp Local.xcconfig.example Local.xcconfig   # optional: your team id and bundle id
+just install
+```
+
+`Local.xcconfig` is gitignored. It sets `DEVELOPMENT_TEAM` (your Apple Developer team id, for signed builds) and `HOP_BUNDLE_ID` (default `dev.hop.app`). The bundle id also names hop's data folder (`~/Library/Application Support/<bundle id>`), its Keychain items and its log subsystem, so keep it once you have data. Without the file hop builds ad-hoc as `dev.hop.app`.
+
+On first launch hop writes a commented config to `~/.config/hop/config.json5`; nothing personal is preset (KeePassXC, SSH hosts and bookmarks start empty, notes point at `~/Notes`).
 
 Free ⌘Space first: System Settings → Keyboard → Keyboard Shortcuts → Spotlight → uncheck "Show Spotlight search". Or set another `general.hotkey`.
 
@@ -85,7 +97,7 @@ Notes are keyboard-first; ⌘/ shows every shortcut. The right-hand “On this p
 | ⇧⌘O | open in Obsidian |
 | Esc | close find, then search, then the window (it floats above other apps until then) |
 
-Clipboard history lives in `~/Library/Application Support/dev.hop.app/Clipboard` (folder 0700, files 0600). Copies marked concealed or transient (KeePassXC, 1Password, hop's own password pastes) and copies from `clipboard.ignoreApps` are never recorded. Unpinned entries go after `clipboard.keepDays` or beyond `clipboard.maxItems`. Deleting everything takes ⌃⇧X twice.
+Clipboard history lives in `~/Library/Application Support/<bundle id>/Clipboard` (folder 0700, files 0600). Copies marked concealed or transient (KeePassXC, 1Password, hop's own password pastes) and copies from `clipboard.ignoreApps` are never recorded. Unpinned entries go after `clipboard.keepDays` or beyond `clipboard.maxItems`. Deleting everything takes ⌃⇧X twice.
 
 Every global hotkey is configurable: `general.hotkey` (⌘Space), `notes.hotkey` (⌥.), `clipboard.hotkey` (⇧⌥C), `agents.hotkey` (⇧⌘Space), plus a `hotkeys` section that binds any command or app:
 
@@ -150,7 +162,7 @@ agents: {
   claude: { binary: "", args: ["--model", "opus"], remoteControl: true },
   opencode: { binary: "", args: [] },
   hosts: [
-    { name: "zeus", ssh: "zeus", cwd: "~", projects: ["~/apps/lutraid"] },
+    { name: "my-server", ssh: "my-server", cwd: "~", projects: ["~/code/app"] },
   ],
 },
 ```
@@ -187,14 +199,14 @@ hop kill 1234 --force --yes
 hop kp dbs
 hop kp search github --db Work --json
 hop kp get github --field totp # password, totp and notes need keepass.cliAccess: true
-hop notes list olympus --json  # title matches, then text matches
+hop notes list server --json   # title matches, then text matches
 hop notes show "Home"
-hop notes new "Call Mojca" "about the flat"   # or pipe the text in
+hop notes new "Call Alex" "about the flat"   # or pipe the text in
 echo "- [ ] renew domain" | hop notes append TODOs
 hop clip list ssh --json       # clipboard history; needs clipboard.cliAccess: true
 hop clip copy 3                # put entry 3 back on the clipboard
 hop files justfile --limit=5   # Spotlight, names (or --content)
-hop snippets expand ";mt" --who=Mojca   # a snippet with its placeholders filled in
+hop snippets expand ";mt" --who=Alex    # a snippet with its placeholders filled in
 hop hotkeys                    # hop's hotkeys, the hotkeys section, every bindable command
 hop config path | check | show
 hop convert 100 usd to eur     # units or currency
@@ -214,6 +226,6 @@ Destructive commands only describe what they would do unless `--yes` is passed.
 
 ```sh
 just build        # Debug
-just test         # Swift Testing, golden fixtures from ~/repos/raycast-re
+just test         # Swift Testing, golden fixtures in hopTests/Fixtures
 scripts/build-local.sh build && open ~/Applications/hop.app --args -DebugShowOnLaunch YES -DebugQuery saf -DebugSnapshotPath /tmp/hop.png
 ```

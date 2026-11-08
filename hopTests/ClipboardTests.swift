@@ -25,7 +25,7 @@ struct ClipColorTests {
 
 struct ClipboardClassifierTests {
     @Test func kinds() {
-        #expect(ClipboardClassifier.kind(of: "https://github.com/pseudobun/hop") == .link)
+        #expect(ClipboardClassifier.kind(of: "https://github.com/example/hop") == .link)
         #expect(ClipboardClassifier.kind(of: "  mailto:you@example.com \n") == .link)
         #expect(ClipboardClassifier.kind(of: "#10B981") == .color)
         #expect(ClipboardClassifier.kind(of: "see https://x.dev now") == .text)
@@ -53,8 +53,8 @@ struct ClipboardClassifierTests {
     }
 
     @Test func searchAndGroups() {
-        let item = ClipboardItem(kind: .text, text: "ssh pseudobun@olympus", sourceName: "Ghostty", hash: "h")
-        #expect(item.matches("olympus SSH") && item.matches("ghostty") && item.matches("text") && !item.matches("minsky"))
+        let item = ClipboardItem(kind: .text, text: "ssh me@server", sourceName: "Ghostty", hash: "h")
+        #expect(item.matches("server SSH") && item.matches("ghostty") && item.matches("text") && !item.matches("laptop"))
         let accented = ClipboardItem(kind: .text, text: "Pošljem predlog", hash: "a")
         #expect(accented.matches("POSLJEM") && accented.matches("pošl"))
         let long = ClipboardItem(kind: .text, text: String(repeating: "x", count: 50_000), hash: "l")

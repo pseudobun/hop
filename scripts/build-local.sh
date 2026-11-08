@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Ad-hoc build for machines without a signing identity (olympus).
+# Ad-hoc build for machines without a signing identity.
 # Usage: scripts/build-local.sh [build|test] [Debug|Release]
 set -euo pipefail
 

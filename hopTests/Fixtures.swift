@@ -1,6 +1,6 @@
 import Foundation
 
-/// Golden fixtures from ~/repos/raycast-re, read from the source tree.
+/// Golden fixtures (from the raycast-re reverse-engineering notes), read from the source tree.
 nonisolated enum Fixtures {
     static let directory = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appending(path: "Fixtures")
 

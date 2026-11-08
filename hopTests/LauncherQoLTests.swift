@@ -125,7 +125,7 @@ struct LauncherQoLTests {
         #expect(FallbackSearch.url(google, query: "čevapi #1")?.absoluteString
             == "https://www.google.com/search?q=%C4%8Devapi%20%231")
         let github = try #require(FallbackSearch.engine("github"))
-        #expect(FallbackSearch.url(github, query: "lutralabs/hop")?.absoluteString == "https://github.com/search?q=lutralabs%2Fhop")
+        #expect(FallbackSearch.url(github, query: "example/hop")?.absoluteString == "https://github.com/search?q=example%2Fhop")
         let custom = try #require(FallbackSearch.engine("https://duckduckgo.com/?q={query}"))
         #expect(custom.title == "Search duckduckgo.com")
         #expect(FallbackSearch.url(custom, query: "a b")?.absoluteString == "https://duckduckgo.com/?q=a%20b")

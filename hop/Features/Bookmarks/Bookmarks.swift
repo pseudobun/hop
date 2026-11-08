@@ -32,7 +32,7 @@ enum BookmarkCommands {
         return u
     }
 
-    /// The URL without its scheme or a trailing slash, e.g. "192.168.1.50:8123".
+    /// The URL without its scheme or a trailing slash, e.g. "homeassistant.local:8123".
     static func display(_ url: URL) -> String {
         var s = url.absoluteString
         if let r = s.range(of: "://") { s = String(s[r.upperBound...]) }

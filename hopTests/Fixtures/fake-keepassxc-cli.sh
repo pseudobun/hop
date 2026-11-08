@@ -7,6 +7,6 @@ if [ "$pw" != "secret" ]; then
 fi
 cat <<'CSV'
 "Group","Title","Username","Password","URL","Notes","TOTP","Icon","Last Modified","Created"
-"Root","GitHub","bunny","hunter2","https://github.com","","","0","",""
+"Root","GitHub","alice","hunter2","https://github.com","","","0","",""
 "Root/Recycle Bin","Gone","x","x","","","","0","",""
 CSV

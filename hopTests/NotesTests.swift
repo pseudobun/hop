@@ -30,9 +30,9 @@ struct MarkdownStylerTests {
     }
 
     @Test func links() {
-        #expect(has("see [[olympus|the mini]] now", "olympus|the mini", .link("note:olympus|the mini")))
+        #expect(has("see [[atlas|the mini]] now", "atlas|the mini", .link("note:atlas|the mini")))
         #expect(has("[docs](https://x.dev/a)", "docs", .link("https://x.dev/a")))
-        #expect(has("at https://pseudobun.dev/x.", "https://pseudobun.dev/x", .link("https://pseudobun.dev/x")))
+        #expect(has("at https://example.com/x.", "https://example.com/x", .link("https://example.com/x")))
     }
 
     @Test func tagsNotInsideURLsOrHeadings() {
@@ -104,7 +104,7 @@ struct NoteStoreTests {
     @Test func scanSkipsHiddenFoldersAndListsPlaceholders() throws {
         let root = FileManager.default.temporaryDirectory.appending(path: "hop-notes-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: root) }
-        for (path, age) in [("Home.md", 30.0), ("Infra/olympus.md", 10), (".obsidian/x.md", 0), ("raw/a.png", 0),
+        for (path, age) in [("Home.md", 30.0), ("Infra/atlas.md", 10), (".obsidian/x.md", 0), ("raw/a.png", 0),
                             ("Inbox/.Evicted.md.icloud", 20), (".trash/old.md", 0), ("notes.txt", 0)] {
             let url = root.appending(path: path)
             try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
@@ -112,21 +112,21 @@ struct NoteStoreTests {
             try FileManager.default.setAttributes([.modificationDate: date.addingTimeInterval(-age)], ofItemAtPath: url.path)
         }
         let notes = try NoteStore.scan(root)
-        #expect(notes.map(\.relativePath) == ["Infra/olympus.md", "Inbox/Evicted.md", "Home.md"])
+        #expect(notes.map(\.relativePath) == ["Infra/atlas.md", "Inbox/Evicted.md", "Home.md"])
         #expect(notes.map(\.isPlaceholder) == [false, true, false])
-        #expect(notes[0].title == "olympus" && notes[0].folder == "Infra")
+        #expect(notes[0].title == "atlas" && notes[0].folder == "Infra")
         #expect(throws: (any Error).self) { try NoteStore.scan(root.appending(path: "missing")) }
     }
 
     @Test func searchRanksTitlesThenText() {
-        let notes = ["Infra/olympus.md", "Me/Bunny.md", "Gear/Printer.md"].enumerated().map { i, p in
+        let notes = ["Infra/atlas.md", "Me/Alex.md", "Gear/Printer.md"].enumerated().map { i, p in
             NoteFile(url: URL(fileURLWithPath: "/v/" + p), relativePath: p, modified: date.addingTimeInterval(Double(-i)))
         }
-        let contents = ["Me/Bunny.md": "---\ntitle: Bunny\n---\nRuns olympus as a home server\n",
+        let contents = ["Me/Alex.md": "---\ntitle: Alex\n---\nRuns atlas as a home server\n",
                         "Gear/Printer.md": "Bambu printer"]
-        let hits = NoteStore.search(notes, query: "olympus", contents: contents)
-        #expect(hits.map(\.note.title) == ["olympus", "Bunny"])
-        #expect(hits[1].snippet == "Runs olympus as a home server")
+        let hits = NoteStore.search(notes, query: "atlas", contents: contents)
+        #expect(hits.map(\.note.title) == ["atlas", "Alex"])
+        #expect(hits[1].snippet == "Runs atlas as a home server")
         #expect(NoteStore.search(notes, query: "bambu PRINTER", contents: contents).map(\.note.title) == ["Printer"])
         #expect(NoteStore.search(notes, query: "", contents: [:]).count == 3)
         #expect(NoteStore.search(notes, query: "zzz", contents: contents).isEmpty)
@@ -136,7 +136,7 @@ struct NoteStoreTests {
         #expect(NoteStore.fileName(for: "  a/b: c? [x] #1 ") == "a b c x 1")
         #expect(NoteStore.fileName(for: "...") == "Untitled")
         let dir = URL(fileURLWithPath: "/nonexistent-\(UUID().uuidString)")
-        #expect(NoteStore.uniqueURL(in: dir, title: "Olympus", taken: ["olympus", "olympus 2"]).lastPathComponent == "Olympus 3.md")
+        #expect(NoteStore.uniqueURL(in: dir, title: "Atlas", taken: ["atlas", "atlas 2"]).lastPathComponent == "Atlas 3.md")
         #expect(NoteStore.uniqueURL(in: dir, title: "New", taken: []).lastPathComponent == "New.md")
     }
 
@@ -155,7 +155,7 @@ struct NoteStoreTests {
     }
 
     @Test func yamlQuoting() {
-        #expect(NoteStore.yamlScalar("olympus") == "olympus")
+        #expect(NoteStore.yamlScalar("atlas") == "atlas")
         #expect(NoteStore.yamlScalar("") == "\"\"")
         #expect(NoteStore.yamlScalar("yes") == "\"yes\"")
         #expect(NoteStore.yamlScalar("2026") == "\"2026\"")
@@ -164,20 +164,20 @@ struct NoteStoreTests {
 
     @Test func derivedTitles() {
         #expect(NoteStore.derivedTitle("---\ntitle: \"\"\n---\n\n## **Buy** milk\nmore") == "Buy milk")
-        #expect(NoteStore.derivedTitle("- [ ] call [[Mojca]]") == "call Mojca")
+        #expect(NoteStore.derivedTitle("- [ ] call [[Alex]]") == "call Alex")
         #expect(NoteStore.derivedTitle("\n  \n") == nil)
         #expect(NoteStore.derivedTitle(String(repeating: "word ", count: 30))?.count ?? 0 <= 60)
     }
 
     @Test func resolvesWikiLinks() {
-        let notes = ["Infra/Machines/olympus.md", "Work/Lutra Labs.md"].map {
+        let notes = ["Infra/Machines/atlas.md", "Work/Acme Corp.md"].map {
             NoteFile(url: URL(fileURLWithPath: "/v/" + $0), relativePath: $0, modified: date)
         }
-        #expect(NoteStore.resolve(link: "olympus", in: notes)?.relativePath == "Infra/Machines/olympus.md")
-        #expect(NoteStore.resolve(link: "Lutra Labs#LutraID", in: notes)?.title == "Lutra Labs")
-        #expect(NoteStore.resolve(link: "lutra labs|LL", in: notes)?.title == "Lutra Labs")
-        #expect(NoteStore.resolve(link: "Machines/olympus.md", in: notes)?.title == "olympus")
-        #expect(NoteStore.resolve(link: "minsky", in: notes) == nil)
+        #expect(NoteStore.resolve(link: "atlas", in: notes)?.relativePath == "Infra/Machines/atlas.md")
+        #expect(NoteStore.resolve(link: "Acme Corp#Widgets", in: notes)?.title == "Acme Corp")
+        #expect(NoteStore.resolve(link: "acme corp|AC", in: notes)?.title == "Acme Corp")
+        #expect(NoteStore.resolve(link: "Machines/atlas.md", in: notes)?.title == "atlas")
+        #expect(NoteStore.resolve(link: "nas", in: notes) == nil)
     }
 
     @Test func shortAges() {
@@ -261,21 +261,21 @@ struct NoteSearchTests {
     }
 
     @Test func filtersByPathTagAndExclusion() {
-        let all = notes(["Infra/olympus.md", "Infra/minsky.md", "Me/Bunny.md", "Inbox/todo.md"])
+        let all = notes(["Infra/atlas.md", "Infra/nas.md", "Me/Alex.md", "Inbox/todo.md"])
         let contents = [
-            "Infra/olympus.md": "---\ntags: [machine, infra]\n---\nMac mini server",
-            "Infra/minsky.md": "---\ntags:\n  - machine\n  - unraid\n---\nUnraid server, draft",
-            "Me/Bunny.md": "Runs the server #person",
+            "Infra/atlas.md": "---\ntags: [machine, infra]\n---\nMac mini server",
+            "Infra/nas.md": "---\ntags:\n  - machine\n  - unraid\n---\nUnraid server, draft",
+            "Me/Alex.md": "Runs the server #person",
             "Inbox/todo.md": "- [ ] server stuff #inbox/later",
         ]
         let titles = { (q: String) in NoteStore.search(all, query: q, contents: contents).map(\.note.title) }
-        #expect(Set(titles("server")) == ["olympus", "minsky", "Bunny", "todo"])
-        #expect(titles("server path:infra") == ["olympus", "minsky"])
-        #expect(titles("server -draft path:Infra") == ["olympus"])
-        #expect(titles("#unraid") == ["minsky"])
-        #expect(Set(titles("tag:machine")) == ["olympus", "minsky"])
+        #expect(Set(titles("server")) == ["atlas", "nas", "Alex", "todo"])
+        #expect(titles("server path:infra") == ["atlas", "nas"])
+        #expect(titles("server -draft path:Infra") == ["atlas"])
+        #expect(titles("#unraid") == ["nas"])
+        #expect(Set(titles("tag:machine")) == ["atlas", "nas"])
         #expect(titles("#inbox") == ["todo"]) // nested tag inbox/later
-        #expect(titles("#person server") == ["Bunny"])
+        #expect(titles("#person server") == ["Alex"])
     }
 
     @Test func ranksTitlesThenRelevantText() {
@@ -294,10 +294,10 @@ struct NoteSearchTests {
     }
 
     @Test func firstMatchPrefersTheBody() {
-        let text = "---\ntitle: olympus\n---\nThe olympus box"
-        let (count, location) = NoteStore.matchInfo(text, terms: ["olympus"])
+        let text = "---\ntitle: atlas\n---\nThe atlas box"
+        let (count, location) = NoteStore.matchInfo(text, terms: ["atlas"])
         #expect(count == 2)
-        #expect(location == (text as NSString).range(of: "olympus box").location)
+        #expect(location == (text as NSString).range(of: "atlas box").location)
         #expect(NoteStore.matchInfo("only: x\n", terms: ["zzz"]).location == nil)
     }
 
@@ -321,12 +321,12 @@ struct MarkdownTableTests {
     }
 
     @Test func parsesAlignmentAndUnevenRows() throws {
-        let source = "Before\n\n| Name | Value | Status |\n| :--- | ---: | :---: |\n| Bunny | 42 |\n| Hop | 7 | ok | ignored |\n\nAfter"
+        let source = "Before\n\n| Name | Value | Status |\n| :--- | ---: | :---: |\n| Alex | 42 |\n| Hop | 7 | ok | ignored |\n\nAfter"
         let table = try #require(tables(source).first)
         #expect(table.alignments == [.left, .right, .center])
-        #expect(table.rows == [["Name", "Value", "Status"], ["Bunny", "42", ""], ["Hop", "7", "ok"]])
+        #expect(table.rows == [["Name", "Value", "Status"], ["Alex", "42", ""], ["Hop", "7", "ok"]])
         #expect((source as NSString).substring(with: table.range).hasPrefix("| Name"))
-        #expect(MarkdownPreview.plain(source) == "Before\n\nName\tValue\tStatus\nBunny\t42\t\nHop\t7\tok\n\nAfter")
+        #expect(MarkdownPreview.plain(source) == "Before\n\nName\tValue\tStatus\nAlex\t42\t\nHop\t7\tok\n\nAfter")
     }
 
     @Test func preservesWikiAliasesAndEscapedPipes() throws {

@@ -107,7 +107,7 @@ struct SnippetFileAndMatcherTests {
     @Test func decodesTheTemplateAndAppends() throws {
         let snippets = try SnippetsFile.decode(Data(SnippetsFile.template.utf8))
         #expect(snippets.map(\.name) == ["Email", "Today", "Signature"])
-        #expect(snippets[0].keyword == ";mail" && snippets[2].keyword == nil && snippets[2].text == "Lp,\nUrban")
+        #expect(snippets[0].keyword == ";mail" && snippets[2].keyword == nil && snippets[2].text == "Best,\nYour Name")
         let appended = try #require(SnippetsFile.appending(Snippet(name: "Q \"x\"", keyword: ";q", text: "a\nb"), to: SnippetsFile.template))
         let again = try SnippetsFile.decode(Data(appended.utf8))
         #expect(again.count == 4 && again[3] == Snippet(name: "Q \"x\"", keyword: ";q", text: "a\nb"))

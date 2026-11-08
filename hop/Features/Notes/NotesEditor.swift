@@ -141,7 +141,7 @@ final class NotesTextView: NSTextView {
     }
 }
 
-/// How each Markdown span looks: olympus DS tokens, Outfit for prose, Geist Mono for code.
+/// How each Markdown span looks: Theme tokens, Outfit for prose, Geist Mono for code.
 enum MarkdownTheme {
     static let bodySize: CGFloat = 15
 

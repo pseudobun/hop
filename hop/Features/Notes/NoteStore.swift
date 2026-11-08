@@ -3,7 +3,7 @@ import Foundation
 /// One Markdown file in the notes folder.
 nonisolated struct NoteFile: Sendable, Hashable {
     let url: URL
-    /// Path inside the notes folder, e.g. "Infra/Machines/olympus.md".
+    /// Path inside the notes folder, e.g. "Infra/Machines/server.md".
     let relativePath: String
     let modified: Date
     /// Evicted by iCloud: only a `.name.md.icloud` placeholder is on disk.

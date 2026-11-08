@@ -12,7 +12,7 @@ enum ItemIcon {
     case tile(String, NSColor)
 }
 
-/// Feature colours, all olympus design-system tokens.
+/// Feature colours, all design-system tokens (see Theme).
 enum Palette {
     static var wireguard: NSColor { Theme.chart4 }
     static var keepass: NSColor { Theme.good }

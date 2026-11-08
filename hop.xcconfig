@@ -1,0 +1,11 @@
+// Build settings for every target and configuration. Values for your own machine
+// (signing team, bundle id) go in Local.xcconfig: gitignored, see Local.xcconfig.example.
+
+// Bundle identifier of hop.app; it also names hop's Application Support folder,
+// Keychain items and log subsystem. Tests use "$(HOP_BUNDLE_ID)Tests".
+HOP_BUNDLE_ID = dev.hop.app
+HOP_COPYRIGHT = © hop contributors
+// Apple Developer team for signed builds; empty builds ad-hoc via the justfile.
+DEVELOPMENT_TEAM =
+
+#include? "Local.xcconfig"

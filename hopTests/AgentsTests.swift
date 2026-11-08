@@ -10,10 +10,10 @@ struct AgentsTests {
     @Test func registryRecordAndStatus() throws {
         let json = """
         {"pid":73968,"sessionId":"699e5857-cb71","cwd":"/Users/me/repos","startedAt":1794134720083,"kind":"interactive","tmux":"hop-cc-x-1",
-         "name":"bunnys-code","bridgeSessionId":"session_014VUM","updatedAt":1794138193533,"status":"waiting"}
+         "name":"side-project","bridgeSessionId":"session_014VUM","updatedAt":1794138193533,"status":"waiting"}
         """
         let r = try #require(ClaudeSessions.parseRecord(Data(json.utf8)))
-        #expect(r.pid == 73968 && r.sessionID == "699e5857-cb71" && r.cwd == "/Users/me/repos" && r.name == "bunnys-code")
+        #expect(r.pid == 73968 && r.sessionID == "699e5857-cb71" && r.cwd == "/Users/me/repos" && r.name == "side-project")
         #expect(r.bridgeSessionID == "session_014VUM" && r.status == "waiting" && r.tmux == "hop-cc-x-1")
         #expect(r.updatedAt == Date(timeIntervalSince1970: 1794138193.533))
         #expect(ClaudeSessions.parseRecord(Data("{\"pid\": 1}".utf8)) == nil)
@@ -25,7 +25,7 @@ struct AgentsTests {
 
         let pending = ClaudeSessions.Summary(pendingTool: "Bash")
         let s = ClaudeSessions.session(r, summary: pending, transcript: nil)
-        #expect(s.status == .waiting && s.detail == "Bash permission" && s.title == "bunnys-code")
+        #expect(s.status == .waiting && s.detail == "Bash permission" && s.title == "side-project")
         #expect(s.webURL == URL(string: "https://claude.ai/code/session_014VUM"))
         #expect(s.key == "local/claude/699e5857-cb71")
     }
@@ -170,14 +170,14 @@ struct AgentsTests {
         let out = AgentStore.attach(panes: Array(panes.prefix(4)), to: [claude("a", pid: 500), claude("b", pid: 501), oc, reported], host: nil,
                                     parent: { $0 == 501 ? 600 : 1 })
         #expect(out.map(\.tmux) == ["hop-cc-hop-1a2b", "work", "hop-oc-api-3c4d", "hop-cc-new-9f9f"])
-        let starting = AgentStore.attach(panes: Array(panes.prefix(4)), to: [], host: "zeus")
+        let starting = AgentStore.attach(panes: Array(panes.prefix(4)), to: [], host: "my-server")
         #expect(starting.map(\.id) == ["tmux:hop-cc-hop-1a2b", "tmux:hop-oc-api-3c4d", "tmux:hop-cc-new-9f9f"])
-        #expect(starting[2].status == .running && starting[2].cwd == "/Users/me/new" && starting[2].host == "zeus")
+        #expect(starting[2].status == .running && starting[2].cwd == "/Users/me/new" && starting[2].host == "my-server")
         #expect(starting[2].lastActivity == Date(timeIntervalSince1970: 1794139500))
     }
 
     @Test func tmuxNames() {
-        #expect(AgentNames.tmuxName(provider: .claude, cwd: "/Users/me/repos/Lutra Doc.v2", suffix: "00ff") == "hop-cc-lutra-doc-v2-00ff")
+        #expect(AgentNames.tmuxName(provider: .claude, cwd: "/Users/me/repos/Side Project.v2", suffix: "00ff") == "hop-cc-side-project-v2-00ff")
         #expect(AgentNames.tmuxName(provider: .opencode, cwd: "/", suffix: "1234") == "hop-oc-home-1234")
         #expect(AgentNames.tmuxName(provider: .claude, cwd: "~/čšž", suffix: "abcd") == "hop-cc-home-abcd")
         #expect(AgentNames.provider(ofTmux: "hop-oc-x-1234") == .opencode && AgentNames.provider(ofTmux: "main") == nil)
@@ -214,7 +214,7 @@ struct AgentsTests {
         #expect(AgentCommands.remotePath("~") == #""$HOME""#)
         #expect(AgentCommands.remotePath("~/apps/my app") == #""$HOME"/'apps/my app'"#)
         #expect(AgentCommands.remotePath("/srv/x") == "'/srv/x'")
-        #expect(AgentCommands.sshArguments("zeus").suffix(2) == ["zeus", "bash -l -s"])
+        #expect(AgentCommands.sshArguments("my-server").suffix(2) == ["my-server", "bash -l -s"])
 
         let spawn = AgentCommands.Spawn(provider: .claude, cwd: "~/apps", prompt: "", resume: nil, tmuxName: "hop-cc-apps-1a2b")
         let script = AgentCommands.remoteSpawnScript(spawn, agent: ["claude", "--name", "apps-1a2b", "say \"hi\" it's"])
@@ -233,8 +233,8 @@ struct AgentsTests {
 
         #expect(AgentCommands.attachScript(tmux: "/opt/homebrew/bin/tmux", session: "hop-cc-a-1", sshAlias: nil)
             == "#!/bin/bash\nclear\nexec '/opt/homebrew/bin/tmux' attach-session -t '=hop-cc-a-1'\n")
-        #expect(AgentCommands.attachScript(tmux: "tmux", session: "hop-cc-a-1", sshAlias: "zeus")
-            == "#!/bin/bash\nclear\nexec /usr/bin/ssh -t 'zeus' 'bash -lc \"tmux attach-session -t =hop-cc-a-1\"'\n")
+        #expect(AgentCommands.attachScript(tmux: "tmux", session: "hop-cc-a-1", sshAlias: "my-server")
+            == "#!/bin/bash\nclear\nexec /usr/bin/ssh -t 'my-server' 'bash -lc \"tmux attach-session -t =hop-cc-a-1\"'\n")
         #expect(AgentCommands.isSafeTmuxName("hop-cc-a-1") && !AgentCommands.isSafeTmuxName("a b") && !AgentCommands.isSafeTmuxName(""))
     }
 
@@ -251,14 +251,14 @@ struct AgentsTests {
         let text = """
         { agents: { hotkey: "hyper+a", defaultProvider: "opencode", terminal: "iterm", historyHours: 6,
           claude: { binary: "~/bin/claude", args: ["--model", "opus"], remoteControl: false },
-          hosts: [{ name: "Zeus", ssh: "zeus", cwd: "~/apps", projects: ["~/apps/lutraid"] }, { ssh: "olympus.local" }] } }
+          hosts: [{ name: "Server", ssh: "my-server", cwd: "~/apps", projects: ["~/apps/web"] }, { ssh: "nas.local" }] } }
         """
         let c = try decoder.decode(HopConfig.self, from: Data(text.utf8)).agents
         #expect(c.hotkey == "hyper+a" && c.defaultProvider == .opencode && c.terminal == .iterm && c.historyHours == 6)
         #expect(c.claude.binary == "~/bin/claude" && c.claude.args == ["--model", "opus"] && !c.claude.remoteControl && c.claude.enabled)
         #expect(c.opencode == HopConfig.Agents().opencode)
-        #expect(c.hosts.map(\.label) == ["Zeus", "olympus.local"] && c.hosts[1].cwd == "~" && c.hosts[1].claude == "claude")
-        #expect(c.hosts[0].projects == ["~/apps/lutraid"])
+        #expect(c.hosts.map(\.label) == ["Server", "nas.local"] && c.hosts[1].cwd == "~" && c.hosts[1].claude == "claude")
+        #expect(c.hosts[0].projects == ["~/apps/web"])
 
         let template = try decoder.decode(HopConfig.self, from: Data(AppSettings.template.utf8))
         #expect(template.agents == HopConfig.Agents())

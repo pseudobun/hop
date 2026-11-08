@@ -1,11 +1,12 @@
 # hop — build and install locally.
-# Signs with your Apple Development identity when one is in the keychain
-# (Accessibility grants then survive rebuilds), otherwise ad-hoc.
+# Signs with your Apple Development identity when one is in the keychain and
+# Local.xcconfig sets DEVELOPMENT_TEAM (Accessibility grants then survive rebuilds),
+# otherwise ad-hoc. Bundle id and team: Local.xcconfig (see Local.xcconfig.example).
 
 app_dir := "/Applications"
 cli_link := "/opt/homebrew/bin/hop"
 
-signing := `security find-identity -v -p codesigning 2>/dev/null | grep -q "Apple Development" && echo signed || echo adhoc`
+signing := `security find-identity -v -p codesigning 2>/dev/null | grep -q "Apple Development" && grep -qE "^[[:space:]]*DEVELOPMENT_TEAM[[:space:]]*=[[:space:]]*[A-Z0-9]" Local.xcconfig 2>/dev/null && echo signed || echo adhoc`
 adhoc_flags := if signing == "adhoc" { "CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM=" } else { "" }
 
 default: build

@@ -72,7 +72,7 @@ struct ShelfTests {
     }
 
     @Test func titlesAndSummary() {
-        #expect(ShelfItem.link("https://github.com/lutralabs/hop").title == "github.com/lutralabs/hop")
+        #expect(ShelfItem.link("https://github.com/example/hop").title == "github.com/example/hop")
         #expect(ShelfItem.link("https://example.com/").title == "example.com")
         #expect(ShelfItem.text("\n  first line \nsecond").title == "first line")
         let items: [ShelfItem] = [.file("/a"), .file("/b"), .link("https://x.org"), .text("t")]

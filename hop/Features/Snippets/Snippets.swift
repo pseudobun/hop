@@ -55,7 +55,7 @@ final class SnippetsFile {
     [
       { name: "Email", keyword: ";mail", text: "you@example.com" },
       { name: "Today", keyword: ";date", text: "{date format=\\"yyyy-MM-dd\\"}" },
-      { name: "Signature", text: "Lp,\\nUrban" },
+      { name: "Signature", text: "Best,\\nYour Name" },
     ]
 
     """

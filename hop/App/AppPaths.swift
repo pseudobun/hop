@@ -1,9 +1,14 @@
 import Foundation
 
 nonisolated enum AppPaths {
+    /// hop.app's bundle identifier (`HOP_BUNDLE_ID` in Local.xcconfig). It names the
+    /// support and cache folders, the log subsystem, Keychain items and notifications,
+    /// so each build identity keeps its own data.
+    static let bundleID: String = appBundle.bundleIdentifier ?? "dev.hop.app"
+
     static let supportDir: URL = {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        return base.appending(path: "dev.hop.app", directoryHint: .isDirectory)
+        return base.appending(path: bundleID, directoryHint: .isDirectory)
     }()
 
     static func file(_ name: String) -> URL { supportDir.appending(path: name) }

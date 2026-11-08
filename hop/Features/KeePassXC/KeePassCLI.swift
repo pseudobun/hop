@@ -78,7 +78,7 @@ nonisolated enum KeePassCLI {
 /// The master password in the login Keychain, released only after Touch ID
 /// (or the login password on Macs without Touch ID).
 nonisolated enum CredentialVault {
-    static let service = "dev.hop.app.keepass"
+    static let service = AppPaths.bundleID + ".keepass"
 
     /// `errSecSuccess`, or why the Keychain refused the password.
     static func save(_ password: String, account: String) -> OSStatus {

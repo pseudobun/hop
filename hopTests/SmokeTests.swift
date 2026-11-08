@@ -4,6 +4,6 @@ import Testing
 
 struct SmokeTests {
     @Test func hostAppLoads() {
-        #expect(Bundle.main.bundleIdentifier == "dev.hop.app")
+        #expect(Bundle.main.bundleIdentifier == AppPaths.bundleID && !AppPaths.bundleID.isEmpty)
     }
 }

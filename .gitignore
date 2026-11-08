@@ -19,3 +19,6 @@ xcuserdata/
 .build/
 .swiftpm/
 Packages/
+
+# Local build settings (signing team, bundle id)
+Local.xcconfig

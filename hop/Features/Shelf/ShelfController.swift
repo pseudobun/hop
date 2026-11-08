@@ -5,7 +5,7 @@ import os
 /// commands, `hop shelf`) and the recently closed ones you can bring back.
 final class ShelfController {
     /// `hop shelf <paths>` posts this with the paths in `userInfo["paths"]`.
-    static let addNotification = Notification.Name("dev.hop.app.shelf.add")
+    static let addNotification = Notification.Name(AppPaths.bundleID + ".shelf.add")
     private static let recentLimit = 10
 
     private let settings: AppSettings

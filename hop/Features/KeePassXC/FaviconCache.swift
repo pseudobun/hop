@@ -7,7 +7,8 @@ final class FaviconCache {
 
     private let dir: URL = {
         let base = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
-        return base.appending(path: "dev.hop.app/favicons", directoryHint: .isDirectory)
+        return base.appending(path: AppPaths.bundleID, directoryHint: .isDirectory)
+            .appending(path: "favicons", directoryHint: .isDirectory)
     }()
     private let memory: NSCache<NSString, NSImage> = {
         let c = NSCache<NSString, NSImage>()

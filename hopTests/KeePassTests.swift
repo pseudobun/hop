@@ -49,7 +49,7 @@ struct TOTPTests {
 struct KeePassCSVTests {
     static let csv = """
     "Group","Title","Username","Password","URL","Notes","TOTP","Icon","Last Modified","Created"
-    "Root","GitHub","bunny","  pa,ss"" word ","https://github.com","line one
+    "Root","GitHub","alice","  pa,ss"" word ","https://github.com","line one
     line two","otpauth://totp/GitHub?secret=GEZDGNBVGY3TQOJQ","0","2026-01-01T00:00:00Z","2026-01-01T00:00:00Z"
     "Root/Work","Linear","me@work","x","https://linear.app","","","0","",""
     "Root/Recycle Bin","Old","old","x","","","","0","",""
