@@ -73,20 +73,21 @@ enum CLI {
           shelf <path…>                       Put files on a shelf in the running hop (paths or stdin, one per line)
           codes [--latest] [--minutes=N] [--json]   One-time codes from Messages (needs Full Disk Access)
           events [--days=N] [--birthdays] [--json]  Calendar events from today on (default today only)
-          tr <text> [--to=en|sl] [--json]     Translate Slovenian ↔ English with OpenAI (text or stdin)
+          tr <text> [--to=CODE] [--json]      Translate between translate.languages with OpenAI (text or stdin)
           ocr [image] [--copy] [--json]       Text in an image, or in an area you select on screen
-          emoji <query> [--limit=N] [--json]  Search emoji by name, slang or Slovenian
+          emoji <query> [--limit=N] [--json]  Search emoji by name or slang (English, Slovenian)
           bookmarks [query] [--json]          Bookmarks from the config; bookmarks open <name>
           permissions [--json]                Which macOS permissions hop has
           snippets [list] [--json]            Snippets from snippets.json5 with their keywords
           snippets expand <name|keyword> [--arg=value…]   Print a snippet with its placeholders filled in
           snippets add <name> [text] [--keyword=;k]       Append a snippet (text or stdin)
+          snippets template                   Print the default snippets.json5
           hotkeys [--json]                    hop's hotkeys, the hotkeys section, and every command you can bind
           clip count                          How many entries the clipboard history holds
           clip [list] [query] [--json] [--limit=N]   Clipboard history, newest first (needs clipboard.cliAccess)
           clip show <n|query> [--json]        Print entry n (1 = newest) or the best match; images print their PNG path
           clip copy <n|query>                 Put an entry back on the clipboard
-          config path | check | show          Inspect ~/.config/hop/config.json5
+          config path | check | show | template   Inspect ~/.config/hop/config.json5; template prints the full default
           hyper status | map | unmap          Caps Lock → F20 key mapping (unmap after a crash)
           wg list | up <name> [--keep] | down <name> | down-all   WireGuard tunnels (WireGuard.app; up stops the others unless --keep)
           kp dbs | search [query] | get <entry> [--field F] [--db NAME]   KeePassXC (unlocks per call)
@@ -268,8 +269,11 @@ enum CLI {
                 "bookmarks": c.bookmarks.map { ["name": $0.name, "url": $0.url, "aliases": $0.aliases, "icon": $0.icon] },
             ])
             return settings.error == nil ? 0 : 1
+        case "template":
+            print(AppSettings.template, terminator: "")
+            return 0
         default:
-            return Output.fail("usage: hop config path | check | show")
+            return Output.fail("usage: hop config path | check | show | template")
         }
     }
 
@@ -513,6 +517,10 @@ enum CLI {
     }
 
     static func snippets(_ a: Args) async -> Int32 {
+        if a.positional.first == "template" {
+            print(SnippetsFile.template, terminator: "")
+            return 0
+        }
         let config = AppSettings().data
         let file = SnippetsFile(url: URL(fileURLWithPath: config.snippets.file.expandingTilde))
         file.load()

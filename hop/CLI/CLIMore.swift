@@ -67,22 +67,24 @@ extension CLI {
         return 0
     }
 
-    /// `hop tr <text> [--to=en|sl]` (or text on stdin): Slovenian ↔ English with OpenAI.
+    /// `hop tr <text> [--to=CODE]` (or text on stdin): between the `translate.languages` with OpenAI.
     static func translate(_ a: Args) async -> Int32 {
         let text = (a.positional.isEmpty ? stdinInput() ?? "" : a.positional.joined(separator: " "))
             .trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else { return Output.fail("usage: hop tr <text> [--to=en|sl], or text on stdin") }
-        let target: Translator.Language
-        switch a.option("to")?.lowercased() {
-        case nil: target = Translator.target(for: text)
-        case "en", "english": target = .english
-        case "sl", "si", "slovenian": target = .slovenian
-        case let other?: return Output.fail("--to must be en or sl, not \(other)")
-        }
         let config = AppSettings().data.translate
-        switch await Translator.translate(text, to: target, model: config.model, reasoning: config.reasoning) {
+        let pair = Translator.Pair(config.languages)
+        let codes = "\(pair.first.code)|\(pair.second.code)"
+        guard !text.isEmpty else { return Output.fail("usage: hop tr <text> [--to=\(codes)], or text on stdin") }
+        let target: Translator.Language
+        if let raw = a.option("to") {
+            guard let language = pair.language(named: raw) else { return Output.fail("--to must be \(codes), not \(raw)") }
+            target = language
+        } else {
+            target = Translator.target(for: text, pair: pair)
+        }
+        switch await Translator.translate(text, to: target, pair: pair, model: config.model, reasoning: config.reasoning) {
         case .success(let translation):
-            if a.json { Output.json(["text": text, "to": target.rawValue, "translation": translation]) } else { print(translation) }
+            if a.json { Output.json(["text": text, "to": target.name, "translation": translation]) } else { print(translation) }
             return 0
         case .failure(let error):
             return Output.fail(OpenAI.describe(error))
@@ -102,7 +104,7 @@ extension CLI {
             temporary = true
         }
         defer { if temporary { try? FileManager.default.removeItem(at: url) } }
-        let lines = await ScreenText.recognize(url)
+        let lines = await ScreenText.recognize(url, languages: AppSettings().data.ocr.languages)
         guard !lines.isEmpty else { return Output.fail("no text found") }
         let text = lines.joined(separator: "\n")
         if a.flags.contains("copy") { Pasteboard.copy(text) }

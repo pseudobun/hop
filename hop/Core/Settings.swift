@@ -232,10 +232,15 @@ nonisolated struct HopConfig: Decodable, Equatable, Sendable {
         var model = "gpt-6.1-terra"
         /// reasoning_effort; "" leaves it out.
         var reasoning = "none"
+        /// Two ISO 639 codes: text in the first goes to the second, anything else to the first.
+        /// Empty: the macOS language and English.
+        var languages: [String] = []
     }
 
     nonisolated struct OCR: Decodable, Equatable, Sendable {
         var enabled = true
+        /// Vision recognition languages, most likely first ("en-US", "de-DE", "sl-SI").
+        var languages = ["en-US"]
     }
 
     /// The Agents panel: Claude Code and OpenCode sessions here and on SSH hosts.
@@ -582,20 +587,22 @@ nonisolated extension HopConfig.CalendarSettings {
 }
 
 nonisolated extension HopConfig.Translate {
-    private enum Keys: String, CodingKey { case enabled, model, reasoning }
+    private enum Keys: String, CodingKey { case enabled, model, reasoning, languages }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: Keys.self), d = Self()
         enabled = try c.value(.enabled, d.enabled)
         model = try c.value(.model, d.model)
         reasoning = try c.value(.reasoning, d.reasoning)
+        languages = try c.value(.languages, d.languages)
     }
 }
 
 nonisolated extension HopConfig.OCR {
-    private enum Keys: String, CodingKey { case enabled }
+    private enum Keys: String, CodingKey { case enabled, languages }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: Keys.self), d = Self()
         enabled = try c.value(.enabled, d.enabled)
+        languages = try c.value(.languages, d.languages)
     }
 }
 
@@ -953,8 +960,11 @@ final class AppSettings {
       },
 
       translate: {
-        // "Translate" or "tr " in hop: Slovenian ↔ English with OpenAI ("Set OpenAI API Key")
+        // "Translate" or "tr " in hop: between two languages with OpenAI ("Set OpenAI API Key")
         enabled: true,
+        // ISO 639 codes: text in the first goes to the second, anything else to the first,
+        // e.g. ["de", "en"] ([] = your macOS language and English)
+        languages: [],
         model: "gpt-6.1-terra",
         // reasoning_effort ("none", "low", …; "" leaves it out)
         reasoning: "none",
@@ -963,6 +973,8 @@ final class AppSettings {
       ocr: {
         // "Copy Text from Screen": select an area, its text goes to the clipboard (read on this Mac)
         enabled: true,
+        // Vision recognition languages, most likely first
+        languages: ["en-US"],
       },
 
       agents: {

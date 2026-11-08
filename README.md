@@ -40,6 +40,8 @@ Requires macOS 26 on Apple Silicon (Release builds are arm64 only).
 
 ## Install
 
+A full commented config is in [`examples/config.json5`](examples/config.json5) (hop writes the same file to `~/.config/hop/config.json5` on first launch), snippets in [`examples/snippets.json5`](examples/snippets.json5). `hop config template` prints it.
+
 ```sh
 just install   # Release build → /Applications/hop.app, CLI → /opt/homebrew/bin/hop
 ```
@@ -212,7 +214,7 @@ hop config path | check | show
 hop convert 100 usd to eur     # units or currency
 hop codes --latest             # newest one-time code from Messages (Full Disk Access)
 hop events --days=3 --json     # Calendar; from the running hop when this terminal has no access
-pbpaste | hop tr | pbcopy      # Slovenian ↔ English with OpenAI ("Set OpenAI API Key" in hop)
+pbpaste | hop tr | pbcopy      # between translate.languages with OpenAI ("Set OpenAI API Key" in hop)
 hop tr "see you tomorrow" --to=sl
 hop ocr screenshot.png         # or no file: select an area on screen; --copy
 hop emoji "povit srček"        # the picker's search

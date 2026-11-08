@@ -1,0 +1,298 @@
+// hop configuration (JSON5: comments and trailing commas are fine).
+// Saved changes apply immediately. Delete a key to use its default.
+{
+  general: {
+    // cmd, ctrl, alt/opt, shift or hyper, plus a key: "cmd+space", "alt+space", "hyper+k"
+    hotkey: "cmd+space",
+    // How loosely search matches: "low", "medium" or "high"
+    sensitivity: "high",
+    // Reopening after this many seconds starts back at the root search
+    popToRootSeconds: 90,
+    // Reopening within this many seconds brings back the last root search, selected so
+    // typing replaces it; 0 always starts empty. Capped by popToRootSeconds.
+    keepQueryFor: 10,
+    // Shown under root results, and alone when nothing matches (↵ runs the first):
+    // "chatgpt", "google", "github", or a URL with {query}, e.g. "https://duckduckgo.com/?q={query}"
+    fallbacks: ["chatgpt", "google", "github"],
+    openAtLogin: true,
+    menuBarIcon: true,
+  },
+
+  // Global hotkeys for any command or app, on top of general.hotkey, notes.hotkey and
+  // clipboard.hotkey. Key: a command title ("Empty Trash"), an app name ("Safari"),
+  // a command id or "app:" + bundle id; `hop hotkeys` lists them. Value: e.g. "hyper+t".
+  hotkeys: {
+    // "Empty Trash": "hyper+t",
+    // "Safari": "hyper+s",
+    // "WireGuard": "hyper+w",
+  },
+
+  hyperKey: {
+    // Caps Lock becomes ⌃⌥⌘⇧ (needs Accessibility permission)
+    enabled: false,
+    // Caps Lock tapped on its own sends Escape
+    quickPressEscape: false,
+  },
+
+  wireguard: {
+    enabled: true,
+    // Flag from a tunnel name prefix: "si-home" → 🇸🇮
+    showFlags: true,
+    // Activating a tunnel deactivates the others first (one tunnel at a time)
+    exclusive: true,
+    // Tunnels as pills under the search field, click one to toggle it
+    bar: true,
+    // Which tunnels the bar shows, in order; [] shows all, e.g. ["si-home", "Office"]
+    barTunnels: [],
+    // Keys in the launcher, hotkey syntax; "" turns one off
+    keys: {
+      // Select in the bar: ←→ (Tab) move, ↵ or Space toggles, Esc goes back
+      focus: "cmd+j",
+      disconnectAll: "cmd+shift+j",
+      // Modifiers for 1…9 to toggle a tunnel at once, e.g. "alt+cmd"
+      direct: "",
+    },
+  },
+
+  keepass: {
+    enabled: false,
+    // One entry per database; switch between them with ⌘D in hop.
+    databases: [
+      {
+        name: "Personal",
+        path: "~/Passwords.kdbx",
+        // Optional key file
+        keyFile: "",
+        // Where the master password comes from (see below)
+        password: "keychain",
+        passwordCommand: "",
+      },
+      // { name: "Work", path: "~/Work/work.kdbx", password: "command",
+      //   passwordCommand: "security find-generic-password -w -s hop-work" },
+    ],
+    // password: where a database's master password comes from. Never write it in this file.
+    //   "keychain" ask once in hop, keep it in the Keychain behind Touch ID
+    //   "prompt"   ask every time the database is unlocked
+    //   "command"  run passwordCommand and read the password from its output,
+    //              e.g. "security find-generic-password -w -s hop-keepass"
+    //   "none"     the database has no password (key file only)
+    // Lock again on sleep, when the screen locks and after lockAfterMinutes without use.
+    // Off: an unlocked database stays open until you lock it (⌘L) or quit hop.
+    autoLock: false,
+    // With autoLock: minutes without use before locking; -1 only on sleep / screen lock
+    lockAfterMinutes: 10,
+    // Path to keepassxc-cli if it is not in KeePassXC.app or Homebrew
+    cli: "",
+    // Allow `hop kp get` to print passwords, TOTP codes and notes (e.g. for agents)
+    cliAccess: false,
+    // Site icons, fetched straight from each entry's website and cached
+    favicons: true,
+  },
+
+  system: {
+    // Folder emptied by "Clear Downloads"
+    downloadsFolder: "~/Downloads",
+  },
+
+  // Links you can search from hop; ↵ opens them in the default browser.
+  bookmarks: [
+    // {
+    //   name: "Home Assistant",
+    //   url: "http://homeassistant.local:8123",
+    //   // Other names that find it
+    //   aliases: ["hass", "ha"],
+    //   // Image file (relative to this folder, ~/ or absolute), SF Symbol name or emoji
+    //   icon: "icons/home-assistant.svg",
+    //   // Tile colour when icon is an SF Symbol
+    //   color: "#18bcf2",
+    // },
+  ],
+
+  notes: {
+    enabled: true,
+    // Opens the floating notes window from anywhere
+    hotkey: "alt+.",
+    // Folder of Markdown files; an Obsidian vault works as is, e.g. one in iCloud Drive:
+    // "~/Library/Mobile Documents/iCloud~md~obsidian/Documents/<vault>"
+    folder: "~/Notes",
+    // Where ⌘N puts new notes, relative to folder
+    newNoteFolder: "Inbox",
+    // Start of every new note; {{title}} and {{date}} are filled in
+    template: "---\ntitle: {{title}}\ntags: [inbox]\ntype: note\nstatus: stub\nupdated: {{date}}\n---\n\n",
+    // Set an existing `updated:` date in the frontmatter to today when you edit a note
+    bumpUpdated: true,
+  },
+
+  calculator: {
+    // Currency conversion ("100 usd to eur", "€50 in gbp"); rates come from
+    // open.er-api.com, fetched only after you type a currency, at most twice a day
+    currencies: true,
+    // Where an amount goes when you type no target ("50 usd")
+    currency: "EUR",
+  },
+
+  files: {
+    enabled: true,
+    // Folders searched (Spotlight's index, so results are always current)
+    scopes: ["~"],
+    // Results with one of these folders in their path are hidden
+    exclude: ["node_modules", ".git", "Library", "DerivedData", ".Trash", ".cache", "Caches"],
+    // Also find files by the text inside them
+    contentSearch: true,
+    maxResults: 60,
+    // Show dotfiles when browsing a path (~/…)
+    showHidden: false,
+  },
+
+  shelf: {
+    // Floating shelves to park files, links, images and text while you drag
+    enabled: true,
+    // Shake the pointer while dragging something to open a shelf under it
+    shake: true,
+    // "low", "medium" or "high": how small a shake counts
+    shakeSensitivity: "medium",
+    // Hold this while dragging to open a shelf ("shift", "alt", "ctrl+alt", "" off)
+    modifier: "shift",
+    // Global hotkeys: new empty shelf, new shelf from the clipboard, reopen the last one
+    hotkey: "",
+    clipboardHotkey: "",
+    reopenHotkey: "",
+    // Keep items on the shelf after you drag them out
+    keepAfterDragOut: false,
+    // Drags from these apps never open a shelf (bundle identifiers)
+    ignoreApps: [],
+  },
+
+  messages: {
+    // Verification codes from SMS and iMessage (needs Full Disk Access)
+    enabled: true,
+    // How many days back "Messages Codes" lists codes
+    days: 3,
+    // "Paste Latest Code" takes only a code received this many minutes ago or later
+    latestMinutes: 15,
+    // Show a HUD when a new code arrives, so it is ready to paste
+    notify: true,
+    // Global hotkey that pastes the latest code ("" off)
+    pasteHotkey: "alt+cmd+v",
+    // Also put a new code on the clipboard (hidden from clipboard history, cleared after 2 minutes)
+    autoCopy: false,
+  },
+
+  calendar: {
+    // Upcoming events and birthdays from Calendar (asks for Calendar access)
+    enabled: true,
+    // Root search shows events starting within this many minutes, and ones running now
+    soonMinutes: 60,
+    // How many days "Calendar" lists
+    days: 7,
+    // Today's and tomorrow's birthdays at the top of root search
+    birthdays: true,
+    // Calendars to leave out, by name
+    ignoreCalendars: [],
+  },
+
+  emoji: {
+    // "Search Emoji", or type ":" in hop: names, keywords (English, Slovenian) and slang
+    enabled: true,
+    // For emoji that take one: none, light, mediumLight, medium, mediumDark, dark
+    skinTone: "none",
+    // Suggestions from OpenAI for phrases the index can't place ("ko deploy faila v petek");
+    // only with a key ("Set OpenAI API Key" in hop), only for those queries
+    ai: true,
+    aiModel: "gpt-6-luna",
+    // reasoning_effort: "none" keeps it at about 1.5 s ("" leaves it out)
+    aiReasoning: "none",
+  },
+
+  translate: {
+    // "Translate" or "tr " in hop: between two languages with OpenAI ("Set OpenAI API Key")
+    enabled: true,
+    // ISO 639 codes: text in the first goes to the second, anything else to the first,
+    // e.g. ["de", "en"] ([] = your macOS language and English)
+    languages: [],
+    model: "gpt-6.1-terra",
+    // reasoning_effort ("none", "low", …; "" leaves it out)
+    reasoning: "none",
+  },
+
+  ocr: {
+    // "Copy Text from Screen": select an area, its text goes to the clipboard (read on this Mac)
+    enabled: true,
+    // Vision recognition languages, most likely first
+    languages: ["en-US"],
+  },
+
+  agents: {
+    // Agents panel: Claude Code and OpenCode sessions on this Mac and on SSH hosts,
+    // live status and transcript; start new ones in tmux and attach from a terminal
+    enabled: true,
+    // Opens the panel (it follows you across Spaces until Esc); pressed again in front, it closes
+    hotkey: "shift+cmd+space",
+    // "claude" or "opencode": what a new session starts with
+    defaultProvider: "claude",
+    // Where new sessions start when no folder is typed
+    defaultCwd: "~/repos",
+    // Their subfolders are offered as projects when starting a session
+    projectRoots: ["~/repos"],
+    // Finished sessions from this many hours back stay in the list
+    historyHours: 24,
+    // "Attach in Terminal" (⌘↵): "auto", "ghostty", "iterm" or "terminal"
+    terminal: "auto",
+    // Path to tmux; "" finds it (Homebrew, /usr/local, PATH)
+    tmux: "",
+    // Above other windows while open
+    floating: true,
+    // Seconds between refreshes of remote hosts while the panel is open
+    remoteRefreshSeconds: 15,
+    claude: {
+      enabled: true,
+      // "" finds claude (~/.local/bin, Homebrew, the login PATH)
+      binary: "",
+      // Flags for every session hop starts, e.g. ["--model", "opus"]
+      args: [],
+      // Start with --remote-control, so the Claude app and claude.ai/code can continue it
+      remoteControl: true,
+    },
+    opencode: {
+      enabled: true,
+      binary: "",
+      args: [],
+    },
+    // Machines reached over SSH: sessions there are listed, new ones start there in tmux
+    hosts: [
+      // { name: "my-server", ssh: "my-server", cwd: "~", projects: ["~/code/app"] },
+    ],
+  },
+
+  snippets: {
+    enabled: true,
+    // Type a snippet's keyword anywhere and it becomes the snippet (needs Accessibility)
+    expand: true,
+    // Also expand keywords typed in the middle of a word
+    expandWithinWords: false,
+    // Apps where keywords never expand (bundle identifiers)
+    disabledApps: [],
+    // The snippets themselves (JSON5); "Edit Snippets" in hop opens it
+    file: "~/.config/hop/snippets.json5",
+  },
+
+  clipboard: {
+    enabled: true,
+    // Opens the clipboard history from anywhere
+    hotkey: "shift+alt+c",
+    // Days to keep unpinned entries (-1 forever) and how many at most
+    keepDays: 90,
+    maxItems: 2000,
+    // Keep copied images, up to this size
+    images: true,
+    maxImageMB: 20,
+    // Copies from these apps are never recorded; password managers that mark their
+    // copies as concealed (KeePassXC, 1Password, hop itself) are skipped anyway
+    ignoreApps: ["com.apple.keychainaccess", "com.apple.Passwords", "org.keepassxc.keepassxc",
+                 "com.1password.1password", "com.bitwarden.desktop"],
+    // ↵ pastes into the app you were in; false only copies
+    pasteOnReturn: true,
+    // Let `hop clip` read the history (e.g. for agents); it holds whatever you copied
+    cliAccess: false,
+  },
+}

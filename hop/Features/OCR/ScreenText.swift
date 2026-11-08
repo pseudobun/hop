@@ -13,14 +13,14 @@ nonisolated enum ScreenText {
         return FileManager.default.fileExists(atPath: url.path) ? url : nil
     }
 
-    /// Lines in reading order; Slovenian and English, with language correction.
-    static func recognize(_ url: URL) async -> [String] {
+    /// Lines in reading order, in the `ocr.languages`, with language correction.
+    static func recognize(_ url: URL, languages: [String]) async -> [String] {
         await withCheckedContinuation { done in
             queue.async {
                 let request = VNRecognizeTextRequest()
                 request.recognitionLevel = .accurate
                 request.usesLanguageCorrection = true
-                request.recognitionLanguages = ["sl-SI", "en-US"]
+                request.recognitionLanguages = languages
                 let handler = VNImageRequestHandler(url: url)
                 try? handler.perform([request])
                 let lines = (request.results ?? []).compactMap { $0.topCandidates(1).first?.string }
@@ -30,10 +30,10 @@ nonisolated enum ScreenText {
     }
 
     /// Capture, read and copy; the HUD says how it went.
-    static func copyFromScreen() async {
+    static func copyFromScreen(languages: [String]) async {
         guard let url = await capture() else { return }
         defer { try? FileManager.default.removeItem(at: url) }
-        let lines = await recognize(url)
+        let lines = await recognize(url, languages: languages)
         guard !lines.isEmpty else {
             await HUD.shared.warn("No text found in that part of the screen")
             return
@@ -50,11 +50,11 @@ enum ScreenTextCommands {
         guard services.settings.data.ocr.enabled else { return [] }
         return [
             Item(id: "ocr.copy", title: "Copy Text from Screen", subtitle: "Select an area; its text goes to the clipboard",
-                 aliases: ["ocr", "screen text", "text from image", "besedilo z zaslona"],
+                 aliases: ["ocr", "screen text", "text from image"],
                  icon: .tile("text.viewfinder", Palette.ocr), accessory: "Command",
                  actions: [Action(title: "Select Area", symbol: "text.viewfinder") {
                      services.hideLauncher?()
-                     await ScreenText.copyFromScreen()
+                     await ScreenText.copyFromScreen(languages: services.settings.data.ocr.languages)
                      return .stay
                  }]),
         ]

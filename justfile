@@ -37,3 +37,8 @@ uninstall:
 
 footprint:
     scripts/check-footprint.sh 30
+
+# Regenerate examples/ from the templates hop writes on first launch
+examples: build
+    build/Build/Products/Debug/hop.app/Contents/MacOS/hop config template > examples/config.json5
+    build/Build/Products/Debug/hop.app/Contents/MacOS/hop snippets template > examples/snippets.json5

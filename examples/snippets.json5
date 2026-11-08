@@ -1,0 +1,9 @@
+// hop snippets (JSON5). Type a keyword anywhere to expand it, or search them in hop.
+// Placeholders: {clipboard} {clipboard offset=1} {date} {date format="yyyy-MM-dd"} {time} {datetime} {day}
+//   {date offset="+1d -2h"} {uuid} {cursor} {argument name="who" default="you"} {snippet name="Signature"}
+//   {calculator expression="2*21"}; modifiers: {clipboard | trim | uppercase}, lowercase, percent-encode, json-stringify
+[
+  { name: "Email", keyword: ";mail", text: "you@example.com" },
+  { name: "Today", keyword: ";date", text: "{date format=\"yyyy-MM-dd\"}" },
+  { name: "Signature", text: "Best,\nYour Name" },
+]
