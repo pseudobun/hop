@@ -75,6 +75,10 @@ final class AgentsController: NSObject, NSWindowDelegate, NSTableViewDataSource,
     private let actionPanel = ActionPanelView()
     private var actionPanelHeight: NSLayoutConstraint!
     private let form = AgentSpawnView()
+    /// One line for a herdr agent (`herdr agent prompt`), under the transcript.
+    private let promptBar = NSTextField()
+    private var promptBarHeight: NSLayoutConstraint!
+    private var promptTarget: AgentSession?
 
     init(settings: AppSettings) {
         self.settings = settings
@@ -123,6 +127,7 @@ final class AgentsController: NSObject, NSWindowDelegate, NSTableViewDataSource,
     func hide() {
         guard panel.isVisible else { return }
         closeActionPanel()
+        closePromptBar()
         if !form.isHidden { closeForm() }
         panel.orderOut(nil)
         store.stop()
@@ -164,16 +169,18 @@ final class AgentsController: NSObject, NSWindowDelegate, NSTableViewDataSource,
         let q = query
         guard !q.isEmpty else { return true }
         let hay = [s.title, s.shortCwd, s.host ?? "this mac", s.provider.label, s.tmux ?? "", s.status.label,
-                   s.kind == .remoteControl ? "rc remote control" : "", s.isViewOnly ? "view only" : "", s.needsTrust ? "trust folder" : ""].joined(separator: " ").lowercased()
+                   s.kind == .remoteControl ? "rc remote control" : "", s.isViewOnly ? "view only" : "", s.needsTrust ? "trust folder" : "",
+                   s.herdrPane != nil ? "herdr" : "", s.herdrName ?? ""].joined(separator: " ").lowercased()
         return q.split(separator: " ").allSatisfy { hay.contains($0) }
     }
 
     private func storeChanged() {
         reload()
-        if let tmux = pendingTmux, let s = store.sessions.first(where: { $0.tmux == tmux && !$0.id.hasPrefix("tmux:") })
-            ?? store.sessions.first(where: { $0.tmux == tmux }) {
+        func started(_ s: AgentSession, _ name: String) -> Bool { s.tmux == name || s.herdrName == name }
+        if let tmux = pendingTmux, let s = store.sessions.first(where: { started($0, tmux) && !$0.id.hasPrefix("tmux:") && !$0.id.hasPrefix("herdr:") })
+            ?? store.sessions.first(where: { started($0, tmux) }) {
             selectedKey = s.key
-            if !s.id.hasPrefix("tmux:") { pendingTmux = nil }
+            if !s.id.hasPrefix("tmux:") && !s.id.hasPrefix("herdr:") { pendingTmux = nil }
             reload()
         }
     }
@@ -198,9 +205,10 @@ final class AgentsController: NSObject, NSWindowDelegate, NSTableViewDataSource,
         var count = "\(visible.count) sessions"
         let busy = store.sessions.filter { $0.status == .waiting }.count
         if busy > 0 { count += " · \(busy) need you" }
-        if let (host, error) = store.hostErrors.sorted(by: { $0.key < $1.key }).first { count += " · \(host): \(error)" }
-        countLabel.attributedStringValue = Theme.labelString(count, color: store.hostErrors.isEmpty ? Theme.mutedForeground : Theme.warn)
-        countLabel.toolTip = store.hostErrors.map { "\($0.key): \($0.value)" }.sorted().joined(separator: "\n")
+        let problems = store.hostErrors.merging(Dictionary(uniqueKeysWithValues: store.herdrNotices.map { ($0.key == "local" ? "This Mac" : $0.key, $0.value) })) { a, b in "\(a); \(b)" }
+        if let (host, error) = problems.sorted(by: { $0.key < $1.key }).first { count += " · \(host): \(error)" }
+        countLabel.attributedStringValue = Theme.labelString(count, color: problems.isEmpty ? Theme.mutedForeground : Theme.warn)
+        countLabel.toolTip = problems.map { "\($0.key): \($0.value)" }.sorted().joined(separator: "\n")
     }
 
     private var selectedSession: AgentSession? {
@@ -235,6 +243,7 @@ final class AgentsController: NSObject, NSWindowDelegate, NSTableViewDataSource,
 
     private func selectionChanged() {
         let s = selectedSession
+        if let t = promptTarget, t.key != s?.key { closePromptBar() }
         selectedKey = s?.key ?? selectedKey
         store.watchedKey = s?.key
         stopArmed = nil
@@ -259,6 +268,7 @@ final class AgentsController: NSObject, NSWindowDelegate, NSTableViewDataSource,
         var meta = [s.provider.label, s.host ?? "This Mac", s.shortCwd]
         if let m = s.model { meta.append(m) }
         if let t = s.tmux { meta.append("tmux \(t)") }
+        else if let p = s.herdrPane { meta.append("herdr \(s.herdrName ?? p)") }
         else if s.isViewOnly { meta.append(s.kind == .remoteControl ? "Remote Control · view only" : "Not in tmux · view only") }
         metaLabel.stringValue = meta.joined(separator: "  ·  ")
         metaLabel.toolTip = "Session \(s.id)" + (s.remoteID.map { "\nclaude.ai \($0)" } ?? "") + (s.transcript.map { "\n\($0)" } ?? "")
@@ -354,14 +364,21 @@ final class AgentsController: NSObject, NSWindowDelegate, NSTableViewDataSource,
 
     private func actions(for s: AgentSession) -> [Action] {
         var list: [Action] = []
-        let attach: Action? = s.tmux.map { name in
+        var attach: Action? = s.tmux.map { name in
             Action(title: "Attach in Terminal", symbol: "terminal", shortcut: .ret(.command)) { [weak self] in
                 guard let self else { return .stay }
                 if let error = AgentLauncher.attach(tmux: name, host: host(s), config: config) { HUD.shared.fail(error) }
                 return .stay
             }
         }
-        let canResume = s.status == .finished && s.tmux == nil && !s.id.hasPrefix("tmux:")
+        if attach == nil, let pane = s.herdrPane {
+            attach = Action(title: "Attach in Terminal", symbol: "terminal", shortcut: .ret(.command)) { [weak self] in
+                guard let self else { return .stay }
+                if let error = AgentLauncher.attach(herdrPane: pane, host: host(s), config: config) { HUD.shared.fail(error) }
+                return .stay
+            }
+        }
+        let canResume = s.status == .finished && s.tmux == nil && s.herdrPane == nil && !s.id.hasPrefix("tmux:") && !s.id.hasPrefix("herdr:")
         let resume: Action? = canResume ? Action(title: "Resume in tmux", symbol: "play.fill", shortcut: .ret(.command)) { [weak self] in
             guard let self else { return .stay }
             let spawn = AgentCommands.Spawn(provider: s.provider, cwd: s.cwd, prompt: "", resume: s.id,
@@ -379,13 +396,20 @@ final class AgentsController: NSObject, NSWindowDelegate, NSTableViewDataSource,
         }
         list += (primaryWeb ? [web, attach, resume] : [attach, resume, web]).compactMap { $0 }
         // Claude Code asks whether to trust the folder: answer it here, or attach and answer there.
-        if s.needsTrust, let name = s.tmux {
+        if s.needsTrust, s.tmux != nil || s.herdrName != nil {
             list.insert(Action(title: "Trust Folder & Start", symbol: "checkmark.shield", shortcut: .cmd("t")) { [weak self] in
-                self?.confirmTrust(s, tmux: name)
+                self?.confirmTrust(s)
                 return .stay
             }, at: min(1, list.count))
         }
-        if s.isLocal, let path = s.transcript {
+        // herdr types a line into the agent and submits it; it refuses one that waits on a question.
+        if let pane = s.herdrPane, !s.needsTrust, s.status != .finished {
+            list.insert(Action(title: "Send Prompt…", symbol: "text.bubble", shortcut: .cmd("p")) { [weak self] in
+                self?.openPromptBar(s, pane: pane)
+                return .stay
+            }, at: min(1, list.count))
+        }
+        if let path = s.transcript, s.isLocal {
             list.append(Action(title: "Show Transcript in Finder", symbol: "folder", shortcut: .cmd("f", .shift)) {
                 NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)])
                 return .stay
@@ -417,6 +441,12 @@ final class AgentsController: NSObject, NSWindowDelegate, NSTableViewDataSource,
                 self?.stop(s, tmux: name)
                 return .stay
             })
+        } else if s.herdrWorkspace != nil {
+            list.append(Action(title: "Close herdr Workspace…", symbol: "xmark.octagon", shortcut: KeyCombo(key: .character("x"), modifiers: .control),
+                               style: .destructive) { [weak self] in
+                self?.stop(s, tmux: s.herdrName ?? "")
+                return .stay
+            })
         }
         return list
     }
@@ -437,7 +467,12 @@ final class AgentsController: NSObject, NSWindowDelegate, NSTableViewDataSource,
         if let armed = stopArmed, armed.key == s.key, armed.until > Date() {
             stopArmed = nil
             Task {
-                if let error = await AgentLauncher.stop(tmux: name, host: host(s), config: config) {
+                let error = if let ws = s.herdrWorkspace, s.tmux == nil {
+                    await AgentLauncher.stop(herdrWorkspace: ws, host: host(s), config: config)
+                } else {
+                    await AgentLauncher.stop(tmux: name, host: host(s), config: config)
+                }
+                if let error {
                     HUD.shared.fail(error)
                 } else {
                     HUD.shared.show("Stopped \(name)", symbol: "xmark.octagon.fill")
@@ -456,9 +491,16 @@ final class AgentsController: NSObject, NSWindowDelegate, NSTableViewDataSource,
     }
 
     /// "Yes, I trust this folder" in the session's trust question, then a look at the result.
-    private func confirmTrust(_ s: AgentSession, tmux name: String) {
+    private func confirmTrust(_ s: AgentSession) {
         Task {
-            if let error = await AgentLauncher.confirmTrust(tmux: name, host: host(s), config: config) {
+            let error: String? = if let name = s.tmux {
+                await AgentLauncher.confirmTrust(tmux: name, host: host(s), config: config)
+            } else if let name = s.herdrName {
+                await AgentLauncher.confirmTrust(herdrAgent: name, host: host(s), config: config)
+            } else {
+                "No terminal to answer in"
+            }
+            if let error {
                 HUD.shared.fail(error)
                 return
             }
@@ -482,18 +524,64 @@ final class AgentsController: NSObject, NSWindowDelegate, NSTableViewDataSource,
     private func start(_ spawn: AgentCommands.Spawn, host: HopConfig.Agents.Host?) {
         form.isBusy = true
         Task {
-            let error = await AgentLauncher.start(spawn, host: host, config: config)
+            let started = await AgentLauncher.start(spawn, host: host, config: config)
             form.isBusy = false
-            if let error {
-                HUD.shared.fail(error)
+            if let error = started.error {
+                HUD.shared.fail(started.fallback.map { "\($0); tmux: \(error)" } ?? error)
                 return
             }
-            HUD.shared.show("Started \(spawn.tmuxName)\(host.map { " on \($0.label)" } ?? "")")
+            let where_ = host.map { " on \($0.label)" } ?? ""
+            if let why = started.fallback {
+                HUD.shared.show("Started \(spawn.tmuxName)\(where_) in tmux: \(why)", symbol: "exclamationmark.triangle.fill", tone: .warning, seconds: 4)
+            } else {
+                HUD.shared.show("Started \(spawn.tmuxName)\(where_)\(started.herdr ? " in herdr" : "")")
+            }
             pendingTmux = spawn.tmuxName
             if !form.isHidden { closeForm() }
             store.refresh(force: true)
             refreshSoon(remote: host != nil)
         }
+    }
+
+    // MARK: - Quick prompt (herdr)
+
+    private func openPromptBar(_ s: AgentSession, pane: String) {
+        closeActionPanel()
+        promptTarget = s
+        promptBar.stringValue = ""
+        promptBar.placeholderAttributedString = NSAttributedString(string: "Prompt for \(s.herdrName ?? s.title) · ↵ sends · esc cancels", attributes: [
+            .font: Theme.sans(13.5), .foregroundColor: Theme.mutedForeground.withAlphaComponent(0.7),
+        ])
+        promptBar.isHidden = false
+        promptBarHeight.constant = 32
+        panel.makeFirstResponder(promptBar)
+        updateFooter()
+    }
+
+    private func closePromptBar() {
+        guard !promptBar.isHidden else { return }
+        promptBar.isHidden = true
+        promptBarHeight.constant = 0
+        promptTarget = nil
+        panel.makeFirstResponder(searchField)
+        updateFooter()
+    }
+
+    private func sendPrompt() {
+        let text = promptBar.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let s = promptTarget, let pane = s.herdrPane, !text.isEmpty else { return }
+        closePromptBar()
+        Task {
+            if let error = await AgentLauncher.prompt(pane: pane, text: text, host: host(s), config: config) {
+                HUD.shared.fail(error)
+            } else {
+                HUD.shared.show("Sent to \(s.herdrName ?? s.title)", symbol: "text.bubble.fill")
+            }
+        }
+    }
+
+    private var editingPrompt: Bool {
+        !promptBar.isHidden && (panel.firstResponder as? NSTextView)?.delegate === promptBar
     }
 
     // MARK: - New session form
@@ -506,7 +594,8 @@ final class AgentsController: NSObject, NSWindowDelegate, NSTableViewDataSource,
         if providers.isEmpty { providers = [.claude] }
         form.configure(providers: providers, preferred: s?.provider ?? config.defaultProvider, hosts: hosts,
                        host: base?.host, defaultCwd: { [weak self] host in host?.cwd ?? self?.config.defaultCwd ?? "~" },
-                       cwd: s?.cwd, projects: { [weak self] host in self?.store.recentProjects(host: host) ?? [] })
+                       cwd: s?.cwd, projects: { [weak self] host in self?.store.recentProjects(host: host) ?? [] },
+                       multiplexer: { [weak self] host in self?.config.multiplexer(for: host) ?? .tmux })
         form.isHidden = false
         detailBox.isHidden = true
         form.focus(in: panel)
@@ -546,6 +635,13 @@ final class AgentsController: NSObject, NSWindowDelegate, NSTableViewDataSource,
             closeActionPanel()
         }
         if !form.isHidden { return form.handleKey(event) || editingShortcut(event, mods) }
+        if !promptBar.isHidden {
+            if event.keyCode == 53 { closePromptBar(); return true }
+            if editingPrompt {
+                if KeyCombo.ret().matches(event) { sendPrompt(); return true }
+                return editingShortcut(event, mods)
+            }
+        }
         switch (event.keyCode, mods) {
         case (53, []): // Esc
             if !searchField.stringValue.isEmpty {
@@ -586,7 +682,10 @@ final class AgentsController: NSObject, NSWindowDelegate, NSTableViewDataSource,
         return NSApp.sendAction(selector, to: nil, from: self)
     }
 
-    func controlTextDidChange(_ obj: Notification) { reload() }
+    func controlTextDidChange(_ obj: Notification) {
+        if (obj.object as? NSTextField) === promptBar { return }
+        reload()
+    }
 
     @objc private func doubleClicked() {
         guard table.clickedRow >= 0, case .session(let s) = rows[table.clickedRow] else { return }
@@ -602,8 +701,13 @@ final class AgentsController: NSObject, NSWindowDelegate, NSTableViewDataSource,
             footer.attributedStringValue = joined([("Start", "↵"), ("Complete", "tab"), ("Provider", "⌘P"), ("Where", "⌘T"), ("Cancel", "esc")])
             return
         }
+        if !promptBar.isHidden {
+            footer.attributedStringValue = joined([("Send", "↵"), ("Cancel", "esc")])
+            return
+        }
         if let armed = stopArmed, armed.until > Date(), let s = selectedSession, s.key == armed.key {
-            footer.attributedStringValue = NSAttributedString(string: "Press ⌃X again to stop \(s.tmux ?? "it") and the agent in it", attributes: [
+            let what = s.tmux ?? s.herdrName.map { "herdr workspace \($0)" } ?? "it"
+            footer.attributedStringValue = NSAttributedString(string: "Press ⌃X again to stop \(what) and the agent in it", attributes: [
                 .font: Theme.meta, .foregroundColor: Theme.destructive,
             ])
             return
@@ -616,6 +720,7 @@ final class AgentsController: NSObject, NSWindowDelegate, NSTableViewDataSource,
         var items: [(String, String)] = []
         if let first = acts.first { items.append((first.title.replacingOccurrences(of: " in Terminal", with: ""), "↵")) }
         if s.needsTrust { items.append(("Trust Folder", "⌘T")) }
+        if s.herdrPane != nil && !s.needsTrust && s.status != .finished { items.append(("Prompt", "⌘P")) }
         items.append(("New", "⌘N"))
         let available = (footer.superview?.bounds.width ?? panel.frame.width) - 260
         var text = joined(items + [("Actions", "⌘K")])
@@ -780,10 +885,25 @@ final class AgentsController: NSObject, NSWindowDelegate, NSTableViewDataSource,
         transcriptScroll.autohidesScrollers = true
         transcriptScroll.scrollerStyle = .overlay
 
+        promptBarHeight = promptBar.heightAnchor.constraint(equalToConstant: 0)
         let detailRule = NSView()
         detailRule.wantsLayer = true
         detailRule.layer?.backgroundColor = Theme.border.cgColor
-        for v in [titleLabel, chip, metaLabel, detailRule, transcriptScroll] as [NSView] {
+        promptBar.isBordered = false
+        promptBar.drawsBackground = true
+        promptBar.backgroundColor = Theme.card
+        promptBar.focusRingType = .none
+        promptBar.font = Theme.sans(13.5)
+        promptBar.textColor = Theme.foreground
+        promptBar.wantsLayer = true
+        promptBar.layer?.cornerRadius = 8
+        promptBar.layer?.borderWidth = 1
+        promptBar.layer?.borderColor = Palette.agents.withAlphaComponent(0.6).cgColor
+        promptBar.cell?.isScrollable = true
+        promptBar.cell?.wraps = false
+        promptBar.delegate = self
+        promptBar.isHidden = true
+        for v in [titleLabel, chip, metaLabel, detailRule, transcriptScroll, promptBar] as [NSView] {
             v.translatesAutoresizingMaskIntoConstraints = false
             detailBox.addSubview(v)
         }
@@ -803,7 +923,11 @@ final class AgentsController: NSObject, NSWindowDelegate, NSTableViewDataSource,
             transcriptScroll.topAnchor.constraint(equalTo: detailRule.bottomAnchor, constant: 4),
             transcriptScroll.leadingAnchor.constraint(equalTo: detailBox.leadingAnchor, constant: 18),
             transcriptScroll.trailingAnchor.constraint(equalTo: detailBox.trailingAnchor, constant: -14),
-            transcriptScroll.bottomAnchor.constraint(equalTo: detailBox.bottomAnchor, constant: -4),
+            transcriptScroll.bottomAnchor.constraint(equalTo: promptBar.topAnchor, constant: -4),
+            promptBar.leadingAnchor.constraint(equalTo: detailBox.leadingAnchor, constant: 22),
+            promptBar.trailingAnchor.constraint(equalTo: detailBox.trailingAnchor, constant: -22),
+            promptBar.bottomAnchor.constraint(equalTo: detailBox.bottomAnchor, constant: -8),
+            promptBarHeight,
         ])
 
         let topRule = NSBox()
@@ -888,7 +1012,7 @@ final class AgentsController: NSObject, NSWindowDelegate, NSTableViewDataSource,
     /// One line per listed session: host, provider, kind, claude.ai id, tmux, access, status, detail, link, title.
     func debugDump() -> String {
         store.sessions.map { s in
-            [s.host ?? "local", s.provider.rawValue, s.kind.rawValue, s.remoteID ?? "-", s.tmux ?? "-",
+            [s.host ?? "local", s.provider.rawValue, s.kind.rawValue, s.remoteID ?? "-", s.tmux ?? s.herdrPane.map { "herdr:\($0)" } ?? "-",
              s.isViewOnly ? "view-only" : (s.isAttachable ? "attachable" : "-"), s.status.label, s.detail ?? "-", s.webURL?.absoluteString ?? "-", s.title]
                 .joined(separator: "\t")
         }.joined(separator: "\n") + "\n"
@@ -899,11 +1023,26 @@ final class AgentsController: NSObject, NSWindowDelegate, NSTableViewDataSource,
     func debugConfirmTrust(_ spec: String) {
         let parts = spec.split(separator: "@", maxSplits: 1).map(String.init)
         let tmux = parts[0], host = parts.count > 1 ? parts[1] : nil
-        guard let s = store.sessions.first(where: { $0.tmux == tmux && $0.needsTrust && $0.host == host }) else {
+        guard let s = store.sessions.first(where: { ($0.tmux == tmux || $0.herdrName == tmux) && $0.needsTrust && $0.host == host }) else {
             HUD.shared.fail("No trust question in \(tmux)")
             return
         }
-        confirmTrust(s, tmux: tmux)
+        confirmTrust(s)
+    }
+
+    /// "agent-name|text" or "agent-name@host|text": sends a quick prompt to a herdr agent, as Send Prompt does.
+    func debugPrompt(_ spec: String) {
+        let parts = spec.split(separator: "|", maxSplits: 1).map(String.init)
+        let target = parts.first?.split(separator: "@", maxSplits: 1).map(String.init) ?? []
+        guard parts.count == 2, let name = target.first,
+              let s = store.sessions.first(where: { $0.herdrName == name && $0.host == (target.count > 1 ? target[1] : nil) }) else {
+            HUD.shared.fail("No herdr agent \(spec)")
+            return
+        }
+        promptTarget = s
+        promptBar.stringValue = parts[1]
+        promptBar.isHidden = false
+        sendPrompt()
     }
 
     /// "claude|~/repos/hop|prompt|host": starts a session as the form would, with a fixed tmux name.

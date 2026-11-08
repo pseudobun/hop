@@ -99,20 +99,33 @@ nonisolated enum ClaudeTrust {
     static func confirmScript(tmux: String, session: String) -> String {
         let t = AgentCommands.quote(tmux)
         let target = AgentCommands.quote("=\(session):")
-        return """
-            s=$(\(t) capture-pane -p -t \(target) 2>/dev/null) || { echo "no tmux session \(session)" >&2; exit 5; }
-            case "$s" in *\(quoteForCase(yesOption))*) ;; *) echo "no trust question on screen" >&2; exit 6 ;; esac
-            i=0
-            while [ $i -lt 3 ]; do
-              printf '%s\\n' "$s" | grep -q '❯ *\(yesOption)' && break
-              \(t) send-keys -t \(target) Down
-              sleep 0.3
-              s=$(\(t) capture-pane -p -t \(target) 2>/dev/null)
-              i=$((i+1))
-            done
-            printf '%s\\n' "$s" | grep -q '❯ *\(yesOption)' || { echo "could not select “\(yesOption)”" >&2; exit 7; }
-            \(t) send-keys -t \(target) Enter
-            """
+        return confirmScript(capture: "\(t) capture-pane -p -t \(target)", down: "\(t) send-keys -t \(target) Down",
+                             enter: "\(t) send-keys -t \(target) Enter", what: "tmux session \(session)")
+    }
+
+    /// The same for an agent in herdr (`agent read`, `agent send-keys`).
+    static func confirmScript(herdr: String, agent: String) -> String {
+        let h = AgentCommands.quote(herdr)
+        let a = AgentCommands.quote(agent)
+        return confirmScript(capture: "\(h) agent read \(a) --source visible", down: "\(h) agent send-keys \(a) down",
+                             enter: "\(h) agent send-keys \(a) enter", what: "herdr agent \(agent)")
+    }
+
+    private static func confirmScript(capture: String, down: String, enter: String, what: String) -> String {
+        """
+        s=$(\(capture) 2>/dev/null) || { echo "no \(what)" >&2; exit 5; }
+        case "$s" in *\(quoteForCase(yesOption))*) ;; *) echo "no trust question on screen" >&2; exit 6 ;; esac
+        i=0
+        while [ $i -lt 3 ]; do
+          printf '%s\\n' "$s" | grep -q '❯ *\(yesOption)' && break
+          \(down) >/dev/null
+          sleep 0.3
+          s=$(\(capture) 2>/dev/null)
+          i=$((i+1))
+        done
+        printf '%s\\n' "$s" | grep -q '❯ *\(yesOption)' || { echo "could not select “\(yesOption)”" >&2; exit 7; }
+        \(enter) >/dev/null
+        """
     }
 
     private static func quoteForCase(_ s: String) -> String {

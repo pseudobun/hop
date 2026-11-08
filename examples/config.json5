@@ -240,6 +240,12 @@
     terminal: "auto",
     // Path to tmux; "" finds it (Homebrew, /usr/local, PATH)
     tmux: "",
+    // What new sessions run in: "tmux", or "herdr" (herdr.dev: hop lists its agents with
+    // herdr's own status and can send them a prompt); herdr falls back to tmux when it is
+    // not installed, its server is not running or speaks another protocol
+    multiplexer: "tmux",
+    // Path to herdr; "" finds it (Homebrew, ~/.local/bin, PATH)
+    herdr: "",
     // Above other windows while open
     floating: true,
     // Seconds between refreshes of remote hosts while the panel is open
@@ -258,9 +264,10 @@
       binary: "",
       args: [],
     },
-    // Machines reached over SSH: sessions there are listed, new ones start there in tmux
+    // Machines reached over SSH: sessions there are listed (herdr's too, when it runs
+    // there), new ones start there in tmux, or in herdr with multiplexer: "herdr"
     hosts: [
-      // { name: "my-server", ssh: "my-server", cwd: "~", projects: ["~/code/app"] },
+      // { name: "my-server", ssh: "my-server", cwd: "~", projects: ["~/code/app"], multiplexer: "herdr" },
     ],
   },
 

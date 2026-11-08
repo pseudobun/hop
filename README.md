@@ -138,7 +138,7 @@ What it reads (all read only):
 
 FSEvents on `~/.claude/sessions`, `~/.claude/projects` and the OpenCode folder update the list and the open transcript as they change; nothing polls. Finished sessions stay listed for `agents.historyHours`.
 
-New sessions (⌘N, or "New Agent Session" in hop) run in tmux, so they keep going after hop quits and you can attach from any terminal. hop names them `hop-cc-<folder>-<4 hex>` / `hop-oc-…`; locally tmux gets your login shell's PATH, remotely the script runs under `bash -l` (a fish login shell never parses it). Claude Code starts with `--name` and, with `agents.claude.remoteControl` (on by default), `--remote-control`, so the Claude app and claude.ai/code can continue it from the phone; OpenCode starts with `--prompt`. A finished session can be resumed in tmux (`claude --resume`, `opencode --session`). A folder Claude Code has not been trusted in yet stops at its trust question (“Quick safety check … Yes, I trust this folder”), and Remote Control waits with it. hop spots that question in its own `hop-cc-…` tmux sessions (`tmux capture-pane`, only for sessions no running Claude Code has claimed yet, at start and on each refresh while the panel is open; on hosts in the listing script) and lists the session under Needs you as “trust folder”. Answer it yourself: attach (⌘↵), or **Trust Folder & Start** (⌘T), which selects “Yes, I trust this folder” and presses Enter in that session, after checking the question is on screen. hop never answers it unasked. The new-session form already says when a folder on this Mac is not trusted yet: hop reads `projects[<folder>].hasTrustDialogAccepted` in `~/.claude.json` the way Claude Code does (the folder or a folder above it counts, but inside a git repository only up to the repository root).
+New sessions (⌘N, or "New Agent Session" in hop) run in tmux, so they keep going after hop quits and you can attach from any terminal. hop names them `hop-cc-<folder>-<4 hex>` / `hop-oc-…`; locally tmux gets your login shell's PATH, remotely the script runs under `bash -l` (a fish login shell never parses it). Claude Code starts with `--name` and, with `agents.claude.remoteControl` (on by default), `--remote-control`, so the Claude app and claude.ai/code can continue it from the phone; OpenCode starts with `--prompt`. A finished session can be resumed in tmux (`claude --resume`, `opencode --session`). A folder Claude Code has not been trusted in yet stops at its trust question (“Quick safety check … Yes, I trust this folder”), and Remote Control waits with it. hop spots that question in its own `hop-cc-…` tmux sessions and herdr agents (`tmux capture-pane`, only for sessions no running Claude Code has claimed yet, at start and on each refresh while the panel is open; on hosts in the listing script) and lists the session under Needs you as “trust folder”. Answer it yourself: attach (⌘↵), or **Trust Folder & Start** (⌘T), which selects “Yes, I trust this folder” and presses Enter in that session, after checking the question is on screen. hop never answers it unasked. The new-session form already says when a folder on this Mac is not trusted yet: hop reads `projects[<folder>].hasTrustDialogAccepted` in `~/.claude.json` the way Claude Code does (the folder or a folder above it counts, but inside a git repository only up to the repository root).
 
 Sessions served by `claude rc` (Remote Control server mode, here or on a host) run headless, with no terminal to attach: they are listed as `rc` (view only) with status and transcript, and ↵ / ⌘↵ open them in Claude (claude.ai/code). Rows say `tmux` when a terminal can attach. For a session you can both attach over ssh and continue in the Claude app, start it from hop (⌘N: tmux plus `claude --remote-control`).
 
@@ -148,12 +148,13 @@ Sessions served by `claude rc` (Remote Control server mode, here or on a host) r
 | type | filter by title, folder, host, provider, status |
 | ↑ ↓ | select a session |
 | ↵ | first action: attach (in tmux), open in Claude (`claude rc`), resume (finished), else open in Claude |
-| ⌘↵ | attach a terminal to its tmux session (Ghostty, iTerm, Terminal; `agents.terminal`) / open a `claude rc` session in Claude / resume a finished one |
+| ⌘↵ | attach a terminal to its tmux session or herdr agent (Ghostty, iTerm, Terminal; `agents.terminal`) / open a `claude rc` session in Claude / resume a finished one |
 | ⌘O | open a remote-control session in Claude (claude.ai/code) |
+| ⌘P | send a prompt line to an agent in herdr |
 | ⌘T | trust folder & start: answer Claude Code's trust question with Yes in a `hop-cc-…` session that shows it |
 | ⌘N | new session: ⌘P provider, ⌘T this Mac or a host, folder with recent projects (Tab completes paths), optional prompt, ↵ starts |
 | ⌘K | actions: also show transcript in Finder (⇧⌘F), copy session id (⇧⌘C) or folder (⌥⌘C), refresh (⌘R) |
-| ⌃X twice | stop a tmux session hop started (`hop-…`), and the agent in it |
+| ⌃X twice | stop a tmux session hop started (`hop-…`), or close the herdr workspace it made, and the agent in it |
 | Esc | close the form or actions, clear the filter, then close |
 
 ```json5
@@ -164,15 +165,24 @@ agents: {
   projectRoots: ["~/repos"],          // subfolders offered as projects
   historyHours: 24,
   terminal: "auto",                   // auto, ghostty, iterm, terminal
+  multiplexer: "tmux",                // or "herdr" (tmux when herdr is not there)
   claude: { binary: "", args: ["--model", "opus"], remoteControl: true },
   opencode: { binary: "", args: [] },
   hosts: [
-    { name: "my-server", ssh: "my-server", cwd: "~", projects: ["~/code/app"] },
+    { name: "my-server", ssh: "my-server", cwd: "~", projects: ["~/code/app"], multiplexer: "herdr" },
   ],
 },
 ```
 
-Hosts need key-based ssh (hop runs it with `BatchMode=yes`), tmux and the agent on the login PATH. On hosts, OpenCode shows only the tmux sessions hop started there (no status or transcript yet), and finished Claude Code sessions are not listed. iTerm attaches through its AppleScript (macOS asks once for Automation → iTerm); Terminal takes over if that is refused.
+Hosts need key-based ssh (hop runs it with `BatchMode=yes`), tmux (or herdr) and the agent on the login PATH. On hosts, OpenCode shows only the tmux sessions hop started there (no status or transcript yet), and finished Claude Code sessions are not listed. iTerm attaches through its AppleScript (macOS asks once for Automation → iTerm); Terminal takes over if that is refused.
+
+### herdr
+
+[herdr](https://herdr.dev) is a terminal workspace manager that recognizes coding agents in its panes and knows their state (idle, working, blocked, done). With `agents.multiplexer: "herdr"` (or `multiplexer` on one host) new sessions start in herdr instead of tmux: hop creates a workspace labelled like the agent (`hop-cc-<folder>-<4 hex>`, at most 32 characters, herdr's limit for agent names), then `herdr agent start <name> --kind claude --pane <pane> -- --name … --remote-control …`. herdr starts its own `claude` / `opencode` from the shell in that pane, so `agents.claude.binary` and a host's `claude` do not apply there; `args` do. When herdr is not installed, its server is not running, or it speaks another API protocol than the one hop was written against, the session starts in tmux and the HUD says why.
+
+Whatever `multiplexer` says, hop lists the agents herdr runs, here and on hosts, whenever herdr is there (`herdr api snapshot`, in the same refresh as the rest; nothing extra polls): a Claude Code session herdr hosts (same session id as `~/.claude/sessions`) gets herdr's status and a `herdr` tag, and the transcript still comes from `~/.claude/projects`. A `claude rc` server running in a herdr pane is listed and attachable as itself; the sessions it serves stay `rc` (view only). For herdr sessions, ⌘↵ attaches with `herdr agent attach`, **Send Prompt…** (⌘P) types one line into the agent with `herdr agent prompt` (herdr refuses an agent that is waiting on a question), Trust Folder & Start answers the trust question with `herdr agent send-keys`, and ⌃X twice closes the workspace hop made for it (never one hop did not make). On hosts all of this goes through the same `ssh host bash -l -s` script calling the host's `herdr` (`hosts[].herdr`), not `herdr --remote`: that one attaches a TUI to a remote server, while the CLI over ssh gives hop the same JSON as locally, with the ssh setup hosts already need.
+
+hop reads herdr's API as documented by `herdr api schema` for protocol 22 (herdr 0.9.0 and 0.9.5, schema version 1) and ignores fields it does not know. A herdr that reports another protocol is left alone: the panel says so in the footer and hop keeps to tmux.
 
 ## Permissions
 

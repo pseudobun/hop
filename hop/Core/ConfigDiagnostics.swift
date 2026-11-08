@@ -20,6 +20,7 @@ nonisolated extension Sensitivity: ConfigChoice {}
 nonisolated extension ShakeDetector.Sensitivity: ConfigChoice {}
 nonisolated extension HopConfig.KeePass.PasswordSource: ConfigChoice {}
 nonisolated extension HopConfig.Agents.Terminal: ConfigChoice {}
+nonisolated extension HopConfig.Agents.Multiplexer: ConfigChoice {}
 nonisolated extension AgentProvider: ConfigChoice {}
 
 /// The keys the config understands, read off the default `HopConfig` (property names are
@@ -36,7 +37,7 @@ nonisolated indirect enum ConfigSchema: Equatable, Sendable {
         // Empty by default, so there is no element to look at.
         "bookmarks": HopConfig.Bookmark(),
         "keepass.databases": HopConfig.KeePass.Database(),
-        "agents.hosts": HopConfig.Agents.Host(),
+        "agents.hosts": { var h = HopConfig.Agents.Host(); h.multiplexer = .tmux; return h }(),
     ])
 
     private static func describing(_ value: Any, path: String, samples: [String: Any]) -> ConfigSchema {
@@ -55,6 +56,10 @@ nonisolated indirect enum ConfigSchema: Equatable, Sendable {
             guard let element = mirror.children.first?.value ?? samples[path] else { return .list(.value) }
             return .list(describing(element, path: "\(path).0", samples: samples))
         case .dictionary: return .anyKeys
+        // An optional setting (nil by default) is known by its sample's value.
+        case .optional:
+            guard let wrapped = mirror.children.first?.value else { return .value }
+            return describing(wrapped, path: path, samples: samples)
         default: return .value
         }
     }

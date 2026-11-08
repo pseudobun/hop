@@ -291,6 +291,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                         self.agents.debugConfirmTrust(name)
                     }
                 }
+                if let spec = defaults.string(forKey: "DebugAgentsPrompt") {
+                    Task {
+                        try? await Task.sleep(for: .seconds(defaults.double(forKey: "DebugAgentsPromptDelay")))
+                        self.agents.debugPrompt(spec)
+                    }
+                }
                 if let path = defaults.string(forKey: "DebugAgentsDumpPath") {
                     Task {
                         let seconds = defaults.object(forKey: "DebugAgentsSnapshotDelay") != nil ? defaults.double(forKey: "DebugAgentsSnapshotDelay") : 1.5

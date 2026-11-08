@@ -14,6 +14,7 @@ final class AgentSpawnView: NSView, NSTableViewDataSource, NSTableViewDelegate, 
     private var hosts: [HopConfig.Agents.Host] = []
     private var projects: (HopConfig.Agents.Host?) -> [String] = { _ in [] }
     private var defaultCwd: (HopConfig.Agents.Host?) -> String = { _ in "~" }
+    private var multiplexer: (HopConfig.Agents.Host?) -> HopConfig.Agents.Multiplexer = { _ in .tmux }
     private var known: [String] = []
     private var suggestions: [String] = []
 
@@ -49,7 +50,9 @@ final class AgentSpawnView: NSView, NSTableViewDataSource, NSTableViewDelegate, 
 
     func configure(providers: [AgentProvider], preferred: AgentProvider, hosts: [HopConfig.Agents.Host], host: String?,
                    defaultCwd: @escaping (HopConfig.Agents.Host?) -> String, cwd: String?,
-                   projects: @escaping (HopConfig.Agents.Host?) -> [String]) {
+                   projects: @escaping (HopConfig.Agents.Host?) -> [String],
+                   multiplexer: @escaping (HopConfig.Agents.Host?) -> HopConfig.Agents.Multiplexer = { _ in .tmux }) {
+        self.multiplexer = multiplexer
         self.providers = providers
         self.hosts = hosts
         self.projects = projects
@@ -91,7 +94,10 @@ final class AgentSpawnView: NSView, NSTableViewDataSource, NSTableViewDelegate, 
         if provider == .claude, host == nil, ClaudeTrust.isTrusted(localFolder: folderField.stringValue.trimmingCharacters(in: .whitespaces)) == false {
             trust = "Claude Code has not trusted this folder yet and asks first; Trust Folder & Start (⌘T) in the list answers it. "
         }
-        note.stringValue = trust + "Starts \(provider.label) \(where_) in a tmux session named hop-\(provider.tag)-…, so it keeps running "
+        let in_ = multiplexer(host) == .herdr
+            ? "in a herdr workspace and agent named hop-\(provider.tag)-… (tmux when herdr is not there)"
+            : "in a tmux session named hop-\(provider.tag)-…"
+        note.stringValue = trust + "Starts \(provider.label) \(where_) \(in_), so it keeps running "
             + "after hop quits. ⌘↵ in the list attaches a terminal to it."
             + (provider == .claude ? " Remote Control (agents.claude.remoteControl) lets the Claude app continue it." : "")
     }

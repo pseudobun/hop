@@ -442,6 +442,151 @@ struct AgentsTests {
         #expect(!quiet.contains("send-keys"))
     }
 
+    // MARK: - herdr
+
+    /// A trimmed `herdr api snapshot` (protocol 22), with fictitious ids and a field hop does not know.
+    static func herdrSnapshot(protocol proto: Int = 22) -> String {
+        """
+        {"id":"cli:api:snapshot","result":{"type":"snapshot","snapshot":{"version":"0.9.5","protocol":\(proto),"focused_pane_id":"w1:p1",
+          "workspaces":[{"workspace_id":"w1","label":"app","number":1,"focused":true,"pane_count":1,"tab_count":1,"active_tab_id":"w1:t1","agent_status":"idle"},
+                        {"workspace_id":"w2","label":"hop-cc-new-0001","number":2,"focused":false,"pane_count":1,"tab_count":1,"active_tab_id":"w2:t1","agent_status":"blocked"},
+                        {"workspace_id":"w3","label":"server","number":3,"focused":false,"pane_count":2,"tab_count":1,"active_tab_id":"w3:t1","agent_status":"working"}],
+          "tabs":[],"panes":[],"layouts":[],
+          "agents":[
+            {"agent":"claude","agent_session":{"agent":"claude","kind":"id","source":"herdr:claude","value":"uuid-live"},"agent_status":"working",
+             "cwd":"/Users/me/app","foreground_cwd":"/Users/me/app","focused":true,"pane_id":"w1:p1","tab_id":"w1:t1","workspace_id":"w1",
+             "terminal_id":"term_1","revision":3,"state_change_seq":12,"terminal_title_stripped":"app","future_field":{"x":1}},
+            {"agent":"claude","agent_status":"blocked","cwd":"/Users/me/new","name":"hop-cc-new-0001","launch_pending":true,"focused":false,
+             "pane_id":"w2:p1","tab_id":"w2:t1","workspace_id":"w2","terminal_id":"term_2","revision":2},
+            {"agent":"claude","agent_session":{"agent":"claude","kind":"id","source":"herdr:claude","value":"uuid-server"},"agent_status":"idle",
+             "cwd":"/Users/me","focused":false,"pane_id":"w3:p1","tab_id":"w3:t1","workspace_id":"w3","terminal_id":"term_3","revision":9,
+             "terminal_title_stripped":"[my-mac] claude rc ~"},
+            {"agent":"codex","agent_status":"idle","cwd":"/Users/me","focused":false,"pane_id":"w3:p2","tab_id":"w3:t1","workspace_id":"w3",
+             "terminal_id":"term_4","revision":1},
+            {"agent_status":"unknown","focused":false,"tab_id":"w3:t1","workspace_id":"w3","terminal_id":"term_5","revision":1}
+          ]}}}
+        """
+    }
+
+    @Test func herdrSnapshotParses() throws {
+        let snap = try #require(Herdr.parseSnapshot(Data(Self.herdrSnapshot().utf8)))
+        #expect(snap.version == "0.9.5" && snap.proto == 22 && snap.isCompatible)
+        #expect(snap.agents.count == 4) // the one without a pane id is dropped
+        #expect(snap.agents[0] == Herdr.Agent(paneID: "w1:p1", workspaceID: "w1", agent: "claude", status: "working", name: nil,
+                                              cwd: "/Users/me/app", title: "app", sessionID: "uuid-live", stateChangeSeq: 12))
+        #expect(snap.agents[1].name == "hop-cc-new-0001" && snap.agents[1].sessionID == nil && snap.workspaces["w2"] == "hop-cc-new-0001")
+        #expect(Herdr.isHopOwned(snap.agents[1], snapshot: snap) && !Herdr.isHopOwned(snap.agents[0], snapshot: snap))
+        #expect(Herdr.parseSnapshot(Data("{\"result\":{}}".utf8)) == nil && Herdr.parseSnapshot(Data("nope".utf8)) == nil)
+        #expect(Herdr.parseSnapshot(Data(Self.herdrSnapshot(protocol: 23).utf8))?.isCompatible == false)
+
+        #expect(Herdr.status("working") == .running && Herdr.status("blocked") == .waiting)
+        #expect(Herdr.status("idle") == .idle && Herdr.status("done") == .idle && Herdr.status("unknown") == nil)
+        #expect(Herdr.isValidName("hop-cc-app-00ff") && !Herdr.isValidName("Hop") && !Herdr.isValidName(String(repeating: "a", count: 33)))
+        #expect(Herdr.isSafeID("w1Q:p1") && !Herdr.isSafeID("w1; rm") && !Herdr.isSafeID(""))
+        let long = AgentNames.tmuxName(provider: .claude, cwd: "/Users/me/a-very-long-project-folder-name-indeed", suffix: "abcd")
+        #expect(long == "hop-cc-a-very-long-project-abcd" && Herdr.isValidName(long))
+        #expect(Herdr.rootPane(Data(#"{"result":{"root_pane":{"pane_id":"w9:p1"},"workspace":{"workspace_id":"w9"}}}"#.utf8)) == "w9:p1")
+        #expect(Herdr.errorMessage(#"{"error":{"code":"agent_blocked","message":"agent x is blocked"},"id":"cli"}"#) == "agent x is blocked")
+        #expect(Herdr.errorMessage("plain\nlast line") == "last line")
+    }
+
+    @Test func herdrMergesIntoSessions() throws {
+        let snap = try #require(Herdr.parseSnapshot(Data(Self.herdrSnapshot().utf8)))
+        func claude(_ id: String, _ status: AgentStatus) -> AgentSession {
+            AgentSession(provider: .claude, id: id, host: nil, title: id, cwd: "/Users/me", status: status, lastActivity: .distantPast,
+                         pid: status == .finished ? nil : 7, tmux: nil, bridgeID: nil, transcript: nil, detail: nil, model: nil)
+        }
+        // A live registry session herdr hosts, and the transcript of a `claude rc` server pane listed as finished.
+        let out = Herdr.merge(snap, into: [claude("uuid-live", .idle), claude("uuid-server", .finished)], host: nil)
+        #expect(out.count == 3) // codex is not a provider the panel lists
+        #expect(out[0].herdrPane == "w1:p1" && out[0].status == .running && out[0].isAttachable && out[0].accessTag == "herdr" && !out[0].isViewOnly)
+        #expect(out[0].herdrWorkspace == nil)
+        #expect(out[1].herdrPane == "w3:p1" && out[1].status == .idle && out[1].kind == .terminal)
+        let new = out[2]
+        #expect(new.id == "herdr:w2:p1" && new.title == "hop-cc-new-0001" && new.status == .waiting && new.herdrName == "hop-cc-new-0001")
+        #expect(new.herdrWorkspace == "w2" && new.cwd == "/Users/me/new")
+        // Its trust question, as the listing reports it.
+        let marked = AgentSession.markTrustPrompts(out, prompts: ["herdr:hop-cc-new-0001"])
+        #expect(marked[2].needsTrust && marked[2].detail == "trust folder" && !marked[0].needsTrust)
+
+        let old = try #require(Herdr.parseSnapshot(Data(Self.herdrSnapshot(protocol: 23).utf8)))
+        #expect(Herdr.merge(old, into: [claude("uuid-live", .idle)], host: nil).map(\.herdrPane) == [nil])
+        #expect(AgentStore.protocolNotice(old).contains("protocol 23"))
+
+        let list = AgentCommands.parseRemoteList("H\t" + Self.herdrSnapshot().replacingOccurrences(of: "\n", with: "") + "\nQ|herdr:hop-cc-new-0001\n")
+        #expect(list.herdr?.agents.count == 4 && list.trustPrompts == ["herdr:hop-cc-new-0001"])
+        let script = AgentCommands.remoteListScript(herdr: "herdr")
+        #expect(script.contains("api snapshot") && script.contains("agent read") && script.hasSuffix("exit 0"))
+        #expect(AgentCommands.remoteListScript(herdr: nil) == AgentCommands.remoteListScript)
+    }
+
+    @Test func herdrCommandLines() {
+        #expect(AgentCommands.herdrAttachScript(herdr: "/opt/homebrew/bin/herdr", pane: "w1:p1", sshAlias: nil)
+            == "#!/bin/bash\nclear\nexec '/opt/homebrew/bin/herdr' agent attach 'w1:p1'\n")
+        #expect(AgentCommands.herdrAttachScript(herdr: "herdr", pane: "w1:p1", sshAlias: "my-server")
+            == "#!/bin/bash\nclear\nexec /usr/bin/ssh -t 'my-server' 'bash -lc \"herdr agent attach w1:p1\"'\n")
+        #expect(Herdr.promptScript(herdr: "herdr", pane: "w1:p1", text: "it's done?") == #"'herdr' agent prompt 'w1:p1' 'it'\''s done?'"#)
+        #expect(Herdr.agentStartArguments(["claude", "--name", "x"]) == ["--name", "x"])
+        #expect(ClaudeTrust.confirmScript(herdr: "herdr", agent: "hop-cc-x-0001").contains("'herdr' agent send-keys 'hop-cc-x-0001' down"))
+    }
+
+    /// The spawn script against stand-in herdr and tmux: herdr when it answers with protocol 22,
+    /// tmux (and a "fallback:" line) when it speaks another or is missing.
+    @Test func herdrSpawnScriptFallsBack() throws {
+        let dir = FileManager.default.temporaryDirectory.appending(path: "hop-herdr-\(UUID().uuidString)")
+        let bin = dir.appending(path: "bin")
+        try FileManager.default.createDirectory(at: bin, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        func tool(_ name: String, _ body: String) throws {
+            let f = bin.appending(path: name)
+            try "#!/bin/bash\necho \"\(name) $*\" >> \(dir.path)/log\n\(body)\n".write(to: f, atomically: true, encoding: .utf8)
+            try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: f.path)
+        }
+        try tool("tmux", "exit 0")
+        func run(_ herdrBody: String?) throws -> (Int32, String, [String]) {
+            try? FileManager.default.removeItem(at: dir.appending(path: "log"))
+            try? FileManager.default.removeItem(at: bin.appending(path: "herdr"))
+            if let herdrBody { try tool("herdr", herdrBody) }
+            let spawn = AgentCommands.Spawn(provider: .claude, cwd: dir.path, prompt: "", resume: nil, tmuxName: "hop-cc-app-0001")
+            let script = AgentCommands.remoteHerdrSpawnScript(spawn, agent: ["true", "--name", "app-0001"], herdr: "herdr")
+            let p = Process()
+            p.executableURL = URL(fileURLWithPath: "/bin/bash")
+            p.arguments = ["-c", script]
+            p.environment = ["PATH": bin.path + ":/usr/bin:/bin", "HOME": dir.path]
+            let out = Pipe()
+            p.standardOutput = out
+            p.standardError = FileHandle.nullDevice
+            try p.run()
+            p.waitUntilExit()
+            let log = (try? String(contentsOf: dir.appending(path: "log"), encoding: .utf8)) ?? ""
+            return (p.terminationStatus, String(decoding: out.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self),
+                    log.split(separator: "\n").map(String.init))
+        }
+        let ok = """
+            case "$1 $2" in
+              "api snapshot") echo '{"result":{"snapshot":{"version":"0.9.5","protocol":22,"agents":[]}}}' ;;
+              "workspace create") echo '{"result":{"root_pane":{"agent_status":"unknown","pane_id":"w7:p1"},"workspace":{"workspace_id":"w7"}}}' ;;
+              "agent start") echo '{"error":{"code":"agent_not_ready","message":"blocked during startup"}}' >&2; exit 1 ;;
+            esac
+            """
+        let (status, out, log) = try run(ok)
+        #expect(status == 0 && !out.contains("fallback"))
+        #expect(log.contains("herdr workspace create --cwd \(dir.resolvingSymlinksInPath().path) --label hop-cc-app-0001 --no-focus")
+            || log.contains("herdr workspace create --cwd \(dir.path) --label hop-cc-app-0001 --no-focus"))
+        #expect(log.contains("herdr agent start hop-cc-app-0001 --kind claude --pane w7:p1 --timeout 20000 -- --name app-0001"))
+        #expect(!log.contains { $0.hasPrefix("tmux") })
+
+        let (s2, out2, log2) = try run(#"echo '{"result":{"snapshot":{"version":"1.2.0","protocol":23,"agents":[]}}}'"#)
+        #expect(s2 == 0 && out2.contains("fallback: herdr speaks protocol 23, hop knows 22"))
+        #expect(log2.contains { $0.hasPrefix("tmux new-session -d -s hop-cc-app-0001") } && !log2.contains { $0.contains("workspace create") })
+
+        let (s3, out3, log3) = try run(nil)
+        #expect(s3 == 0 && out3.contains("fallback: herdr is not installed") && log3.contains { $0.hasPrefix("tmux new-session") })
+
+        let (s4, out4, _) = try run("exit 1")
+        #expect(s4 == 0 && out4.contains("fallback: the herdr server is not running"))
+    }
+
     // MARK: - Config
 
     @Test func agentsConfig() throws {
@@ -450,12 +595,14 @@ struct AgentsTests {
         let d = HopConfig().agents
         #expect(d.enabled && d.hotkey == "shift+cmd+space" && d.defaultProvider == .claude && d.terminal == .auto)
         #expect(d.claude.remoteControl && d.opencode.enabled && d.hosts.isEmpty && d.historyHours == 24)
+        #expect(d.multiplexer == .tmux && d.herdr == "")
         #expect(HotkeySpec.parse(d.hotkey) != nil)
 
         let text = """
         { agents: { hotkey: "hyper+a", defaultProvider: "opencode", terminal: "iterm", historyHours: 6,
           claude: { binary: "~/bin/claude", args: ["--model", "opus"], remoteControl: false },
-          hosts: [{ name: "Server", ssh: "my-server", cwd: "~/apps", projects: ["~/apps/web"] }, { ssh: "nas.local" }] } }
+          multiplexer: "herdr",
+          hosts: [{ name: "Server", ssh: "my-server", cwd: "~/apps", projects: ["~/apps/web"], multiplexer: "tmux" }, { ssh: "nas.local" }] } }
         """
         let c = try decoder.decode(HopConfig.self, from: Data(text.utf8)).agents
         #expect(c.hotkey == "hyper+a" && c.defaultProvider == .opencode && c.terminal == .iterm && c.historyHours == 6)
@@ -463,12 +610,23 @@ struct AgentsTests {
         #expect(c.opencode == HopConfig.Agents().opencode)
         #expect(c.hosts.map(\.label) == ["Server", "nas.local"] && c.hosts[1].cwd == "~" && c.hosts[1].claude == "claude")
         #expect(c.hosts[0].projects == ["~/apps/web"])
+        #expect(c.multiplexer == .herdr && c.hosts[0].multiplexer == .tmux && c.hosts[1].multiplexer == nil && c.hosts[1].herdr == "herdr")
+        #expect(c.multiplexer(for: c.hosts[0]) == .tmux && c.multiplexer(for: c.hosts[1]) == .herdr && c.multiplexer(for: nil) == .herdr)
 
         let template = try decoder.decode(HopConfig.self, from: Data(AppSettings.template.utf8))
         #expect(template.agents == HopConfig.Agents())
 
         #expect(ConfigSchema.hop.node(at: ["agents", "terminal"]) == .choice(["auto", "ghostty", "iterm", "terminal"]))
         #expect(ConfigSchema.hop.node(at: ["agents", "defaultProvider"]) == .choice(["claude", "opencode"]))
+        #expect(ConfigSchema.hop.node(at: ["agents", "multiplexer"]) == .choice(["tmux", "herdr"]))
+        #expect(ConfigSchema.hop.node(at: ["agents", "hosts", "0", "multiplexer"]) == .choice(["tmux", "herdr"]))
+        do {
+            _ = try decoder.decode(HopConfig.self, from: Data("{ agents: { multiplexer: 'screen' } }".utf8))
+            Issue.record("screen should not decode")
+        } catch {
+            #expect(ConfigDiagnostics.issue(for: error, in: "{ agents: { multiplexer: 'screen' } }").message
+                == #"agents.multiplexer (line 1): "screen" is not one of tmux, herdr"#)
+        }
         let warnings = ConfigDiagnostics.warnings(in: "{ agents: { hosts: [{ ssh: 'a', sshh: 'b' }], clade: {} } }").map(\.message)
         #expect(warnings == ["agents.hosts[0].sshh (line 1): unknown key, did you mean ssh?", "agents.clade (line 1): unknown key, did you mean claude?"])
         do {

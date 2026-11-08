@@ -8,6 +8,8 @@ final class AgentStore {
     private(set) var sessions: [AgentSession] = []
     /// Problems from the last refresh, e.g. an unreachable host; shown in the panel.
     private(set) var hostErrors: [String: String] = [:]
+    /// herdr found but not used, by host label ("local" for this Mac): another protocol.
+    private(set) var herdrNotices: [String: String] = [:]
     var onChange: (() -> Void)?
     /// A session's transcript changed on disk (its `key`).
     var onTranscriptChange: ((String) -> Void)?
@@ -130,10 +132,25 @@ final class AgentStore {
             let config = config()
             let tmux = await Self.tmuxPanes(tmux: AgentTools.tmux(config))
             var local = await Self.localSessions(config: config, panes: tmux)
-            local = AgentSession.markTrustPrompts(local, prompts: await Self.trustPrompts(in: local, tmux: AgentTools.tmux(config)))
+            let herdr = AgentTools.herdr(config)
+            var notice: String?
+            if let herdr, let snap = await Self.herdrSnapshot(herdr) {
+                if snap.isCompatible {
+                    local = Herdr.merge(snap, into: local, host: nil) { id, cwd in
+                        ClaudeSessions.transcriptURL(sessionID: id, cwd: cwd)?.path
+                    }
+                } else {
+                    notice = Self.protocolNotice(snap)
+                }
+            }
+            var prompts = await Self.trustPrompts(in: local, tmux: AgentTools.tmux(config))
+            prompts.formUnion(await Self.herdrTrustPrompts(in: local, herdr: herdr))
+            local = AgentSession.markTrustPrompts(local, prompts: prompts)
+            let noticeChanged = herdrNotices["local"] != notice
+            herdrNotices["local"] = notice
             lastRefresh = Date()
             refreshing = false
-            publish(local: local)
+            if !publish(local: local) && noticeChanged { onChange?() }
             if refreshPending {
                 refreshPending = false
                 refresh()
@@ -163,17 +180,18 @@ final class AgentStore {
                 let result = await Self.remoteSessions(host)
                 guard let self else { return }
                 remoteInFlight.remove(host.label)
-                let before = hostErrors
+                let before = (hostErrors, herdrNotices)
                 switch result {
-                case .success(let list):
+                case .success(let (list, notice)):
                     remote[host.label] = list
                     hostErrors[host.label] = nil
+                    herdrNotices[host.label] = notice
                 case .failure(let message):
                     remote[host.label] = []
                     hostErrors[host.label] = message.text
                 }
                 let changed = publish()
-                if !changed && before != hostErrors { onChange?() }
+                if !changed && (before.0 != hostErrors || before.1 != herdrNotices) { onChange?() }
             }
         }
     }
@@ -198,6 +216,29 @@ final class AgentStore {
             if let screen = await capturePane(tmux: tmux, session: name), ClaudeTrust.isPrompt(screen) { out.insert(name) }
         }
         return out
+    }
+
+    /// hop's Claude agents in herdr that herdr calls blocked before Claude registered a session
+    /// (the trust question comes first): their screen, read once per refresh.
+    nonisolated static func herdrTrustPrompts(in sessions: [AgentSession], herdr: String?) async -> Set<String> {
+        guard let herdr else { return [] }
+        var out = Set<String>()
+        for s in sessions where s.provider == .claude && s.status == .waiting && s.pid == nil {
+            guard let name = s.herdrName, name.hasPrefix("hop-cc-") else { continue }
+            if let r = try? await ProcessRunner.run(herdr, ["agent", "read", name, "--source", "visible"], timeout: .seconds(3)), r.ok,
+               ClaudeTrust.isPrompt(r.out) { out.insert("herdr:" + name) }
+        }
+        return out
+    }
+
+    /// `herdr api snapshot` on this Mac; nil when herdr's server is not running.
+    nonisolated static func herdrSnapshot(_ herdr: String) async -> Herdr.Snapshot? {
+        guard let r = try? await ProcessRunner.run(herdr, ["api", "snapshot"], timeout: .seconds(3)), r.ok else { return nil }
+        return Herdr.parseSnapshot(r.stdout)
+    }
+
+    nonisolated static func protocolNotice(_ snap: Herdr.Snapshot) -> String {
+        "herdr \(snap.version) speaks protocol \(snap.proto), hop knows \(Herdr.knownProtocol): its agents are not listed, new sessions use tmux"
     }
 
     nonisolated static func capturePane(tmux: String, session: String) async -> String? {
@@ -341,9 +382,11 @@ final class AgentStore {
 
     nonisolated struct Failure: Error { let text: String }
 
-    nonisolated static func remoteSessions(_ host: HopConfig.Agents.Host) async -> Result<[AgentSession], Failure> {
+    /// The host's sessions, and a note when its herdr speaks another protocol.
+    nonisolated static func remoteSessions(_ host: HopConfig.Agents.Host) async -> Result<([AgentSession], String?), Failure> {
+        let script = AgentCommands.remoteListScript(herdr: host.herdr.isEmpty ? "herdr" : host.herdr)
         guard let r = try? await ProcessRunner.run("/usr/bin/ssh", AgentCommands.sshArguments(host.ssh),
-                                                   stdin: Data(AgentCommands.remoteListScript.utf8), timeout: .seconds(12))
+                                                   stdin: Data(script.utf8), timeout: .seconds(12))
         else { return .failure(Failure(text: "ssh could not start")) }
         guard r.ok else {
             let line = r.err.split(whereSeparator: \.isNewline).last.map(String.init) ?? "exit \(r.status)"
@@ -354,8 +397,12 @@ final class AgentStore {
             ClaudeSessions.session($0, summary: nil, transcript: nil, host: host.label, remoteID: list.remoteIDs[$0.pid])
         }
         // Remote processes are not ours to inspect: match tmux panes by pid only.
-        let all = attach(panes: list.panes, to: sessions, host: host.label, parent: { _ in nil })
-        return .success(AgentSession.markTrustPrompts(all, prompts: list.trustPrompts))
+        var all = attach(panes: list.panes, to: sessions, host: host.label, parent: { _ in nil })
+        var notice: String?
+        if let snap = list.herdr {
+            if snap.isCompatible { all = Herdr.merge(snap, into: all, host: host.label) } else { notice = protocolNotice(snap) }
+        }
+        return .success((AgentSession.markTrustPrompts(all, prompts: list.trustPrompts), notice))
     }
 
     // MARK: - Transcripts
@@ -372,7 +419,7 @@ final class AgentStore {
             guard !s.id.hasPrefix("tmux:") else { return [] }
             return OpenCodeSessions.entries(await OpenCodeSessions.messages(session: s.id)).entries
         case (.claude, false):
-            guard !s.id.hasPrefix("tmux:"), let host = config().hosts.first(where: { $0.label == s.host }) else { return [] }
+            guard !s.id.hasPrefix("tmux:"), !s.id.hasPrefix("herdr:"), let host = config().hosts.first(where: { $0.label == s.host }) else { return [] }
             guard let r = try? await ProcessRunner.run("/usr/bin/ssh", AgentCommands.sshArguments(host.ssh),
                                                        stdin: Data(AgentCommands.remoteTranscriptScript(sessionID: s.id).utf8),
                                                        timeout: .seconds(12)), r.ok else { return [] }
@@ -447,6 +494,10 @@ nonisolated enum AgentTools {
         }
         let dirs = (path ?? cachedPath ?? "").split(separator: ":").map { "\($0)/\(name)" }
         return (candidates.map(\.expandingTilde) + dirs).first { fm.isExecutableFile(atPath: $0) }
+    }
+
+    static func herdr(_ c: HopConfig.Agents) -> String? {
+        find(c.herdr, candidates: ["/opt/homebrew/bin/herdr", "~/.local/bin/herdr", "/usr/local/bin/herdr"], name: "herdr")
     }
 
     static func tmux(_ c: HopConfig.Agents) -> String? {

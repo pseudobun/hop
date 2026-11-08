@@ -65,14 +65,42 @@ nonisolated enum AgentCommands {
     /// Bash for a remote host: cd, check tmux, start the session with the login PATH.
     static func remoteSpawnScript(_ s: Spawn, agent: [String]) -> String {
         """
-        cd \(remotePath(s.cwd)) || { echo "no such folder: \(s.cwd.replacingOccurrences(of: "\"", with: ""))" >&2; exit 3; }
+        \(remoteCdLine(s))
         command -v tmux >/dev/null 2>&1 || { echo "tmux is not installed" >&2; exit 4; }
-        command -v \(quote(agent[0])) >/dev/null 2>&1 || { echo "\(agent[0].replacingOccurrences(of: "\"", with: "")) not found" >&2; exit 5; }
-        tmux new-session -d -s \(quote(s.tmuxName)) -c "$PWD" -e "PATH=$PATH" -- \(agent.map(quote).joined(separator: " "))
+        \(remoteAgentCheckLine(agent))
+        \(remoteTmuxLine(s, agent: agent))
         """
     }
 
+    /// The same in herdr, with tmux as the fallback.
+    static func remoteHerdrSpawnScript(_ s: Spawn, agent: [String], herdr: String) -> String {
+        """
+        \(remoteCdLine(s))
+        \(Herdr.spawnScript(herdr: herdr, name: s.tmuxName, kind: s.provider == .claude ? "claude" : "opencode",
+                            agentArgs: Herdr.agentStartArguments(agent),
+                            tmuxFallback: remoteAgentCheckLine(agent) + "\n  " + remoteTmuxLine(s, agent: agent)))
+        """
+    }
+
+    static func remoteCdLine(_ s: Spawn) -> String {
+        "cd \(remotePath(s.cwd)) || { echo \"no such folder: \(s.cwd.replacingOccurrences(of: "\"", with: ""))\" >&2; exit 3; }"
+    }
+
+    static func remoteAgentCheckLine(_ agent: [String]) -> String {
+        "command -v \(quote(agent[0])) >/dev/null 2>&1 || { echo \"\(agent[0].replacingOccurrences(of: "\"", with: "")) not found\" >&2; exit 5; }"
+    }
+
+    static func remoteTmuxLine(_ s: Spawn, agent: [String]) -> String {
+        "tmux new-session -d -s \(quote(s.tmuxName)) -c \"$PWD\" -e \"PATH=$PATH\" -- \(agent.map(quote).joined(separator: " "))"
+    }
+
     // MARK: - Watching remote hosts
+
+    /// The listing with herdr's snapshot too, when herdr is there (`herdr`: its command).
+    static func remoteListScript(herdr: String?) -> String {
+        guard let herdr, !herdr.isEmpty else { return remoteListScript }
+        return remoteListScript.replacingOccurrences(of: "\nexit 0", with: "\n" + Herdr.remoteListLines(herdr: herdr) + "\nexit 0")
+    }
 
     /// Live Claude Code sessions (registry records of running processes), the `--sdk-url` of
     /// `claude rc` children (pid and URL only, no other arguments) and tmux panes.
@@ -89,12 +117,13 @@ nonisolated enum AgentCommands {
           u="${a#*--sdk-url}"; u="${u#=}"; u="${u# }"; u="${u%% *}"
           printf 'P\\t%s\\t%s\\n' "$p" "$u"
         done
-        command -v tmux >/dev/null 2>&1 || exit 0
-        tmux list-panes -a -F 'T|\(TmuxPane.format)' 2>/dev/null
-        tmux list-sessions -F '#{session_name}' 2>/dev/null | while read -r n; do
-          case "$n" in hop-cc-*) ;; *) continue ;; esac
-          tmux capture-pane -p -t "=$n:" 2>/dev/null | grep -q '\(ClaudeTrust.yesOption)' && printf 'Q|%s\\n' "$n"
-        done
+        if command -v tmux >/dev/null 2>&1; then
+          tmux list-panes -a -F 'T|\(TmuxPane.format)' 2>/dev/null
+          tmux list-sessions -F '#{session_name}' 2>/dev/null | while read -r n; do
+            case "$n" in hop-cc-*) ;; *) continue ;; esac
+            tmux capture-pane -p -t "=$n:" 2>/dev/null | grep -q '\(ClaudeTrust.yesOption)' && printf 'Q|%s\\n' "$n"
+          done
+        fi
         exit 0
         """
 
@@ -114,8 +143,10 @@ nonisolated enum AgentCommands {
         var panes: [TmuxPane] = []
         /// claude.ai session ("cse_…") of each `claude rc` child, by pid.
         var remoteIDs: [Int32: String] = [:]
-        /// hop tmux sessions where Claude Code asks whether to trust the folder.
+        /// hop tmux sessions (and "herdr:<agent>") where Claude Code asks whether to trust the folder.
         var trustPrompts: Set<String> = []
+        /// herdr's snapshot on the host, when it runs there.
+        var herdr: Herdr.Snapshot?
     }
 
     static func parseRemoteList(_ text: String) -> RemoteList {
@@ -130,7 +161,10 @@ nonisolated enum AgentCommands {
                 }
             } else if line.hasPrefix("Q|") {
                 let name = String(line.dropFirst(2))
-                if isSafeTmuxName(name) { out.trustPrompts.insert(name) }
+                let bare = name.hasPrefix("herdr:") ? String(name.dropFirst(6)) : name
+                if isSafeTmuxName(bare) { out.trustPrompts.insert(name) }
+            } else if line.hasPrefix("H\t") {
+                out.herdr = Herdr.parseSnapshot(Data(line.dropFirst(2).utf8))
             } else if line.hasPrefix("T|") {
                 out.panes += TmuxPane.parse(String(line))
             }
@@ -149,6 +183,15 @@ nonisolated enum AgentCommands {
             return "#!/bin/bash\nclear\nexec /usr/bin/ssh -t \(quote(sshAlias)) \(quote(remote))\n"
         }
         return "#!/bin/bash\nclear\nexec \(quote(tmux)) attach-session -t \(target)\n"
+    }
+
+    /// A `.command` script that attaches a terminal to an agent in herdr.
+    static func herdrAttachScript(herdr: String, pane: String, sshAlias: String?) -> String {
+        if let sshAlias {
+            let remote = "bash -lc \"\(herdr) agent attach \(pane)\""
+            return "#!/bin/bash\nclear\nexec /usr/bin/ssh -t \(quote(sshAlias)) \(quote(remote))\n"
+        }
+        return "#!/bin/bash\nclear\nexec \(quote(herdr)) agent attach \(quote(pane))\n"
     }
 
     /// Only names hop could have made: letters, digits and dashes.

@@ -105,8 +105,14 @@ nonisolated struct AgentSession: Equatable, Sendable {
     var kind: AgentKind = .terminal
     /// The claude.ai session a Remote Control child serves ("cse_…").
     var remoteID: String? = nil
-    /// Claude Code waits on its folder trust question in this hop tmux session.
+    /// Claude Code waits on its folder trust question in this hop tmux session or herdr agent.
     var needsTrust = false
+    /// The herdr pane the agent runs in ("w1:p1"), when herdr hosts it.
+    var herdrPane: String? = nil
+    /// Its live herdr agent name, when it has one.
+    var herdrName: String? = nil
+    /// The herdr workspace hop made for it (labelled like the agent); nil when hop did not start it.
+    var herdrWorkspace: String? = nil
 
     /// Stable across refreshes, for keeping the selection.
     var key: String { "\(host ?? "local")/\(provider.rawValue)/\(id)" }
@@ -126,16 +132,17 @@ nonisolated struct AgentSession: Equatable, Sendable {
         return URL(string: "https://claude.ai/code/\(id)")
     }
 
-    /// A terminal can attach to it: it runs in tmux.
-    var isAttachable: Bool { tmux != nil }
+    /// A terminal can attach to it: it runs in tmux or herdr.
+    var isAttachable: Bool { tmux != nil || herdrPane != nil }
 
-    /// Live but not in tmux (a `claude rc` child, or a terminal hop cannot reach): watch only.
-    var isViewOnly: Bool { status != .finished && tmux == nil }
+    /// Live but in neither (a `claude rc` child, or a terminal hop cannot reach): watch only.
+    var isViewOnly: Bool { status != .finished && !isAttachable }
 
     /// Short row tag for how it can be reached: "tmux" (attach), "rc" (view only, open in
     /// Claude), "view only"; nil once finished. The detail header spells it out.
     var accessTag: String? {
-        if isAttachable { return "tmux" }
+        if tmux != nil { return "tmux" }
+        if herdrPane != nil { return "herdr" }
         guard isViewOnly else { return nil }
         return kind == .remoteControl ? "rc" : "view only"
     }
@@ -144,7 +151,8 @@ nonisolated struct AgentSession: Equatable, Sendable {
     static func markTrustPrompts(_ sessions: [AgentSession], prompts: Set<String>) -> [AgentSession] {
         guard !prompts.isEmpty else { return sessions }
         return sessions.map { s in
-            guard s.provider == .claude, s.status != .finished, let t = s.tmux, prompts.contains(t) else { return s }
+            let hit = s.tmux.map { prompts.contains($0) } == true || s.herdrName.map { prompts.contains("herdr:" + $0) } == true
+            guard s.provider == .claude, s.status != .finished, hit else { return s }
             var s = s
             s.needsTrust = true
             s.status = .waiting
@@ -186,14 +194,15 @@ nonisolated struct TmuxPane: Equatable, Sendable {
 
 /// tmux session names hop gives the agents it starts.
 nonisolated enum AgentNames {
-    /// `hop-cc-hop-3f2a`: provider tag, folder name (letters, digits, dashes) and 4 hex.
-    static func tmuxName(provider: AgentProvider, cwd: String, suffix: String) -> String {
+    /// `hop-cc-hop-3f2a`: provider tag, folder name (letters, digits, dashes) and 4 hex. herdr
+    /// takes names up to 32 characters: `maxFolder` 20 keeps them within that.
+    static func tmuxName(provider: AgentProvider, cwd: String, suffix: String, maxFolder: Int = 20) -> String {
         let base = (cwd as NSString).lastPathComponent.lowercased()
         var slug = String(base.unicodeScalars.map { CharacterSet.alphanumerics.contains($0) && $0.isASCII ? Character($0) : "-" })
         while slug.contains("--") { slug = slug.replacingOccurrences(of: "--", with: "-") }
         slug = slug.trimmingCharacters(in: CharacterSet(charactersIn: "-"))
         if slug.isEmpty { slug = "home" }
-        return "hop-\(provider.tag)-\(String(slug.prefix(24)))-\(suffix)"
+        return "hop-\(provider.tag)-\(String(slug.prefix(maxFolder)).trimmingCharacters(in: CharacterSet(charactersIn: "-")))-\(suffix)"
     }
 
     static func randomSuffix() -> String { String(format: "%04x", UInt16.random(in: 0...UInt16.max)) }

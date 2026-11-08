@@ -250,6 +250,11 @@ nonisolated struct HopConfig: Decodable, Equatable, Sendable {
             case auto, ghostty, iterm, terminal
         }
 
+        /// What new sessions run in: tmux, or herdr (herdr.dev) with tmux as the fallback.
+        nonisolated enum Multiplexer: String, Decodable, Equatable, Sendable, CaseIterable {
+            case tmux, herdr
+        }
+
         nonisolated struct Provider: Decodable, Equatable, Sendable {
             var enabled = true
             /// Path to the binary; "" finds it in the usual places (and the login PATH).
@@ -279,6 +284,10 @@ nonisolated struct HopConfig: Decodable, Equatable, Sendable {
             /// Binaries on that host (its login PATH finds them).
             var claude = "claude"
             var opencode = "opencode"
+            /// "tmux" or "herdr" for new sessions there; nil follows `agents.multiplexer`.
+            var multiplexer: Multiplexer?
+            /// herdr on that host (its login PATH finds it).
+            var herdr = "herdr"
 
             var label: String { name.isEmpty ? ssh : name }
         }
@@ -296,6 +305,10 @@ nonisolated struct HopConfig: Decodable, Equatable, Sendable {
         var terminal: Terminal = .auto
         /// Path to tmux; "" finds it.
         var tmux = ""
+        /// What new sessions run in; herdr falls back to tmux when it is missing or unreachable.
+        var multiplexer: Multiplexer = .tmux
+        /// Path to herdr; "" finds it.
+        var herdr = ""
         /// Above other windows while open; false lets other windows cover it.
         var floating = true
         /// Seconds between remote host refreshes while the panel is open.
@@ -519,8 +532,8 @@ nonisolated extension HopConfig.Emoji {
 
 nonisolated extension HopConfig.Agents {
     private enum Keys: String, CodingKey {
-        case enabled, hotkey, defaultProvider, defaultCwd, projectRoots, historyHours, terminal, tmux, floating, remoteRefreshSeconds,
-             claude, opencode, hosts
+        case enabled, hotkey, defaultProvider, defaultCwd, projectRoots, historyHours, terminal, tmux, multiplexer, herdr, floating,
+             remoteRefreshSeconds, claude, opencode, hosts
     }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: Keys.self), d = Self()
@@ -532,6 +545,8 @@ nonisolated extension HopConfig.Agents {
         historyHours = try c.value(.historyHours, d.historyHours)
         terminal = try c.value(.terminal, d.terminal)
         tmux = try c.value(.tmux, d.tmux)
+        multiplexer = try c.value(.multiplexer, d.multiplexer)
+        herdr = try c.value(.herdr, d.herdr)
         floating = try c.value(.floating, d.floating)
         remoteRefreshSeconds = try c.value(.remoteRefreshSeconds, d.remoteRefreshSeconds)
         claude = try c.value(.claude, d.claude)
@@ -562,7 +577,7 @@ nonisolated extension HopConfig.Agents.Claude {
 }
 
 nonisolated extension HopConfig.Agents.Host {
-    private enum Keys: String, CodingKey { case name, ssh, cwd, projects, claude, opencode }
+    private enum Keys: String, CodingKey { case name, ssh, cwd, projects, claude, opencode, multiplexer, herdr }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: Keys.self), d = Self()
         name = try c.value(.name, d.name)
@@ -571,7 +586,14 @@ nonisolated extension HopConfig.Agents.Host {
         projects = try c.value(.projects, d.projects)
         claude = try c.value(.claude, d.claude)
         opencode = try c.value(.opencode, d.opencode)
+        multiplexer = try c.decodeIfPresent(HopConfig.Agents.Multiplexer.self, forKey: .multiplexer)
+        herdr = try c.value(.herdr, d.herdr)
     }
+}
+
+nonisolated extension HopConfig.Agents {
+    /// What new sessions on `host` (nil: this Mac) run in.
+    func multiplexer(for host: Host?) -> Multiplexer { host?.multiplexer ?? multiplexer }
 }
 
 nonisolated extension HopConfig.CalendarSettings {
@@ -995,6 +1017,12 @@ final class AppSettings {
         terminal: "auto",
         // Path to tmux; "" finds it (Homebrew, /usr/local, PATH)
         tmux: "",
+        // What new sessions run in: "tmux", or "herdr" (herdr.dev: hop lists its agents with
+        // herdr's own status and can send them a prompt); herdr falls back to tmux when it is
+        // not installed, its server is not running or speaks another protocol
+        multiplexer: "tmux",
+        // Path to herdr; "" finds it (Homebrew, ~/.local/bin, PATH)
+        herdr: "",
         // Above other windows while open
         floating: true,
         // Seconds between refreshes of remote hosts while the panel is open
@@ -1013,9 +1041,10 @@ final class AppSettings {
           binary: "",
           args: [],
         },
-        // Machines reached over SSH: sessions there are listed, new ones start there in tmux
+        // Machines reached over SSH: sessions there are listed (herdr's too, when it runs
+        // there), new ones start there in tmux, or in herdr with multiplexer: "herdr"
         hosts: [
-          // { name: "my-server", ssh: "my-server", cwd: "~", projects: ["~/code/app"] },
+          // { name: "my-server", ssh: "my-server", cwd: "~", projects: ["~/code/app"], multiplexer: "herdr" },
         ],
       },
 
