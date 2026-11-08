@@ -238,6 +238,68 @@ nonisolated struct HopConfig: Decodable, Equatable, Sendable {
         var enabled = true
     }
 
+    /// The Agents panel: Claude Code and OpenCode sessions here and on SSH hosts.
+    nonisolated struct Agents: Decodable, Equatable, Sendable {
+        nonisolated enum Terminal: String, Decodable, Equatable, Sendable, CaseIterable {
+            /// Ghostty, then iTerm, then Terminal: the first one installed.
+            case auto, ghostty, iterm, terminal
+        }
+
+        nonisolated struct Provider: Decodable, Equatable, Sendable {
+            var enabled = true
+            /// Path to the binary; "" finds it in the usual places (and the login PATH).
+            var binary = ""
+            /// Flags added to every session it starts, e.g. ["--model", "opus"].
+            var args: [String] = []
+        }
+
+        nonisolated struct Claude: Decodable, Equatable, Sendable {
+            var enabled = true
+            var binary = ""
+            var args: [String] = []
+            /// Start sessions with --remote-control, so the Claude app and claude.ai/code can continue them.
+            var remoteControl = true
+        }
+
+        /// A machine reached over SSH; its sessions are listed and new ones start there in tmux.
+        nonisolated struct Host: Decodable, Equatable, Sendable {
+            /// Shown in the panel; defaults to `ssh`.
+            var name = ""
+            /// Host alias from ~/.ssh/config (or user@host).
+            var ssh = ""
+            /// Where new sessions start when no folder is typed.
+            var cwd = "~"
+            /// Folders offered when starting a session there.
+            var projects: [String] = []
+            /// Binaries on that host (its login PATH finds them).
+            var claude = "claude"
+            var opencode = "opencode"
+
+            var label: String { name.isEmpty ? ssh : name }
+        }
+
+        var enabled = true
+        var hotkey = "shift+cmd+space"
+        var defaultProvider: AgentProvider = .claude
+        /// Where new local sessions start when no folder is typed.
+        var defaultCwd = "~/repos"
+        /// Their subfolders are offered as projects when starting a session.
+        var projectRoots = ["~/repos"]
+        /// Finished sessions from this many hours back stay in the list.
+        var historyHours = 24
+        /// Where "Attach in Terminal" opens.
+        var terminal: Terminal = .auto
+        /// Path to tmux; "" finds it.
+        var tmux = ""
+        /// Above other windows while open; false lets other windows cover it.
+        var floating = true
+        /// Seconds between remote host refreshes while the panel is open.
+        var remoteRefreshSeconds = 15
+        var claude = Claude()
+        var opencode = Provider()
+        var hosts: [Host] = []
+    }
+
     nonisolated struct CalculatorSettings: Decodable, Equatable, Sendable {
         /// Convert currencies; rates come from open.er-api.com, only once you type one.
         var currencies = true
@@ -262,6 +324,7 @@ nonisolated struct HopConfig: Decodable, Equatable, Sendable {
     var translate = Translate()
     var ocr = OCR()
     var emoji = Emoji()
+    var agents = Agents()
     /// Global hotkeys for any command or app: { "Empty Trash": "hyper+t", "Safari": "hyper+s" }.
     var hotkeys: [String: String] = [:]
 
@@ -277,7 +340,7 @@ nonisolated private extension KeyedDecodingContainer {
 }
 
 nonisolated extension HopConfig {
-    private enum Keys: String, CodingKey { case general, hyperKey, wireguard, keepass, system, bookmarks, notes, clipboard, snippets, files, calculator, shelf, messages, calendar, translate, ocr, emoji, hotkeys }
+    private enum Keys: String, CodingKey { case general, hyperKey, wireguard, keepass, system, bookmarks, notes, clipboard, snippets, files, calculator, shelf, messages, calendar, translate, ocr, emoji, agents, hotkeys }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: Keys.self)
         general = try c.value(.general, General())
@@ -297,6 +360,7 @@ nonisolated extension HopConfig {
         translate = try c.value(.translate, Translate())
         ocr = try c.value(.ocr, OCR())
         emoji = try c.value(.emoji, Emoji())
+        agents = try c.value(.agents, Agents())
         hotkeys = try c.value(.hotkeys, [:])
     }
 }
@@ -445,6 +509,63 @@ nonisolated extension HopConfig.Emoji {
         ai = try c.value(.ai, d.ai)
         aiModel = try c.value(.aiModel, d.aiModel)
         aiReasoning = try c.value(.aiReasoning, d.aiReasoning)
+    }
+}
+
+nonisolated extension HopConfig.Agents {
+    private enum Keys: String, CodingKey {
+        case enabled, hotkey, defaultProvider, defaultCwd, projectRoots, historyHours, terminal, tmux, floating, remoteRefreshSeconds,
+             claude, opencode, hosts
+    }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: Keys.self), d = Self()
+        enabled = try c.value(.enabled, d.enabled)
+        hotkey = try c.value(.hotkey, d.hotkey)
+        defaultProvider = try c.value(.defaultProvider, d.defaultProvider)
+        defaultCwd = try c.value(.defaultCwd, d.defaultCwd)
+        projectRoots = try c.value(.projectRoots, d.projectRoots)
+        historyHours = try c.value(.historyHours, d.historyHours)
+        terminal = try c.value(.terminal, d.terminal)
+        tmux = try c.value(.tmux, d.tmux)
+        floating = try c.value(.floating, d.floating)
+        remoteRefreshSeconds = try c.value(.remoteRefreshSeconds, d.remoteRefreshSeconds)
+        claude = try c.value(.claude, d.claude)
+        opencode = try c.value(.opencode, d.opencode)
+        hosts = try c.value(.hosts, d.hosts)
+    }
+}
+
+nonisolated extension HopConfig.Agents.Provider {
+    private enum Keys: String, CodingKey { case enabled, binary, args }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: Keys.self), d = Self()
+        enabled = try c.value(.enabled, d.enabled)
+        binary = try c.value(.binary, d.binary)
+        args = try c.value(.args, d.args)
+    }
+}
+
+nonisolated extension HopConfig.Agents.Claude {
+    private enum Keys: String, CodingKey { case enabled, binary, args, remoteControl }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: Keys.self), d = Self()
+        enabled = try c.value(.enabled, d.enabled)
+        binary = try c.value(.binary, d.binary)
+        args = try c.value(.args, d.args)
+        remoteControl = try c.value(.remoteControl, d.remoteControl)
+    }
+}
+
+nonisolated extension HopConfig.Agents.Host {
+    private enum Keys: String, CodingKey { case name, ssh, cwd, projects, claude, opencode }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: Keys.self), d = Self()
+        name = try c.value(.name, d.name)
+        ssh = try c.value(.ssh, d.ssh)
+        cwd = try c.value(.cwd, d.cwd)
+        projects = try c.value(.projects, d.projects)
+        claude = try c.value(.claude, d.claude)
+        opencode = try c.value(.opencode, d.opencode)
     }
 }
 
@@ -841,6 +962,48 @@ final class AppSettings {
       ocr: {
         // "Copy Text from Screen": select an area, its text goes to the clipboard (read on this Mac)
         enabled: true,
+      },
+
+      agents: {
+        // Agents panel: Claude Code and OpenCode sessions on this Mac and on SSH hosts,
+        // live status and transcript; start new ones in tmux and attach from a terminal
+        enabled: true,
+        // Opens the panel (it follows you across Spaces until Esc); pressed again in front, it closes
+        hotkey: "shift+cmd+space",
+        // "claude" or "opencode": what a new session starts with
+        defaultProvider: "claude",
+        // Where new sessions start when no folder is typed
+        defaultCwd: "~/repos",
+        // Their subfolders are offered as projects when starting a session
+        projectRoots: ["~/repos"],
+        // Finished sessions from this many hours back stay in the list
+        historyHours: 24,
+        // "Attach in Terminal" (⌘↵): "auto", "ghostty", "iterm" or "terminal"
+        terminal: "auto",
+        // Path to tmux; "" finds it (Homebrew, /usr/local, PATH)
+        tmux: "",
+        // Above other windows while open
+        floating: true,
+        // Seconds between refreshes of remote hosts while the panel is open
+        remoteRefreshSeconds: 15,
+        claude: {
+          enabled: true,
+          // "" finds claude (~/.local/bin, Homebrew, the login PATH)
+          binary: "",
+          // Flags for every session hop starts, e.g. ["--model", "opus"]
+          args: [],
+          // Start with --remote-control, so the Claude app and claude.ai/code can continue it
+          remoteControl: true,
+        },
+        opencode: {
+          enabled: true,
+          binary: "",
+          args: [],
+        },
+        // Machines reached over SSH: sessions there are listed, new ones start there in tmux
+        hosts: [
+          // { name: "zeus", ssh: "zeus", cwd: "~", projects: ["~/apps/lutraid"] },
+        ],
       },
 
       snippets: {

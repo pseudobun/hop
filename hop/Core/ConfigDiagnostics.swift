@@ -19,6 +19,8 @@ nonisolated extension ConfigChoice where Self: CaseIterable & RawRepresentable, 
 nonisolated extension Sensitivity: ConfigChoice {}
 nonisolated extension ShakeDetector.Sensitivity: ConfigChoice {}
 nonisolated extension HopConfig.KeePass.PasswordSource: ConfigChoice {}
+nonisolated extension HopConfig.Agents.Terminal: ConfigChoice {}
+nonisolated extension AgentProvider: ConfigChoice {}
 
 /// The keys the config understands, read off the default `HopConfig` (property names are
 /// the JSON keys), so a new setting is known without listing it twice.
@@ -34,6 +36,7 @@ nonisolated indirect enum ConfigSchema: Equatable, Sendable {
         // Empty by default, so there is no element to look at.
         "bookmarks": HopConfig.Bookmark(),
         "keepass.databases": HopConfig.KeePass.Database(),
+        "agents.hosts": HopConfig.Agents.Host(),
     ])
 
     private static func describing(_ value: Any, path: String, samples: [String: Any]) -> ConfigSchema {
