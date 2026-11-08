@@ -26,7 +26,6 @@ enum Palette {
     static var translate: NSColor { Theme.chart1 }
     static var ocr: NSColor { Theme.chart5 }
     static var emoji: NSColor { Theme.chart2 }
-    static var agents: NSColor { Theme.chart2 }
     static var neutral: NSColor { Theme.mutedForeground }
 }
 

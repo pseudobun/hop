@@ -28,8 +28,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var calendar: CalendarController!
     private let messageWatcher = MessageCodeWatcher()
     private var messagesHotkey: GlobalHotkey!
-    private var agents: AgentsController!
-    private var agentsHotkey: GlobalHotkey!
     private let bindings = HotkeyBindings()
     /// The sub-mode a command hotkey last opened, so pressing it again hides the launcher.
     private weak var bindingMode: Mode?
@@ -86,8 +84,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             launcher.reload()
         }
         services.calendar = calendar
-        agents = AgentsController(settings: settings)
-        services.agents = agents
         shelfHotkeys = [
             GlobalHotkey { [weak self] in self?.shelves.newShelf() },
             GlobalHotkey { [weak self] in self?.shelves.newShelfFromClipboard() },
@@ -172,10 +168,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.notes.toggle()
         }
         messagesHotkey = GlobalHotkey { [weak self] in self?.runBinding("messages.pasteCode") }
-        agentsHotkey = GlobalHotkey { [weak self] in
-            self?.launcher.hide()
-            self?.agents.toggle()
-        }
 
         settings.onChange = { [weak self] old, new in self?.apply(new, previous: old) }
         settings.start()
@@ -268,48 +260,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                         } else {
                             await DebugSnapshot.capture(shelf.panel, to: path)
                         }
-                    }
-                }
-            }
-        }
-        if defaults.bool(forKey: "DebugAgents") {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
-                guard let self else { return }
-                agents.show(newSession: defaults.bool(forKey: "DebugAgentsNew"))
-                if let q = defaults.string(forKey: "DebugAgentsQuery") { agents.debugSearch(q) }
-                if defaults.object(forKey: "DebugAgentsSelect") != nil { agents.debugSelect(defaults.integer(forKey: "DebugAgentsSelect")) }
-                if defaults.bool(forKey: "DebugAgentsActions") { agents.debugOpenActions() }
-                if let name = defaults.string(forKey: "DebugAgentsAttach"),
-                   let error = AgentLauncher.attach(tmux: name, host: nil, config: settings.data.agents) {
-                    HUD.shared.fail(error)
-                }
-                if let spec = defaults.string(forKey: "DebugAgentsStart") {
-                    agents.debugStart(spec, tmuxName: defaults.string(forKey: "DebugAgentsTmux") ?? "hop-cc-debug-0000")
-                }
-                if let name = defaults.string(forKey: "DebugAgentsTrust") {
-                    Task {
-                        try? await Task.sleep(for: .seconds(defaults.double(forKey: "DebugAgentsTrustDelay")))
-                        self.agents.debugConfirmTrust(name)
-                    }
-                }
-                if let spec = defaults.string(forKey: "DebugAgentsPrompt") {
-                    Task {
-                        try? await Task.sleep(for: .seconds(defaults.double(forKey: "DebugAgentsPromptDelay")))
-                        self.agents.debugPrompt(spec)
-                    }
-                }
-                if let path = defaults.string(forKey: "DebugAgentsDumpPath") {
-                    Task {
-                        let seconds = defaults.object(forKey: "DebugAgentsSnapshotDelay") != nil ? defaults.double(forKey: "DebugAgentsSnapshotDelay") : 1.5
-                        try? await Task.sleep(for: .milliseconds(Int(seconds * 1000)))
-                        try? self.agents.debugDump().write(toFile: path, atomically: true, encoding: .utf8)
-                    }
-                }
-                if let path = defaults.string(forKey: "DebugSnapshotPath") {
-                    Task {
-                        let seconds = defaults.object(forKey: "DebugAgentsSnapshotDelay") != nil ? defaults.double(forKey: "DebugAgentsSnapshotDelay") : 1.5
-                        try? await Task.sleep(for: .milliseconds(Int(seconds * 1000)))
-                        await DebugSnapshot.capture(self.agents.panel, to: path)
                     }
                 }
             }
@@ -413,18 +363,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         if previous?.calendar != config.calendar { calendar.apply(config.calendar) }
 
-        if previous?.agents.enabled != config.agents.enabled || previous?.agents.hotkey != config.agents.hotkey {
-            if config.agents.enabled, let spec = HotkeySpec.parse(config.agents.hotkey) {
-                if !agentsHotkey.register(keyCode: spec.keyCode, modifiers: spec.modifiers) {
-                    Log.app.error("Could not register agents hotkey \(config.agents.hotkey, privacy: .public)")
-                }
-            } else {
-                if config.agents.enabled { Log.app.error("Invalid agents hotkey \(config.agents.hotkey, privacy: .public)") }
-                agentsHotkey.unregister()
-                agents.hide()
-            }
-        }
-
         if previous?.messages != config.messages {
             messageWatcher.apply(config.messages)
             let spec = config.messages.pasteHotkey
@@ -476,12 +414,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if previous?.hotkeys != config.hotkeys || previous?.general.hotkey != config.general.hotkey
             || previous?.notes.hotkey != config.notes.hotkey || previous?.notes.enabled != config.notes.enabled
             || previous?.clipboard.hotkey != config.clipboard.hotkey || previous?.clipboard.enabled != config.clipboard.enabled
-            || previous?.shelf != config.shelf || previous?.messages != config.messages
-            || previous?.agents.hotkey != config.agents.hotkey || previous?.agents.enabled != config.agents.enabled {
+            || previous?.shelf != config.shelf || previous?.messages != config.messages {
             var reserved = [(owner: "the hop hotkey", hotkey: config.general.hotkey)]
             if config.notes.enabled { reserved.append((owner: "the notes hotkey", hotkey: config.notes.hotkey)) }
             if config.clipboard.enabled { reserved.append((owner: "the clipboard hotkey", hotkey: config.clipboard.hotkey)) }
-            if config.agents.enabled { reserved.append((owner: "the agents hotkey", hotkey: config.agents.hotkey)) }
             if config.shelf.enabled {
                 for (owner, spec) in [("shelf.hotkey", config.shelf.hotkey), ("shelf.clipboardHotkey", config.shelf.clipboardHotkey),
                                       ("shelf.reopenHotkey", config.shelf.reopenHotkey)] where !spec.isEmpty {
@@ -508,7 +444,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             statusItem = StatusItem(onOpen: { [weak self] in self?.launcher.show() },
                                     onNotes: { [weak self] in self?.notes.show() },
                                     onClipboard: { [weak self] in self?.clipboard.show() },
-                                    onAgents: { [weak self] in self?.agents.show() },
                                     onConfig: { [weak self] in self?.services.openConfig() })
         } else if !config.general.menuBarIcon, let item = statusItem {
             item.remove()
@@ -570,8 +505,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case "notes.open", "notes": notes.toggle(); return
         case "notes.new", "new note": launcher.hide(); notes.show(newNote: true); return
         case "clipboard.history", "clipboard history", "clipboard": launcher.hide(); clipboard.toggle(); return
-        case "agents.open", "agents": launcher.hide(); agents.toggle(); return
-        case "agents.new", "new agent session": launcher.hide(); agents.show(newSession: true); return
         case "shelf.new", "new shelf", "shelf": shelves.newShelf(); return
         case "shelf.clipboard", "new shelf from clipboard": shelves.newShelfFromClipboard(); return
         case "shelf.reopen", "reopen shelf": shelves.reopenLast(); return

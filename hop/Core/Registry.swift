@@ -14,7 +14,6 @@ final class Services {
     var snippets: SnippetService?
     var shelves: ShelfController?
     var calendar: CalendarController?
-    var agents: AgentsController?
     /// Hides the launcher, e.g. before pasting into the app behind it.
     var hideLauncher: (() -> Void)?
     /// Opens the config file in the user's editor, at the parse error when there is one.
@@ -49,7 +48,6 @@ enum Registry {
         items += OpenAICommands.items(services)
         items += CalculatorCommands.items(services)
         items += EmojiCommands.items(services)
-        items += AgentsCommands.items(services)
         items += [
             Item(id: "hop.config", title: "Open hop Config", subtitle: "~/.config/hop/config.json5",
                  icon: .tile("gearshape.fill", Palette.neutral), accessory: "Command",

@@ -223,56 +223,6 @@
     // Vision recognition languages, most likely first
     languages: ["en-US"],
   },
-
-  agents: {
-    // Agents panel: Claude Code and OpenCode sessions on this Mac and on SSH hosts,
-    // live status and transcript; start new ones in tmux and attach from a terminal
-    enabled: true,
-    // Opens the panel (it follows you across Spaces until Esc); pressed again in front, it closes
-    hotkey: "shift+cmd+space",
-    // "claude" or "opencode": what a new session starts with
-    defaultProvider: "claude",
-    // Where new sessions start when no folder is typed
-    defaultCwd: "~/repos",
-    // Their subfolders are offered as projects when starting a session
-    projectRoots: ["~/repos"],
-    // Finished sessions from this many hours back stay in the list
-    historyHours: 24,
-    // "Attach in Terminal" (⌘↵): "auto", "ghostty", "iterm" or "terminal"
-    terminal: "auto",
-    // Path to tmux; "" finds it (Homebrew, /usr/local, PATH)
-    tmux: "",
-    // What new sessions run in: "tmux", or "herdr" (herdr.dev: hop lists its agents with
-    // herdr's own status and can send them a prompt); herdr falls back to tmux when it is
-    // not installed, its server is not running or speaks another protocol
-    multiplexer: "tmux",
-    // Path to herdr; "" finds it (Homebrew, ~/.local/bin, PATH)
-    herdr: "",
-    // Above other windows while open
-    floating: true,
-    // Seconds between refreshes of remote hosts while the panel is open
-    remoteRefreshSeconds: 15,
-    claude: {
-      enabled: true,
-      // "" finds claude (~/.local/bin, Homebrew, the login PATH)
-      binary: "",
-      // Flags for every session hop starts, e.g. ["--model", "opus"]
-      args: [],
-      // Start with --remote-control, so the Claude app and claude.ai/code can continue it
-      remoteControl: true,
-    },
-    opencode: {
-      enabled: true,
-      binary: "",
-      args: [],
-    },
-    // Machines reached over SSH: sessions there are listed (herdr's too, when it runs
-    // there), new ones start there in tmux, or in herdr with multiplexer: "herdr"
-    hosts: [
-      // { name: "my-server", ssh: "my-server", cwd: "~", projects: ["~/code/app"], multiplexer: "herdr" },
-    ],
-  },
-
   snippets: {
     enabled: true,
     // Type a snippet's keyword anywhere and it becomes the snippet (needs Accessibility)
