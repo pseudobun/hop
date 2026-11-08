@@ -436,6 +436,10 @@ enum CLI {
             print(root.path)
             return 0
         }
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: root.path, isDirectory: &isDirectory), isDirectory.boolValue else {
+            return Output.fail("no notes folder at \(root.path): set notes.folder in ~/.config/hop/config.json5")
+        }
         let all: [NoteFile]
         do { all = try NoteStore.scan(root) } catch { return Output.fail("cannot read \(root.path): \(error.localizedDescription)") }
         let name = words.joined(separator: " ")
