@@ -25,6 +25,7 @@ A tiny native macOS launcher. Pure Swift + AppKit, no WebKit. ~3.5 MB binary, ~4
 - Five gentle Caps Lock LED blinks on launch/restart (where macOS supports the LED override), without changing Caps Lock's typing state
 - WireGuard: tunnels as pills under the search field with live status (green on, amber activating). Click one to toggle it, or ⌘J to select: ←→ / Tab move, ↵ or Space toggles, Esc back; ⇧⌘J disconnects all; "+N" opens the full list. All keys are in `wireguard.keys` (`direct: "alt+cmd"` adds ⌥⌘1…9), `wireguard.barTunnels` picks and orders the pills, `wireguard.bar: false` hides the bar. Activating one deactivates the others first (`wireguard.exclusive: false` allows several at once). Also connect, disconnect, disconnect all as commands (WireGuard.app tunnels)
 - Notes on ⌥. : a keyboard-first floating window over a folder of Markdown files (an Obsidian vault works as is). Search titles and text, live Markdown styling, ⌘E preview with tables, tasks, `[[links]]`, back / forward, pinned notes on top, move to Trash, new notes saved straight into the vault
+- Agents on ⇧⌘Space: a floating panel for Claude Code and OpenCode sessions on this Mac and on SSH hosts. Live status (needs you, running, idle, finished), project, last activity and the latest messages and tool calls of the selected one; ⌘N starts a new session in tmux (here or on a host) that outlives hop, ⌘↵ attaches a terminal to it. See [Agents](#agents)
 - Clipboard History on ⇧⌥C, centred like the launcher: text, images, links, colours and files you copied, list on the left and a preview on the right (rendered Markdown, code, colour swatch with HEX / RGB / HSL, images), source app and stats. ↵ pastes into the app you were in, ⌘↵ copies, ⇧⌘P pins, ⌃X deletes, ⌘K for the rest, ⌘P filters by type
 - Snippets: type a keyword anywhere (`;mail`) and it becomes the snippet, or search them in hop. Raycast's placeholders (`{clipboard}`, `{date format="…" offset="+1d"}`, `{time}`, `{uuid}`, `{cursor}`, `{argument}`, `{snippet}`, `{calculator}`, `| trim | uppercase` …), checked against Raycast's own parser
 - File search on Spotlight's index (always current, no index of hop's own to keep in memory): names first, then files whose text matches, ranked like the launcher with frecency and recency. "f " or "Search Files"; a query starting with `~/` or `/` browses folders, Tab completes. ↵ open, ⌘↵ Show in Finder, ⌘Y Quick Look, ⇧⌘C copy path, ⌥⌘C copy file, ⇧⌘T Terminal, ⌘⌫ Trash
@@ -86,7 +87,7 @@ Notes are keyboard-first; ⌘/ shows every shortcut. The right-hand “On this p
 
 Clipboard history lives in `~/Library/Application Support/dev.hop.app/Clipboard` (folder 0700, files 0600). Copies marked concealed or transient (KeePassXC, 1Password, hop's own password pastes) and copies from `clipboard.ignoreApps` are never recorded. Unpinned entries go after `clipboard.keepDays` or beyond `clipboard.maxItems`. Deleting everything takes ⌃⇧X twice.
 
-Every global hotkey is configurable: `general.hotkey` (⌘Space), `notes.hotkey` (⌥.), `clipboard.hotkey` (⇧⌥C), plus a `hotkeys` section that binds any command or app:
+Every global hotkey is configurable: `general.hotkey` (⌘Space), `notes.hotkey` (⌥.), `clipboard.hotkey` (⇧⌥C), `agents.hotkey` (⇧⌘Space), plus a `hotkeys` section that binds any command or app:
 
 ```json5
 hotkeys: {
@@ -109,6 +110,53 @@ Snippets live in `~/.config/hop/snippets.json5` (created on first launch, reload
 
 A keyword expands as soon as it is typed (`snippets.expand`, Accessibility); a keyword that starts with a letter only expands as a whole word unless `snippets.expandWithinWords`. Snippets with `{argument}` ask for the values in hop first. Not in password fields, nor in `snippets.disabledApps`. "Save as Snippet" (⌘S) in the clipboard history adds an entry.
 
+## Agents
+
+⇧⌘Space opens the Agents panel. Once open it joins every Space: switch Spaces and it comes along. It stays up when another app takes the keyboard (it is a panel to watch), floating above other windows unless `agents.floating: false`. ⇧⌘Space while another app has focus brings the keyboard back to it, on the Space you are on; ⇧⌘Space while it has focus, or Esc, closes it. While closed it watches nothing.
+
+What it reads (all read only):
+
+| | live status | transcript |
+|---|---|---|
+| Claude Code | `~/.claude/sessions/<pid>.json` of running processes (`busy`, `waiting`, `idle`), the same records `claude agents --json` prints | `~/.claude/projects/<cwd>/<session>.jsonl`, the last 384 KB |
+| OpenCode (v2) | `session_v2` in `~/.local/share/opencode/opencode.db`: busy after its last idle is running; a pending tool means it waits for permission; an `opencode` process in the folder means idle, none means finished | `session_message` rows of the same database |
+| SSH hosts | the host's `~/.claude/sessions` (processes still alive) and `tmux list-panes`, over `ssh host bash -l -s` every `remoteRefreshSeconds` while the panel is open | the selected session's transcript tail, fetched over ssh |
+
+FSEvents on `~/.claude/sessions`, `~/.claude/projects` and the OpenCode folder update the list and the open transcript as they change; nothing polls. Finished sessions stay listed for `agents.historyHours`.
+
+New sessions (⌘N, or "New Agent Session" in hop) run in tmux, so they keep going after hop quits and you can attach from any terminal. hop names them `hop-cc-<folder>-<4 hex>` / `hop-oc-…`; locally tmux gets your login shell's PATH, remotely the script runs under `bash -l` (a fish login shell never parses it). Claude Code starts with `--name` and, with `agents.claude.remoteControl` (on by default), `--remote-control`, so the Claude app and claude.ai/code can continue it from the phone; OpenCode starts with `--prompt`. A finished session can be resumed in tmux (`claude --resume`, `opencode --session`). A folder Claude Code has not been trusted in yet stops at its trust question: attach (⌘↵) to answer it.
+
+| Agents key | |
+|---|---|
+| ⇧⌘Space | open, focus, or close when focused |
+| type | filter by title, folder, host, provider, status |
+| ↑ ↓ | select a session |
+| ↵ | first action: attach (in tmux), resume (finished), else open on claude.ai |
+| ⌘↵ | attach a terminal to its tmux session (Ghostty, iTerm, Terminal; `agents.terminal`) / resume a finished one |
+| ⌘O | open a remote-control session on claude.ai/code |
+| ⌘N | new session: ⌘P provider, ⌘T this Mac or a host, folder with recent projects (Tab completes paths), optional prompt, ↵ starts |
+| ⌘K | actions: also show transcript in Finder (⇧⌘F), copy session id (⇧⌘C) or folder (⌥⌘C), refresh (⌘R) |
+| ⌃X twice | stop a tmux session hop started (`hop-…`), and the agent in it |
+| Esc | close the form or actions, clear the filter, then close |
+
+```json5
+agents: {
+  hotkey: "shift+cmd+space",
+  defaultProvider: "claude",          // or "opencode"
+  defaultCwd: "~/repos",
+  projectRoots: ["~/repos"],          // subfolders offered as projects
+  historyHours: 24,
+  terminal: "auto",                   // auto, ghostty, iterm, terminal
+  claude: { binary: "", args: ["--model", "opus"], remoteControl: true },
+  opencode: { binary: "", args: [] },
+  hosts: [
+    { name: "zeus", ssh: "zeus", cwd: "~", projects: ["~/apps/lutraid"] },
+  ],
+},
+```
+
+Hosts need key-based ssh (hop runs it with `BatchMode=yes`), tmux and the agent on the login PATH. On hosts, OpenCode shows only the tmux sessions hop started there (no status or transcript yet), and finished Claude Code sessions are not listed. iTerm attaches through its AppleScript (macOS asks once for Automation → iTerm); Terminal takes over if that is refused.
+
 ## Permissions
 
 Run **hop Permissions** (it opens by itself on first launch); ↵ shows each macOS prompt, **Grant All** asks for all of them.
@@ -121,6 +169,7 @@ Run **hop Permissions** (it opens by itself on first launch); ↵ shows each mac
 | Notes in iCloud Drive | iCloud Drive access, if macOS asks |
 | KeePassXC (`keychain`) | Touch ID / login password |
 | Open at Login (`general.openAtLogin`) | Login Items |
+| Agents: attach in iTerm | Automation → iTerm |
 
 ## CLI
 
