@@ -555,8 +555,9 @@ nonisolated extension String {
 
 // MARK: - Loader
 
-/// The user's config file, reloaded whenever it changes on disk. hop never writes
-/// it except to create the commented template on first launch.
+/// The user's config file, reloaded whenever it changes on disk. hop writes it only to
+/// create the commented template on first launch and for changes made in Settings or
+/// the Theme picker, one value at a time, keeping comments.
 @Observable
 final class AppSettings {
     private(set) var data = HopConfig()
@@ -617,6 +618,26 @@ final class AppSettings {
             return // keep the last good config
         }
         if old != data { onChange?(old, data) }
+    }
+
+    /// Writes one value into the file (comments and layout kept) and loads it, so it applies
+    /// right away. `literal` is JSON5 source (`ConfigEdit.literal`). False when it can't be written.
+    @discardableResult
+    func update(_ path: [String], to literal: String) -> Bool {
+        // Write through a symlink (dotfiles) instead of replacing it with a copy.
+        let target = url.resolvingSymlinksInPath()
+        let text = (try? String(contentsOf: target, encoding: .utf8)) ?? "{\n}\n"
+        guard let updated = ConfigEdit.setting(path, to: literal, in: text) else { return false }
+        if updated == text { return true }
+        do {
+            try FileManager.default.createDirectory(at: target.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try updated.write(to: target, atomically: true, encoding: .utf8)
+        } catch {
+            Log.app.error("config write: \(error.localizedDescription, privacy: .public)")
+            return false
+        }
+        load(announce: true)
+        return true
     }
 
     private func announceProblem() {

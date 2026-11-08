@@ -19,6 +19,8 @@ final class LauncherController: NSObject, LauncherContext, NSTableViewDataSource
     /// Called at the start of every `show`, before the rows are built.
     var onWillShow: (() -> Void)?
     var onDidHide: (() -> Void)?
+    /// ⌘, opens Settings, as in any Mac app.
+    var onOpenSettings: (() -> Void)?
 
     private var rows: [Row] = []
     /// The mode `rows` were built for; a different mode gets a full reload (row tint, cell kinds).
@@ -422,6 +424,7 @@ final class LauncherController: NSObject, LauncherContext, NSTableViewDataSource
         default: break
         }
         if KeyCombo.cmd("k").matches(event) { toggleActionPanel(); return true }
+        if KeyCombo.cmd(",").matches(event), let onOpenSettings { onOpenSettings(); return true }
 
         if let item = selectedItem {
             for (i, action) in item.actions.enumerated() {

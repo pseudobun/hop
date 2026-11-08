@@ -26,6 +26,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var shelves: ShelfController!
     private var shelfHotkeys: [GlobalHotkey] = []
     private var calendar: CalendarController!
+    private var settingsWindow: SettingsController!
     private let messageWatcher = MessageCodeWatcher()
     private var messagesHotkey: GlobalHotkey!
     private let bindings = HotkeyBindings()
@@ -118,6 +119,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         root.permissionsMode = makePermissions
         services.permissionsMode = makePermissions
         launcher = LauncherController(root: root)
+        settingsWindow = SettingsController(settings: settings)
+        settingsWindow.onAction = { [weak self] in self?.runSettingsAction($0) }
+        services.openSettings = { [weak self] page in
+            self?.launcher.hide()
+            self?.settingsWindow.show(page: page)
+        }
+        launcher.onOpenSettings = { [weak self] in self?.services.openSettings?(nil) }
         services.hideLauncher = { [weak self] in self?.launcher.hide() }
         launcher.popToRootSeconds = { settings.data.general.popToRootSeconds }
         launcher.keepQueryFor = { settings.data.general.keepQueryFor }
@@ -279,6 +287,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 if defaults.string(forKey: "DebugPush") == "permissions" { launcher.push(makePermissions()) }
                 if defaults.string(forKey: "DebugPush") == "emoji" { launcher.push(EmojiCommands.mode(services)) }
                 if defaults.string(forKey: "DebugPush") == "theme" { launcher.push(ThemeMode(services: services)) }
+                if let page = defaults.string(forKey: "DebugSettings") {
+                    settingsWindow.show(page: page)
+                    if let path = defaults.string(forKey: "DebugSnapshotPath") {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { DebugSnapshot.render(self.settingsWindow.window, to: path) }
+                    }
+                    return
+                }
                 if let q = defaults.string(forKey: "DebugPushQuery") { launcher.setQuery(q) }
                 if defaults.string(forKey: "DebugPush") == "kill" { launcher.push(KillProcessMode(sensitivity: settings.data.general.sensitivity)) }
                 if let path = defaults.string(forKey: "DebugLauncherRender") {
@@ -444,6 +459,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             statusItem = StatusItem(onOpen: { [weak self] in self?.launcher.show() },
                                     onNotes: { [weak self] in self?.notes.show() },
                                     onClipboard: { [weak self] in self?.clipboard.show() },
+                                    onSettings: { [weak self] in self?.services.openSettings?(nil) },
                                     onConfig: { [weak self] in self?.services.openConfig() })
         } else if !config.general.menuBarIcon, let item = statusItem {
             item.remove()
@@ -453,6 +469,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if previous != nil {
             root.rebuild()
             if launcher.isVisible { launcher.reload() }
+            settingsWindow.configDidChange()
+        }
+    }
+
+    private func runSettingsAction(_ action: SettingsAction) {
+        switch action {
+        case .openConfig: services.openConfig()
+        case .revealConfig: NSWorkspace.shared.activateFileViewerSelecting([services.settings.url])
+        case .permissions:
+            launcher.show()
+            if let make = services.permissionsMode { launcher.push(make()) }
+        case .restart: _ = HopApp.restart()
         }
     }
 
@@ -619,6 +647,7 @@ extension AppDelegate {
         makeClipboard()
         if notesShown { notes.show() }
         if clipboardShown { clipboard.show() }
+        settingsWindow.retheme()
         root.rebuild()
         if launcher.isVisible { launcher.reload() } else { launcher.prepare() }
     }

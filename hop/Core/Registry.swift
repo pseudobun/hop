@@ -16,6 +16,8 @@ final class Services {
     var calendar: CalendarController?
     /// Shows the app in a theme without saving it (the Theme picker's preview).
     var previewTheme: ((HopConfig.General.ThemeName) -> Void)?
+    /// Opens the Settings window, on a page (`SettingsPage.id`) or the last one.
+    var openSettings: ((String?) -> Void)?
     /// Hides the launcher, e.g. before pasting into the app behind it.
     var hideLauncher: (() -> Void)?
     /// Opens the config file in the user's editor, at the parse error when there is one.
@@ -52,6 +54,19 @@ enum Registry {
         items += CalculatorCommands.items(services)
         items += EmojiCommands.items(services)
         items += [
+            Item(id: "hop.settings", title: "Settings", subtitle: "hop's preferences",
+                 aliases: ["preferences", "config", "configure", "options", "hop settings"],
+                 icon: .tile("gearshape.2.fill", Theme.info), accessory: "⌘,",
+                 actions: [
+                     Action(title: "Open Settings", symbol: "gearshape.2") {
+                         services.openSettings?(nil)
+                         return .stay
+                     },
+                     Action(title: "Open Config File", shortcut: .ret(.command)) {
+                         services.openConfig()
+                         return .dismiss
+                     },
+                 ]),
             Item(id: "hop.config", title: "Open hop Config", subtitle: "~/.config/hop/config.json5",
                  icon: .tile("gearshape.fill", Palette.neutral), accessory: "Command",
                  actions: [

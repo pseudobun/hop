@@ -32,6 +32,7 @@ A tiny native macOS launcher. Pure Swift + AppKit, no WebKit. ~3.5 MB binary, ~4
 - KeePassXC: several databases (⌘D to switch, or search all), paste or copy password / username / TOTP / URL, favicons, pins, folder filter. Stays unlocked until ⌘L or quit (`keepass.autoLock` locks on sleep, screen lock and inactivity)
 - Bookmarks from the config: name, URL, aliases ("hass") and an icon (image file, SF Symbol or emoji); ↵ opens in the default browser
 - Emoji picker: "Search Emoji" or type `:` (`:fire`). A grid by category with Recently and Frequently Used on top; ←→↑↓ move, ↵ pastes, ⌘C copies, ⇧⌘C copies the name, ⌥⌘C the code points. Searches CLDR names and keywords in English and Slovenian (`srce`, `pivo`), plus slang and intents (`wtf`, `lol`, `rip`, `ship it`); `emoji.skinTone` for people and hands, ⌘T on one picks another skin tone. Data: `scripts/gen-emoji.py`, narrowed to what this macOS draws
+- Settings on ⌘, (in the launcher, "Settings" in root search, or the menu bar bunny): categories in a sidebar grouped like the config (hop, Keyboard, Tools, AI, Integrations, Advanced) with search, values on the right. Toggles, pickers, steppers and a hotkey recorder write straight into `config.json5`, one key at a time with its comments kept, and apply at once. Bookmarks, KeePassXC databases and `hotkeys` bindings are listed with a button to the file
 - Permissions screen: every macOS permission hop needs, with the system prompts (opens on first launch)
 - `hop` CLI for scripts and agents
 
@@ -63,7 +64,7 @@ Free ⌘Space first: System Settings → Keyboard → Keyboard Shortcuts → Spo
 
 ## Config
 
-`~/.config/hop/config.json5` (JSON5, comments allowed) is created on first launch and reloaded on save. `HOP_CONFIG` overrides the path. `hop config check` validates it.
+`~/.config/hop/config.json5` (JSON5, comments allowed) is created on first launch and reloaded on save. `HOP_CONFIG` overrides the path. `hop config check` validates it. Settings (⌘,) edits the same file in place: a changed value is replaced where it stands, a missing key is added at the top of its section, comments and layout stay; a symlinked config is written through the link.
 
 KeePassXC master password: never put it in the config. Choose `keepass.password`:
 

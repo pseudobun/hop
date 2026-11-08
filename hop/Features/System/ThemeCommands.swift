@@ -52,34 +52,8 @@ final class ThemeMode: Mode {
     private static func apply(_ name: HopConfig.General.ThemeName, services: Services) -> ActionResult {
         let settings = services.settings
         if settings.data.general.theme == name { return .dismiss }
-        guard let text = try? String(contentsOf: settings.url, encoding: .utf8),
-              let updated = ConfigEdit.settingTheme(in: text, to: name.rawValue),
-              (try? updated.write(to: settings.url, atomically: true, encoding: .utf8)) != nil
+        guard settings.update(["general", "theme"], to: ConfigEdit.literal(name.rawValue))
         else { return .failWithHUD("Could not write the theme to the config") }
-        // The watcher would notice too; loading now applies it before the launcher closes.
-        settings.load()
         return .dismissWithHUD("Theme: \(Theme.spec(name).label)")
-    }
-}
-
-/// Text edits to the JSON5 config that keep its comments and layout.
-nonisolated enum ConfigEdit {
-    /// Sets `general.theme`: replaces the existing value, or adds the key at the top of `general`
-    /// (or a `general` block at the top of the file). nil when the file has no object to put it in.
-    static func settingTheme(in text: String, to value: String) -> String? {
-        let ns = text as NSString
-        let existing = try! NSRegularExpression(pattern: #"^([ \t]*theme[ \t]*:[ \t]*)(["'])[^"'\n]*\2"#, options: .anchorsMatchLines)
-        if let m = existing.firstMatch(in: text, range: NSRange(location: 0, length: ns.length)) {
-            return ns.replacingCharacters(in: m.range, with: ns.substring(with: m.range(at: 1)) + "\"\(value)\"")
-        }
-        let general = try! NSRegularExpression(pattern: #"^([ \t]*)general[ \t]*:[ \t]*\{[ \t]*\n"#, options: .anchorsMatchLines)
-        if let m = general.firstMatch(in: text, range: NSRange(location: 0, length: ns.length)) {
-            let indent = ns.substring(with: m.range(at: 1)) + "  "
-            return ns.replacingCharacters(in: NSRange(location: m.range.upperBound, length: 0), with: "\(indent)theme: \"\(value)\",\n")
-        }
-        guard let brace = text.firstIndex(of: "{") else { return nil }
-        var out = text
-        out.insert(contentsOf: "\n  general: { theme: \"\(value)\" },", at: out.index(after: brace))
-        return out
     }
 }
