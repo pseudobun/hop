@@ -320,6 +320,128 @@ struct AgentsTests {
         #expect(AgentCommands.remoteListScript.contains(#"u="${a#*--sdk-url}"; u="${u#=}"; u="${u# }"; u="${u%% *}""#))
     }
 
+    // MARK: - Folder trust
+
+    static let trustScreen = """
+         Accessing workspace:
+
+         /Users/me/scratch/new-app
+
+         Quick safety check: Is this a project you created or one you trust? (Like your own code, a well-known open source project, or work from
+         your team). If not, take a moment to review what's in this folder first.
+
+         Claude Code'll be able to read, edit, and execute files here.
+
+         Security guide
+
+         ❯ No, exit
+           Yes, I trust this folder
+
+         Enter to confirm · Esc to cancel
+        """
+
+    @Test func trustRecordsInClaudeJSON() {
+        let json = #"""
+        {"numStartups": 3, "projects": {
+          "/Users/me/repos": {"allowedTools": [], "hasTrustDialogAccepted": true},
+          "/Users/me": {"hasTrustDialogAccepted": false},
+          "/Users/me/repos/app": {"allowedTools": [], "lastCost": 0.5},
+          "/private/tmp/demo": {"hasTrustDialogAccepted": true, "futureField": {"x": 1}},
+          "/weird": "not an object"
+        }}
+        """#
+        let trusted = ClaudeTrust.trustedFolders(claudeJSON: Data(json.utf8))
+        #expect(trusted == ["/Users/me/repos", "/private/tmp/demo"])
+        #expect(ClaudeTrust.trustedFolders(claudeJSON: Data("{}".utf8)).isEmpty)
+        #expect(ClaudeTrust.trustedFolders(claudeJSON: Data("not json".utf8)).isEmpty)
+
+        // The folder itself, or a folder above it outside git.
+        #expect(ClaudeTrust.isTrusted(cwd: "/Users/me/repos", gitRoot: nil, trusted: trusted))
+        #expect(ClaudeTrust.isTrusted(cwd: "/Users/me/repos/notes/2026", gitRoot: nil, trusted: trusted))
+        #expect(!ClaudeTrust.isTrusted(cwd: "/Users/me/other", gitRoot: nil, trusted: trusted))
+        #expect(!ClaudeTrust.isTrusted(cwd: "/Users/me", gitRoot: nil, trusted: trusted))
+        // A git repository under a trusted folder still asks: only up to its root counts.
+        #expect(!ClaudeTrust.isTrusted(cwd: "/Users/me/repos/app/src", gitRoot: "/Users/me/repos/app", trusted: trusted))
+        #expect(ClaudeTrust.isTrusted(cwd: "/Users/me/repos/app/src", gitRoot: "/Users/me/repos/app", trusted: trusted.union(["/Users/me/repos/app"])))
+        #expect(ClaudeTrust.isTrusted(cwd: "/Users/me/repos/app/src", gitRoot: "/Users/me/repos/app",
+                                      trusted: ["/Users/me/repos/app/src"]))
+        // A repository whose root is the trusted folder.
+        #expect(ClaudeTrust.isTrusted(cwd: "/Users/me/repos/x", gitRoot: "/Users/me/repos", trusted: trusted))
+        #expect(!ClaudeTrust.isTrusted(cwd: "/", gitRoot: nil, trusted: trusted))
+        #expect(ClaudeTrust.isTrusted(cwd: "/srv/a", gitRoot: nil, trusted: ["/"]))
+
+        let gits: Set<String> = ["/Users/me/repos/app/.git"]
+        #expect(ClaudeTrust.gitRoot(of: "/Users/me/repos/app/src/x", exists: gits.contains) == "/Users/me/repos/app")
+        #expect(ClaudeTrust.gitRoot(of: "/Users/me/repos/other", exists: gits.contains) == nil)
+    }
+
+    @Test func trustQuestionOnScreen() {
+        #expect(ClaudeTrust.isPrompt(Self.trustScreen) && !ClaudeTrust.isYesSelected(Self.trustScreen))
+        let yes = Self.trustScreen.replacingOccurrences(of: "❯ No, exit", with: "  No, exit")
+            .replacingOccurrences(of: "  Yes, I trust", with: "❯ Yes, I trust")
+        #expect(ClaudeTrust.isYesSelected(yes))
+        #expect(!ClaudeTrust.isPrompt("/remote-control is active · Continue here, on your phone, or at https://claude.ai/code/session_test123\n> "))
+        #expect(!ClaudeTrust.isPrompt("$ echo Yes, I trust this folder"))
+    }
+
+    @Test func trustQuestionMarksHopSessions() {
+        let panes = TmuxPane.parse("hop-cc-new-0001|500|1794139000|/Users/me/new\nhop-cc-old-0002|501|1794139000|/Users/me/old\n")
+        let rows = AgentStore.attach(panes: panes, to: [], host: nil, parent: { _ in nil })
+        let out = AgentSession.markTrustPrompts(rows, prompts: ["hop-cc-new-0001"])
+        #expect(out[0].needsTrust && out[0].status == .waiting && out[0].detail == "trust folder")
+        #expect(!out[1].needsTrust && out[1].status == .running)
+        #expect(out.sorted(by: AgentSession.ordered).first?.tmux == "hop-cc-new-0001")
+
+        let list = AgentCommands.parseRemoteList("""
+            T|hop-cc-app-0001|42|1794139000|/home/u/app
+            Q|hop-cc-app-0001
+            Q|bad name; rm
+            """)
+        #expect(list.trustPrompts == ["hop-cc-app-0001"])
+        #expect(AgentCommands.remoteListScript.contains("hop-cc-*") && AgentCommands.remoteListScript.contains("capture-pane -p"))
+    }
+
+    /// The confirm script against a stand-in tmux: it moves to Yes, checks, then sends Enter.
+    @Test func trustConfirmScript() throws {
+        let dir = FileManager.default.temporaryDirectory.appending(path: "hop-trust-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let yes = Self.trustScreen.replacingOccurrences(of: "❯ No, exit", with: "  No, exit")
+            .replacingOccurrences(of: "  Yes, I trust", with: "❯ Yes, I trust")
+        try Self.trustScreen.write(to: dir.appending(path: "screen0"), atomically: true, encoding: .utf8)
+        try yes.write(to: dir.appending(path: "screen1"), atomically: true, encoding: .utf8)
+        let fake = dir.appending(path: "tmux")
+        try """
+            #!/bin/bash
+            d=\(dir.path)
+            echo "$*" >> "$d/log"
+            case "$1" in
+              capture-pane) n=$(grep -c '^send-keys .* Down$' "$d/log"); [ -f "$d/screen$n" ] && cat "$d/screen$n" || cat "$d/screen1" ;;
+            esac
+            """.write(to: fake, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: fake.path)
+
+        func run() throws -> Int32 {
+            let p = Process()
+            p.executableURL = URL(fileURLWithPath: "/bin/bash")
+            p.arguments = ["-c", ClaudeTrust.confirmScript(tmux: fake.path, session: "hop-cc-new-0001")]
+            p.standardError = FileHandle.nullDevice
+            try p.run()
+            p.waitUntilExit()
+            return p.terminationStatus
+        }
+        #expect(try run() == 0)
+        let log = try String(contentsOf: dir.appending(path: "log"), encoding: .utf8).split(separator: "\n").map(String.init)
+        #expect(log.filter { $0.hasPrefix("send-keys") } == ["send-keys -t =hop-cc-new-0001: Down", "send-keys -t =hop-cc-new-0001: Enter"])
+
+        // No question on screen: nothing is sent.
+        try FileManager.default.removeItem(at: dir.appending(path: "log"))
+        try "/remote-control is active\n".write(to: dir.appending(path: "screen0"), atomically: true, encoding: .utf8)
+        #expect(try run() == 6)
+        let quiet = try String(contentsOf: dir.appending(path: "log"), encoding: .utf8)
+        #expect(!quiet.contains("send-keys"))
+    }
+
     // MARK: - Config
 
     @Test func agentsConfig() throws {

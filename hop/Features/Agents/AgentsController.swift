@@ -164,7 +164,7 @@ final class AgentsController: NSObject, NSWindowDelegate, NSTableViewDataSource,
         let q = query
         guard !q.isEmpty else { return true }
         let hay = [s.title, s.shortCwd, s.host ?? "this mac", s.provider.label, s.tmux ?? "", s.status.label,
-                   s.kind == .remoteControl ? "rc remote control" : "", s.isViewOnly ? "view only" : ""].joined(separator: " ").lowercased()
+                   s.kind == .remoteControl ? "rc remote control" : "", s.isViewOnly ? "view only" : "", s.needsTrust ? "trust folder" : ""].joined(separator: " ").lowercased()
         return q.split(separator: " ").allSatisfy { hay.contains($0) }
     }
 
@@ -287,7 +287,11 @@ final class AgentsController: NSObject, NSWindowDelegate, NSTableViewDataSource,
     private func show(_ entries: [TranscriptEntry], for s: AgentSession, scrollToEnd: Bool) {
         let clip = transcriptScroll.contentView
         let atBottom = clip.bounds.maxY >= (transcript.frame.height - 24)
-        let text = Self.render(entries, provider: s.provider, empty: s.id.hasPrefix("tmux:") ? "Starting…" : "No messages yet")
+        let empty = s.needsTrust
+            ? "Claude Code asks whether you trust \(s.shortCwd) and waits until someone answers: Remote Control starts after that. "
+                + "⌘T answers “Yes, I trust this folder”; ⌘↵ attaches a terminal to answer it there."
+            : s.id.hasPrefix("tmux:") ? "Starting…" : "No messages yet"
+        let text = Self.render(entries, provider: s.provider, empty: empty)
         transcript.textStorage?.setAttributedString(text)
         if scrollToEnd || atBottom { transcript.scrollToEndOfDocument(nil) }
     }
@@ -374,6 +378,13 @@ final class AgentsController: NSObject, NSWindowDelegate, NSTableViewDataSource,
             }
         }
         list += (primaryWeb ? [web, attach, resume] : [attach, resume, web]).compactMap { $0 }
+        // Claude Code asks whether to trust the folder: answer it here, or attach and answer there.
+        if s.needsTrust, let name = s.tmux {
+            list.insert(Action(title: "Trust Folder & Start", symbol: "checkmark.shield", shortcut: .cmd("t")) { [weak self] in
+                self?.confirmTrust(s, tmux: name)
+                return .stay
+            }, at: min(1, list.count))
+        }
         if s.isLocal, let path = s.transcript {
             list.append(Action(title: "Show Transcript in Finder", symbol: "folder", shortcut: .cmd("f", .shift)) {
                 NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)])
@@ -444,6 +455,30 @@ final class AgentsController: NSObject, NSWindowDelegate, NSTableViewDataSource,
         }
     }
 
+    /// "Yes, I trust this folder" in the session's trust question, then a look at the result.
+    private func confirmTrust(_ s: AgentSession, tmux name: String) {
+        Task {
+            if let error = await AgentLauncher.confirmTrust(tmux: name, host: host(s), config: config) {
+                HUD.shared.fail(error)
+                return
+            }
+            HUD.shared.show("Trusted \(s.shortCwd)", symbol: "checkmark.shield.fill")
+            refreshSoon(remote: s.host != nil)
+        }
+    }
+
+    /// A couple of refreshes after starting or answering something: Claude Code draws its
+    /// trust question, or registers the session, a moment later. Nothing runs once closed.
+    private func refreshSoon(remote: Bool) {
+        Task {
+            for delay in [1.5, 4.0] {
+                try? await Task.sleep(for: .milliseconds(Int(delay * 1000)))
+                guard panel.isVisible else { return }
+                if remote { store.refreshRemote() } else { store.refresh(force: true) }
+            }
+        }
+    }
+
     private func start(_ spawn: AgentCommands.Spawn, host: HopConfig.Agents.Host?) {
         form.isBusy = true
         Task {
@@ -457,10 +492,7 @@ final class AgentsController: NSObject, NSWindowDelegate, NSTableViewDataSource,
             pendingTmux = spawn.tmuxName
             if !form.isHidden { closeForm() }
             store.refresh(force: true)
-            if host != nil {
-                try? await Task.sleep(for: .seconds(2))
-                store.refreshRemote()
-            }
+            refreshSoon(remote: host != nil)
         }
     }
 
@@ -583,6 +615,7 @@ final class AgentsController: NSObject, NSWindowDelegate, NSTableViewDataSource,
         let acts = actions(for: s)
         var items: [(String, String)] = []
         if let first = acts.first { items.append((first.title.replacingOccurrences(of: " in Terminal", with: ""), "↵")) }
+        if s.needsTrust { items.append(("Trust Folder", "⌘T")) }
         items.append(("New", "⌘N"))
         let available = (footer.superview?.bounds.width ?? panel.frame.width) - 260
         var text = joined(items + [("Actions", "⌘K")])
@@ -648,11 +681,12 @@ final class AgentsController: NSObject, NSWindowDelegate, NSTableViewDataSource,
         let title = s.title.count > 34 ? s.title.prefix(33).trimmingCharacters(in: .whitespaces) + "…" : s.title
         return Item(id: s.key, title: title, subtitle: subtitle, icon: .tile(symbol, tint),
                     accessory: [s.accessTag, AgentNames.age(s.lastActivity, now: Date())].compactMap { $0 }.joined(separator: " · "),
-                    actions: [], chip: chipFor(s))
+                    actions: [], chip: s.needsTrust ? Chip(text: "Trust folder", tone: .warn) : chipFor(s))
     }
 
     private func chipFor(_ s: AgentSession) -> Chip? {
         switch s.status {
+        case .waiting where s.needsTrust: Chip(text: "Needs you · trust folder", tone: .warn)
         case .waiting: Chip(text: s.detail ?? "Needs you", tone: .warn)
         case .running where s.id.hasPrefix("tmux:"): Chip(text: "In tmux", tone: .info)
         case .running: Chip(text: s.detail.map { "Running \($0)" } ?? "Running", tone: .info)
@@ -851,13 +885,25 @@ final class AgentsController: NSObject, NSWindowDelegate, NSTableViewDataSource,
 
     func debugOpenActions() { toggleActionPanel() }
 
-    /// One line per listed session: host, provider, kind, claude.ai id, tmux, status, title.
+    /// One line per listed session: host, provider, kind, claude.ai id, tmux, access, status, detail, link, title.
     func debugDump() -> String {
         store.sessions.map { s in
             [s.host ?? "local", s.provider.rawValue, s.kind.rawValue, s.remoteID ?? "-", s.tmux ?? "-",
-             s.isViewOnly ? "view-only" : (s.isAttachable ? "attachable" : "-"), s.status.label, s.webURL?.absoluteString ?? "-", s.title]
+             s.isViewOnly ? "view-only" : (s.isAttachable ? "attachable" : "-"), s.status.label, s.detail ?? "-", s.webURL?.absoluteString ?? "-", s.title]
                 .joined(separator: "\t")
         }.joined(separator: "\n") + "\n"
+    }
+
+    /// Answers the trust question in a listed hop session, as Trust Folder & Start does.
+    /// "name" or "name@host".
+    func debugConfirmTrust(_ spec: String) {
+        let parts = spec.split(separator: "@", maxSplits: 1).map(String.init)
+        let tmux = parts[0], host = parts.count > 1 ? parts[1] : nil
+        guard let s = store.sessions.first(where: { $0.tmux == tmux && $0.needsTrust && $0.host == host }) else {
+            HUD.shared.fail("No trust question in \(tmux)")
+            return
+        }
+        confirmTrust(s, tmux: tmux)
     }
 
     /// "claude|~/repos/hop|prompt|host": starts a session as the form would, with a fixed tmux name.

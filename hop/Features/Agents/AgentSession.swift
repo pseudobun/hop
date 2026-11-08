@@ -105,6 +105,8 @@ nonisolated struct AgentSession: Equatable, Sendable {
     var kind: AgentKind = .terminal
     /// The claude.ai session a Remote Control child serves ("cse_…").
     var remoteID: String? = nil
+    /// Claude Code waits on its folder trust question in this hop tmux session.
+    var needsTrust = false
 
     /// Stable across refreshes, for keeping the selection.
     var key: String { "\(host ?? "local")/\(provider.rawValue)/\(id)" }
@@ -136,6 +138,19 @@ nonisolated struct AgentSession: Equatable, Sendable {
         if isAttachable { return "tmux" }
         guard isViewOnly else { return nil }
         return kind == .remoteControl ? "rc" : "view only"
+    }
+
+    /// Marks the sessions whose tmux session shows Claude Code's trust question: they need you.
+    static func markTrustPrompts(_ sessions: [AgentSession], prompts: Set<String>) -> [AgentSession] {
+        guard !prompts.isEmpty else { return sessions }
+        return sessions.map { s in
+            guard s.provider == .claude, s.status != .finished, let t = s.tmux, prompts.contains(t) else { return s }
+            var s = s
+            s.needsTrust = true
+            s.status = .waiting
+            s.detail = "trust folder"
+            return s
+        }
     }
 
     /// Waiting first, then running, idle and finished; newest first within each.

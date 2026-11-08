@@ -129,7 +129,8 @@ final class AgentStore {
             }
             let config = config()
             let tmux = await Self.tmuxPanes(tmux: AgentTools.tmux(config))
-            let local = await Self.localSessions(config: config, panes: tmux)
+            var local = await Self.localSessions(config: config, panes: tmux)
+            local = AgentSession.markTrustPrompts(local, prompts: await Self.trustPrompts(in: local, tmux: AgentTools.tmux(config)))
             lastRefresh = Date()
             refreshing = false
             publish(local: local)
@@ -184,6 +185,25 @@ final class AgentStore {
         guard let r = try? await ProcessRunner.run(tmux, ["list-panes", "-a", "-F", TmuxPane.format], timeout: .seconds(3)), r.ok
         else { return [] }
         return TmuxPane.parse(r.out)
+    }
+
+    /// hop's Claude tmux sessions that show the folder trust question. Only rows no running
+    /// Claude Code has claimed yet are looked at (Claude registers its session after the
+    /// answer), so a settled list costs nothing.
+    nonisolated static func trustPrompts(in sessions: [AgentSession], tmux: String?) async -> Set<String> {
+        guard let tmux else { return [] }
+        var out = Set<String>()
+        for s in sessions where s.provider == .claude && s.id.hasPrefix("tmux:") {
+            guard let name = s.tmux, name.hasPrefix("hop-cc-") else { continue }
+            if let screen = await capturePane(tmux: tmux, session: name), ClaudeTrust.isPrompt(screen) { out.insert(name) }
+        }
+        return out
+    }
+
+    nonisolated static func capturePane(tmux: String, session: String) async -> String? {
+        guard let r = try? await ProcessRunner.run(tmux, ["capture-pane", "-p", "-t", "=\(session):"], timeout: .seconds(3)), r.ok
+        else { return nil }
+        return r.out
     }
 
     nonisolated static func localSessions(config: HopConfig.Agents, panes: [TmuxPane]) async -> [AgentSession] {
@@ -334,7 +354,8 @@ final class AgentStore {
             ClaudeSessions.session($0, summary: nil, transcript: nil, host: host.label, remoteID: list.remoteIDs[$0.pid])
         }
         // Remote processes are not ours to inspect: match tmux panes by pid only.
-        return .success(attach(panes: list.panes, to: sessions, host: host.label, parent: { _ in nil }))
+        let all = attach(panes: list.panes, to: sessions, host: host.label, parent: { _ in nil })
+        return .success(AgentSession.markTrustPrompts(all, prompts: list.trustPrompts))
     }
 
     // MARK: - Transcripts

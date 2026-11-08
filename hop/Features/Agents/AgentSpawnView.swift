@@ -81,8 +81,17 @@ final class AgentSpawnView: NSView, NSTableViewDataSource, NSTableViewDelegate, 
         let cwd = keepFolder.map { host == nil ? ($0 as NSString).abbreviatingWithTildeInPath : $0 } ?? defaultCwd(host)
         folderField.stringValue = cwd
         updateSuggestions(all: true)
+        updateNote()
+    }
+
+    /// What starting does, and whether Claude Code will first ask to trust the folder (this Mac only).
+    private func updateNote() {
         let where_ = host.map { "on \($0.label) over ssh" } ?? "on this Mac"
-        note.stringValue = "Starts \(provider.label) \(where_) in a tmux session named hop-\(provider.tag)-…, so it keeps running "
+        var trust = ""
+        if provider == .claude, host == nil, ClaudeTrust.isTrusted(localFolder: folderField.stringValue.trimmingCharacters(in: .whitespaces)) == false {
+            trust = "Claude Code has not trusted this folder yet and asks first; Trust Folder & Start (⌘T) in the list answers it. "
+        }
+        note.stringValue = trust + "Starts \(provider.label) \(where_) in a tmux session named hop-\(provider.tag)-…, so it keeps running "
             + "after hop quits. ⌘↵ in the list attaches a terminal to it."
             + (provider == .claude ? " Remote Control (agents.claude.remoteControl) lets the Claude app continue it." : "")
     }
@@ -128,6 +137,7 @@ final class AgentSpawnView: NSView, NSTableViewDataSource, NSTableViewDelegate, 
         folderField.stringValue = trailingSlash && !path.hasSuffix("/") ? path + "/" : path
         folderField.currentEditor()?.moveToEndOfDocument(nil)
         updateSuggestions()
+        updateNote()
     }
 
     private func moveSuggestion(_ step: Int) {
@@ -138,7 +148,10 @@ final class AgentSpawnView: NSView, NSTableViewDataSource, NSTableViewDelegate, 
     }
 
     func controlTextDidChange(_ obj: Notification) {
-        if (obj.object as? NSTextField) === folderField { updateSuggestions() }
+        if (obj.object as? NSTextField) === folderField {
+            updateSuggestions()
+            updateNote()
+        }
     }
 
     // MARK: - Keys
@@ -318,7 +331,7 @@ final class AgentSpawnView: NSView, NSTableViewDataSource, NSTableViewDelegate, 
 
         note.font = Theme.sans(12)
         note.textColor = Theme.mutedForeground
-        note.maximumNumberOfLines = 3
+        note.maximumNumberOfLines = 4
         note.lineBreakMode = .byWordWrapping
         note.cell?.wraps = true
         note.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)

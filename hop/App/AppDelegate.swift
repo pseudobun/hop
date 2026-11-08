@@ -285,6 +285,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 if let spec = defaults.string(forKey: "DebugAgentsStart") {
                     agents.debugStart(spec, tmuxName: defaults.string(forKey: "DebugAgentsTmux") ?? "hop-cc-debug-0000")
                 }
+                if let name = defaults.string(forKey: "DebugAgentsTrust") {
+                    Task {
+                        try? await Task.sleep(for: .seconds(defaults.double(forKey: "DebugAgentsTrustDelay")))
+                        self.agents.debugConfirmTrust(name)
+                    }
+                }
                 if let path = defaults.string(forKey: "DebugAgentsDumpPath") {
                     Task {
                         let seconds = defaults.object(forKey: "DebugAgentsSnapshotDelay") != nil ? defaults.double(forKey: "DebugAgentsSnapshotDelay") : 1.5

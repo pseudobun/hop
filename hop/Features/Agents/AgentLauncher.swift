@@ -43,6 +43,23 @@ enum AgentLauncher {
         return r.ok ? nil : r.err.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    /// Answers Claude Code's folder trust question in a hop tmux session with "Yes, I trust
+    /// this folder". Only when the user asks; the script checks the question is on screen.
+    static func confirmTrust(tmux name: String, host: HopConfig.Agents.Host?, config: HopConfig.Agents) async -> String? {
+        guard name.hasPrefix("hop-cc-"), AgentCommands.isSafeTmuxName(name) else { return "Not a session hop started" }
+        let r: ProcessResult?
+        if let host {
+            let script = ClaudeTrust.confirmScript(tmux: "tmux", session: name)
+            r = try? await ProcessRunner.run("/usr/bin/ssh", AgentCommands.sshArguments(host.ssh), stdin: Data(script.utf8),
+                                             timeout: .seconds(15))
+        } else {
+            guard let tmux = AgentTools.tmux(config) else { return "tmux not found" }
+            r = try? await ProcessRunner.run("/bin/bash", ["-c", ClaudeTrust.confirmScript(tmux: tmux, session: name)], timeout: .seconds(8))
+        }
+        guard let r else { return "Could not run tmux" }
+        return r.ok ? nil : (r.err.split(whereSeparator: \.isNewline).last.map(String.init) ?? "exit \(r.status)")
+    }
+
     /// Opens the configured terminal attached to the tmux session.
     static func attach(tmux name: String, host: HopConfig.Agents.Host?, config: HopConfig.Agents) -> String? {
         if host != nil && !AgentCommands.isSafeTmuxName(name) { return "Attach to “\(name)” over ssh by hand" }

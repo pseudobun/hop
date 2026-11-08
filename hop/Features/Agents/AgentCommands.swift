@@ -89,7 +89,12 @@ nonisolated enum AgentCommands {
           u="${a#*--sdk-url}"; u="${u#=}"; u="${u# }"; u="${u%% *}"
           printf 'P\\t%s\\t%s\\n' "$p" "$u"
         done
-        command -v tmux >/dev/null 2>&1 && tmux list-panes -a -F 'T|\(TmuxPane.format)' 2>/dev/null
+        command -v tmux >/dev/null 2>&1 || exit 0
+        tmux list-panes -a -F 'T|\(TmuxPane.format)' 2>/dev/null
+        tmux list-sessions -F '#{session_name}' 2>/dev/null | while read -r n; do
+          case "$n" in hop-cc-*) ;; *) continue ;; esac
+          tmux capture-pane -p -t "=$n:" 2>/dev/null | grep -q '\(ClaudeTrust.yesOption)' && printf 'Q|%s\\n' "$n"
+        done
         exit 0
         """
 
@@ -109,6 +114,8 @@ nonisolated enum AgentCommands {
         var panes: [TmuxPane] = []
         /// claude.ai session ("cse_…") of each `claude rc` child, by pid.
         var remoteIDs: [Int32: String] = [:]
+        /// hop tmux sessions where Claude Code asks whether to trust the folder.
+        var trustPrompts: Set<String> = []
     }
 
     static func parseRemoteList(_ text: String) -> RemoteList {
@@ -121,6 +128,9 @@ nonisolated enum AgentCommands {
                 if parts.count == 3, let pid = Int32(parts[1]), let id = ClaudeSessions.remoteControlID(sdkURL: parts[2]) {
                     out.remoteIDs[pid] = id
                 }
+            } else if line.hasPrefix("Q|") {
+                let name = String(line.dropFirst(2))
+                if isSafeTmuxName(name) { out.trustPrompts.insert(name) }
             } else if line.hasPrefix("T|") {
                 out.panes += TmuxPane.parse(String(line))
             }
