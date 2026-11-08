@@ -16,6 +16,8 @@
     fallbacks: ["chatgpt", "google", "github"],
     openAtLogin: true,
     menuBarIcon: true,
+    // "og" or "modern" (system fonts, softer contrast); hop restarts to switch
+    theme: "og",
   },
 
   // Global hotkeys for any command or app, on top of general.hotkey, notes.hotkey and

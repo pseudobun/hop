@@ -15,6 +15,12 @@ nonisolated struct HopConfig: Decodable, Equatable, Sendable {
         var fallbacks = ["chatgpt", "google", "github"]
         var openAtLogin = true
         var menuBarIcon = true
+        /// "og" (Outfit + Geist Mono, warm black) or "modern" (system fonts, softer contrast).
+        var theme: ThemeName = .og
+
+        nonisolated enum ThemeName: String, Decodable, Equatable, Sendable, CaseIterable {
+            case og, modern
+        }
     }
 
     nonisolated struct HyperKey: Decodable, Equatable, Sendable {
@@ -384,7 +390,7 @@ nonisolated extension HopConfig {
 }
 
 nonisolated extension HopConfig.General {
-    private enum Keys: String, CodingKey { case hotkey, sensitivity, popToRootSeconds, keepQueryFor, fallbacks, openAtLogin, menuBarIcon }
+    private enum Keys: String, CodingKey { case hotkey, sensitivity, popToRootSeconds, keepQueryFor, fallbacks, openAtLogin, menuBarIcon, theme }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: Keys.self), d = Self()
         hotkey = try c.value(.hotkey, d.hotkey)
@@ -394,6 +400,7 @@ nonisolated extension HopConfig.General {
         fallbacks = try c.value(.fallbacks, d.fallbacks)
         openAtLogin = try c.value(.openAtLogin, d.openAtLogin)
         menuBarIcon = try c.value(.menuBarIcon, d.menuBarIcon)
+        theme = try c.value(.theme, d.theme)
     }
 }
 
@@ -793,6 +800,8 @@ final class AppSettings {
         fallbacks: ["chatgpt", "google", "github"],
         openAtLogin: true,
         menuBarIcon: true,
+        // "og" or "modern" (system fonts, softer contrast); hop restarts to switch
+        theme: "og",
       },
 
       // Global hotkeys for any command or app, on top of general.hotkey, notes.hotkey and
