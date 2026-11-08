@@ -2,7 +2,7 @@ import Darwin
 import Foundation
 
 /// Finds agent sessions and keeps them current while the panel is open: FSEvents on
-/// Claude Code's and OpenCode's folders (nothing is polled), a slow timer for SSH hosts.
+/// Claude Code's, OpenCode's and Codex's folders (nothing is polled), a slow timer for SSH hosts.
 /// Closed, it watches nothing.
 final class AgentStore {
     private(set) var sessions: [AgentSession] = []
@@ -29,6 +29,10 @@ final class AgentStore {
     nonisolated private static let queue = DispatchQueue(label: "hop.agents", qos: .userInitiated)
     /// Parsed transcript tails by path, valid while the file's mtime and size match.
     nonisolated(unsafe) private static var summaries: [String: (stamp: FileStamp, summary: ClaudeSessions.Summary)] = [:]
+    /// The same for Codex rollouts.
+    nonisolated(unsafe) private static var codexSummaries: [String: (stamp: FileStamp, summary: CodexSessions.Summary)] = [:]
+    /// Codex thread names, while session_index.jsonl stays the same.
+    nonisolated(unsafe) private static var codexNames: (stamp: FileStamp, names: [String: String])?
 
     nonisolated struct FileStamp: Equatable, Sendable {
         var modified: Date
@@ -84,7 +88,7 @@ final class AgentStore {
         }
         let claude = ClaudeSessions.home.path
         let opencode = OpenCodeSessions.database.deletingLastPathComponent().path
-        let paths = [claude + "/sessions", claude + "/projects", opencode].filter { FileManager.default.fileExists(atPath: $0) }
+        let paths = [claude + "/sessions", claude + "/projects", opencode, CodexSessions.sessionsDir.path].filter { FileManager.default.fileExists(atPath: $0) }
         guard !paths.isEmpty else { return }
         let flags = kFSEventStreamCreateFlagFileEvents | kFSEventStreamCreateFlagUseCFTypes | kFSEventStreamCreateFlagNoDefer
         guard let s = FSEventStreamCreate(nil, callback, &context, paths as CFArray, FSEventStreamEventId(kFSEventStreamEventIdSinceNow),
@@ -254,6 +258,12 @@ final class AgentStore {
                 queue.async { done.resume(returning: claudeSessions(historyHours: config.historyHours)) }
             }
         }
+        var codex: [AgentSession] = []
+        if config.codex.enabled {
+            codex = await withCheckedContinuation { done in
+                queue.async { done.resume(returning: codexSessions(historyHours: config.historyHours)) }
+            }
+        }
         var opencode: [AgentSession] = []
         if config.opencode.enabled {
             let since = Date().addingTimeInterval(-Double(max(1, config.historyHours)) * 3600)
@@ -267,7 +277,7 @@ final class AgentStore {
                 opencode.append(OpenCodeSessions.session(row, liveDirectories: live, pendingTool: pending))
             }
         }
-        return attach(panes: panes, to: claude + opencode, host: nil)
+        return attach(panes: panes, to: claude + opencode + codex, host: nil)
     }
 
     /// Maps tmux panes onto sessions (by process, or for OpenCode by folder) and adds a row
@@ -285,9 +295,11 @@ final class AgentStore {
                     out[i].tmux = pane.session
                     claimed.insert(pane.session)
                 }
-            } else if out[i].provider == .opencode, out[i].status != .finished,
-                      let pane = panes.first(where: { AgentNames.provider(ofTmux: $0.session) == .opencode && $0.path == out[i].cwd
-                          && !claimed.contains($0.session) }) {
+            }
+            // OpenCode (no pid) and Codex (a pid matched by folder): a hop tmux session in the same folder.
+            if out[i].tmux == nil, out[i].provider != .claude, out[i].status != .finished,
+               let pane = panes.first(where: { AgentNames.provider(ofTmux: $0.session) == out[i].provider && $0.path == out[i].cwd
+                   && !claimed.contains($0.session) }) {
                 out[i].tmux = pane.session
                 claimed.insert(pane.session)
             }
@@ -329,6 +341,49 @@ final class AgentStore {
             out.append(ClaudeSessions.finished(url, modified: modified, summary: s))
         }
         return out
+    }
+
+    /// Blocking: Codex rollouts active within `historyHours`, live ones matched to running
+    /// `codex` processes by folder.
+    nonisolated static func codexSessions(historyHours: Int) -> [AgentSession] {
+        let since = Date().addingTimeInterval(-Double(max(1, historyHours)) * 3600)
+        let files = CodexSessions.recentRollouts(since: since)
+        guard !files.isEmpty else { return [] }
+        let processes = OpenCodeSessions.processes(named: "codex")
+        var parsed: [(id: String, url: URL, modified: Date, summary: CodexSessions.Summary, cwd: String?)] = []
+        for (url, modified) in files {
+            guard let id = CodexSessions.sessionID(fileName: url.lastPathComponent),
+                  let s = codexSummary(url, bytes: 384 * 1024) else { continue }
+            parsed.append((id, url, modified, s, s.cwd ?? CodexSessions.headCwd(url)))
+        }
+        let live = CodexSessions.liveMap(parsed.map { ($0.id, $0.cwd ?? "", $0.summary.lastActivity ?? $0.modified) }, processes: processes)
+        let names = codexThreadNames()
+        return parsed.compactMap { p in
+            let pid = live[p.id]
+            // Only the session's own activity counts: rollouts get touched when Codex migrates or indexes them.
+            guard pid != nil || (p.summary.lastActivity ?? p.modified) > since, p.summary.lastActivity != nil || pid != nil else { return nil }
+            return CodexSessions.session(id: p.id, url: p.url, modified: p.modified, summary: p.summary, title: names[p.id], cwd: p.cwd, live: pid)
+        }
+    }
+
+    nonisolated static func codexSummary(_ url: URL, bytes: Int) -> CodexSessions.Summary? {
+        guard let stamp = FileStamp.of(url.path) else { return nil }
+        let key = "\(bytes):\(url.path)"
+        if let hit = codexSummaries[key], hit.stamp == stamp { return hit.summary }
+        guard let data = ClaudeSessions.tail(of: url, bytes: bytes) else { return nil }
+        let s = CodexSessions.parse(data)
+        if codexSummaries.count > 200 { codexSummaries.removeAll() }
+        codexSummaries[key] = (stamp, s)
+        return s
+    }
+
+    nonisolated static func codexThreadNames() -> [String: String] {
+        let url = CodexSessions.indexFile
+        guard let stamp = FileStamp.of(url.path) else { return [:] }
+        if let hit = codexNames, hit.stamp == stamp { return hit.names }
+        let names = ClaudeSessions.tail(of: url, bytes: 512 * 1024).map(CodexSessions.threadNames) ?? [:]
+        codexNames = (stamp, names)
+        return names
     }
 
     /// `claude rc` child ids by pid and start time (a process's arguments never change, a pid
@@ -427,7 +482,12 @@ final class AgentStore {
             var data = r.stdout
             if let nl = data.firstIndex(of: UInt8(ascii: "\n")) { data = Data(data[(nl + 1)...]) }
             return ClaudeSessions.parse(data).entries
-        case (.opencode, false):
+        case (.codex, true):
+            guard let path = s.transcript else { return [] }
+            return await withCheckedContinuation { done in
+                Self.queue.async { done.resume(returning: Self.codexSummary(URL(fileURLWithPath: path), bytes: 384 * 1024)?.entries ?? []) }
+            }
+        case (.opencode, false), (.codex, false), (.cursor, _):
             return []
         }
     }
@@ -513,6 +573,13 @@ nonisolated enum AgentTools {
         case .opencode:
             find(c.opencode.binary, candidates: ["/opt/homebrew/bin/opencode", "~/.opencode/bin/opencode", "~/.local/bin/opencode", "/usr/local/bin/opencode"],
                  name: "opencode", path: path)
+        case .codex:
+            find(c.codex.binary, candidates: ["/opt/homebrew/bin/codex", "~/.local/bin/codex", "/usr/local/bin/codex"], name: "codex", path: path)
+        case .cursor:
+            // Cursor's installer links both `cursor-agent` and `agent` in ~/.local/bin; "agent" is
+            // too generic a name to look for on the PATH.
+            find(c.cursor.binary, candidates: ["~/.local/bin/cursor-agent", "/opt/homebrew/bin/cursor-agent", "/usr/local/bin/cursor-agent"],
+                 name: "cursor-agent", path: path) ?? find("", candidates: ["~/.local/bin/agent"], name: "cursor-agent", path: path)
         }
     }
 }

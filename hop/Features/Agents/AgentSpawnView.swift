@@ -1,10 +1,15 @@
 import AppKit
 
 /// "New session" in the Agents panel: provider, where, folder (recent projects and path
-/// completion) and an optional first prompt. Keyboard first: Tab completes, ↵ moves on
-/// and starts, ⌘P / ⌘T switch provider and target; every control also takes clicks.
+/// completion, pinned ones first), permission mode, an optional new git worktree and an
+/// optional first prompt, and where it runs (a terminal, or a hop chat for Claude Code and
+/// Codex). Keyboard first: Tab completes, ↵ moves on and starts, ⌘P / ⌘T / ⌘M / ⌘E switch
+/// provider, target, mode and Run in, ⌘G toggles the worktree, ⌘⇧P pins the highlighted
+/// folder; every control also takes clicks.
 final class AgentSpawnView: NSView, NSTableViewDataSource, NSTableViewDelegate, NSTextFieldDelegate {
     var onStart: ((AgentCommands.Spawn, HopConfig.Agents.Host?) -> Void)?
+    /// Start it as a hop chat instead (Run in: Chat).
+    var onStartChat: ((AgentCommands.Spawn, HopConfig.Agents.Host?) -> Void)?
     var onCancel: (() -> Void)?
     var isBusy = false {
         didSet { startButton.isEnabled = !isBusy }
@@ -15,6 +20,8 @@ final class AgentSpawnView: NSView, NSTableViewDataSource, NSTableViewDelegate, 
     private var projects: (HopConfig.Agents.Host?) -> [String] = { _ in [] }
     private var defaultCwd: (HopConfig.Agents.Host?) -> String = { _ in "~" }
     private var multiplexer: (HopConfig.Agents.Host?) -> HopConfig.Agents.Multiplexer = { _ in .tmux }
+    private var isPinned: (String, HopConfig.Agents.Host?) -> Bool = { _, _ in false }
+    private var togglePin: ((String, HopConfig.Agents.Host?) -> Void)?
     private var known: [String] = []
     private var suggestions: [String] = []
 
@@ -29,6 +36,10 @@ final class AgentSpawnView: NSView, NSTableViewDataSource, NSTableViewDelegate, 
     private let cancelButton = NSButton(title: "Cancel", target: nil, action: nil)
     private let note = NSTextField(labelWithString: "")
     private let hostLabel = NSTextField(labelWithAttributedString: Theme.labelString("Where ⌘T"))
+    private let modeControl = NSSegmentedControl()
+    private let worktreeCheck = NSButton(checkboxWithTitle: "New git worktree ⌘G", target: nil, action: nil)
+    private let runInLabel = NSTextField(labelWithAttributedString: Theme.labelString("Run in ⌘E"))
+    private let runInControl = NSSegmentedControl()
 
     override init(frame: NSRect) {
         super.init(frame: frame)
@@ -48,11 +59,34 @@ final class AgentSpawnView: NSView, NSTableViewDataSource, NSTableViewDelegate, 
         return i >= 0 && i < providers.count ? providers[i] : .claude
     }
 
+    private var mode: AgentPermissionMode {
+        let i = modeControl.selectedSegment
+        return i >= 0 && i < AgentPermissionMode.allCases.count ? AgentPermissionMode.allCases[i] : .supervised
+    }
+
+    /// Claude Code and Codex can run as a hop chat.
+    private var chatAvailable: Bool { ChatRows.chatProvider(provider) != nil }
+
+    /// Run in: Chat is picked and the provider has one.
+    var runsInChat: Bool { chatAvailable && runInControl.selectedSegment == 1 }
+
+    /// The worktree box is offered and ticked.
+    private var wantsWorktree: Bool { !worktreeCheck.isHidden && worktreeCheck.state == .on }
+
     func configure(providers: [AgentProvider], preferred: AgentProvider, hosts: [HopConfig.Agents.Host], host: String?,
                    defaultCwd: @escaping (HopConfig.Agents.Host?) -> String, cwd: String?,
                    projects: @escaping (HopConfig.Agents.Host?) -> [String],
-                   multiplexer: @escaping (HopConfig.Agents.Host?) -> HopConfig.Agents.Multiplexer = { _ in .tmux }) {
+                   multiplexer: @escaping (HopConfig.Agents.Host?) -> HopConfig.Agents.Multiplexer = { _ in .tmux },
+                   mode: AgentPermissionMode = .supervised,
+                   runIn: HopConfig.Agents.RunIn = .terminal,
+                   isPinned: @escaping (String, HopConfig.Agents.Host?) -> Bool = { _, _ in false },
+                   togglePin: ((String, HopConfig.Agents.Host?) -> Void)? = nil) {
         self.multiplexer = multiplexer
+        self.isPinned = isPinned
+        self.togglePin = togglePin
+        modeControl.selectedSegment = AgentPermissionMode.allCases.firstIndex(of: mode) ?? 0
+        runInControl.selectedSegment = runIn == .chat ? 1 : 0
+        worktreeCheck.state = .off
         self.providers = providers
         self.hosts = hosts
         self.projects = projects
@@ -87,8 +121,25 @@ final class AgentSpawnView: NSView, NSTableViewDataSource, NSTableViewDelegate, 
         updateNote()
     }
 
+    /// Whether the folder is in a git repository: a `.git` in it or a parent (this Mac); a
+    /// remote folder is not looked at, the script there says when it is not one.
+    static func isGitRepository(_ path: String) -> Bool {
+        var dir = (path.expandingTilde as NSString).standardizingPath
+        let fm = FileManager.default
+        while !dir.isEmpty {
+            if fm.fileExists(atPath: (dir as NSString).appendingPathComponent(".git")) { return true }
+            let parent = (dir as NSString).deletingLastPathComponent
+            if parent == dir { break }
+            dir = parent
+        }
+        return false
+    }
+
     /// What starting does, and whether Claude Code will first ask to trust the folder (this Mac only).
     private func updateNote() {
+        runInControl.isEnabled = chatAvailable
+        let folder = folderField.stringValue.trimmingCharacters(in: .whitespaces)
+        worktreeCheck.isHidden = host == nil && !(folder.hasPrefix("/") || folder.hasPrefix("~") ? Self.isGitRepository(folder) : false)
         let where_ = host.map { "on \($0.label) over ssh" } ?? "on this Mac"
         var trust = ""
         if provider == .claude, host == nil, ClaudeTrust.isTrusted(localFolder: folderField.stringValue.trimmingCharacters(in: .whitespaces)) == false {
@@ -97,8 +148,16 @@ final class AgentSpawnView: NSView, NSTableViewDataSource, NSTableViewDelegate, 
         let in_ = multiplexer(host) == .herdr
             ? "in a herdr workspace and agent named hop-\(provider.tag)-… (tmux when herdr is not there)"
             : "in a tmux session named hop-\(provider.tag)-…"
-        note.stringValue = trust + "Starts \(provider.label) \(where_) \(in_), so it keeps running "
-            + "after hop quits. ⌘↵ in the list attaches a terminal to it."
+        let worktree = wantsWorktree ? "in a new git worktree on branch hop/…, " : ""
+        if runsInChat {
+            note.stringValue = "Starts \(provider.label) \(worktree)\(where_) as a chat in this panel: replies stream here and "
+                + "approvals wait for ⌘Y / ⌘⇧N. It ends when hop quits; Continue in Chat (⌘⇧↵) picks it up again."
+            return
+        }
+        let flags = mode.arguments(for: provider)
+        let modeNote = mode == .supervised ? "" : flags.isEmpty ? " \(provider.label) has no \(mode.label) mode: it starts as usual." : ""
+        note.stringValue = trust + "Starts \(provider.label) \(worktree)\(where_) \(in_), so it keeps running "
+            + "after hop quits. ⌘↵ in the list attaches a terminal to it." + modeNote
             + (provider == .claude ? " Remote Control (agents.claude.remoteControl) lets the Claude app continue it." : "")
     }
 
@@ -176,6 +235,17 @@ final class AgentSpawnView: NSView, NSTableViewDataSource, NSTableViewDelegate, 
         if KeyCombo.ret(.command).matches(event) { submit(); return true }
         if KeyCombo.cmd("p").matches(event) { cycle(providerControl); return true }
         if KeyCombo.cmd("t").matches(event), !hostControl.isHidden { cycle(hostControl); return true }
+        if KeyCombo.cmd("m").matches(event) { cycle(modeControl); return true }
+        if KeyCombo.cmd("e").matches(event) {
+            if chatAvailable { cycle(runInControl) } else { HUD.shared.show("\(provider.label) runs in a terminal only", symbol: "terminal") }
+            return true
+        }
+        if KeyCombo.cmd("g").matches(event) {
+            if !worktreeCheck.isHidden { worktreeCheck.state = worktreeCheck.state == .on ? .off : .on }
+            updateNote()
+            return true
+        }
+        if KeyCombo.cmd("p", .shift).matches(event) { pinHighlighted(); return true }
         if editingFolder {
             switch (event.keyCode, mods) {
             case (125, []): moveSuggestion(1); return true
@@ -202,8 +272,30 @@ final class AgentSpawnView: NSView, NSTableViewDataSource, NSTableViewDelegate, 
     private func cycle(_ control: NSSegmentedControl) {
         guard control.segmentCount > 0 else { return }
         control.selectedSegment = (control.selectedSegment + 1) % control.segmentCount
+        if control === modeControl || control === runInControl { updateNote(); return }
         if control === hostControl { targetChanged() } else { targetChanged(keepFolder: folderField.stringValue) }
     }
+
+    /// Pins the highlighted suggestion (or the typed folder), or unpins it; pinned ones list first.
+    private func pinHighlighted() {
+        guard let togglePin else { return }
+        var path = highlighted ?? folderField.stringValue.trimmingCharacters(in: .whitespaces)
+        if path.count > 1 && path.hasSuffix("/") { path.removeLast() }
+        guard !path.isEmpty else { return }
+        let was = isPinned(path, host)
+        togglePin(path, host)
+        HUD.shared.show(was ? "Unpinned \(path)" : "Pinned \(path)", symbol: was ? "pin.slash" : "pin.fill")
+        known = projects(host)
+        updateSuggestions()
+        if let i = suggestions.firstIndex(of: path) {
+            suggestionTable.selectRowIndexes([i], byExtendingSelection: false)
+            suggestionTable.scrollRowToVisible(i)
+        }
+    }
+
+    @objc private func modeClicked() { updateNote() }
+    @objc private func runInClicked() { updateNote() }
+    @objc private func worktreeClicked() { updateNote() }
 
     @objc private func providerClicked() { targetChanged(keepFolder: folderField.stringValue) }
     @objc private func hostClicked() { targetChanged() }
@@ -222,9 +314,10 @@ final class AgentSpawnView: NSView, NSTableViewDataSource, NSTableViewDelegate, 
         var cwd = folderField.stringValue.trimmingCharacters(in: .whitespaces)
         if cwd.isEmpty { cwd = defaultCwd(host) }
         if cwd.count > 1 && cwd.hasSuffix("/") { cwd.removeLast() }
-        let spawn = AgentCommands.Spawn(provider: provider, cwd: cwd, prompt: promptField.stringValue, resume: nil,
-                                        tmuxName: AgentNames.tmuxName(provider: provider, cwd: cwd, suffix: AgentNames.randomSuffix()))
-        onStart?(spawn, host)
+        let name = AgentNames.tmuxName(provider: provider, cwd: cwd, suffix: AgentNames.randomSuffix())
+        let spawn = AgentCommands.Spawn(provider: provider, cwd: cwd, prompt: promptField.stringValue, resume: nil, tmuxName: name,
+                                        mode: mode, worktree: wantsWorktree ? String(name.dropFirst("hop-xx-".count)) : nil)
+        if runsInChat { onStartChat?(spawn, host) } else { onStart?(spawn, host) }
     }
 
     // MARK: - Table
@@ -247,16 +340,26 @@ final class AgentSpawnView: NSView, NSTableViewDataSource, NSTableViewDelegate, 
             label.textColor = Theme.foreground
             label.lineBreakMode = .byTruncatingMiddle
             label.translatesAutoresizingMaskIntoConstraints = false
+            label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+            let pin = NSTextField(labelWithString: "")
+            pin.identifier = NSUserInterfaceItemIdentifier("pin")
+            pin.translatesAutoresizingMaskIntoConstraints = false
+            pin.setContentCompressionResistancePriority(.required, for: .horizontal)
             c.addSubview(label)
+            c.addSubview(pin)
             c.textField = label
             NSLayoutConstraint.activate([
                 label.leadingAnchor.constraint(equalTo: c.leadingAnchor, constant: 18),
-                label.trailingAnchor.constraint(equalTo: c.trailingAnchor, constant: -18),
+                label.trailingAnchor.constraint(lessThanOrEqualTo: pin.leadingAnchor, constant: -8),
                 label.centerYAnchor.constraint(equalTo: c.centerYAnchor),
+                pin.trailingAnchor.constraint(equalTo: c.trailingAnchor, constant: -18),
+                pin.centerYAnchor.constraint(equalTo: c.centerYAnchor),
             ])
             return c
         }()
         cell.textField?.stringValue = suggestions[row]
+        let pin = cell.subviews.first { $0.identifier?.rawValue == "pin" } as? NSTextField
+        pin?.attributedStringValue = isPinned(suggestions[row], host) ? Theme.labelString("Pinned") : NSAttributedString()
         return cell
     }
 
@@ -296,6 +399,35 @@ final class AgentSpawnView: NSView, NSTableViewDataSource, NSTableViewDelegate, 
         }
         providerControl.action = #selector(providerClicked)
         hostControl.action = #selector(hostClicked)
+        modeControl.segmentStyle = .rounded
+        modeControl.controlSize = .regular
+        modeControl.font = Theme.sans(13, 500)
+        modeControl.trackingMode = .selectOne
+        modeControl.segmentCount = AgentPermissionMode.allCases.count
+        for (i, m) in AgentPermissionMode.allCases.enumerated() {
+            modeControl.setLabel(m.label, forSegment: i)
+            modeControl.setWidth(0, forSegment: i)
+        }
+        modeControl.selectedSegment = 0
+        modeControl.target = self
+        modeControl.action = #selector(modeClicked)
+        runInControl.segmentStyle = .rounded
+        runInControl.controlSize = .small
+        runInControl.font = Theme.sans(12, 500)
+        runInControl.trackingMode = .selectOne
+        runInControl.segmentCount = 2
+        runInControl.setLabel("Terminal", forSegment: 0)
+        runInControl.setLabel("hop Chat", forSegment: 1)
+        runInControl.selectedSegment = 0
+        runInControl.target = self
+        runInControl.action = #selector(runInClicked)
+        worktreeCheck.font = Theme.sans(13)
+        worktreeCheck.attributedTitle = NSAttributedString(string: "New git worktree ⌘G", attributes: [
+            .font: Theme.sans(13), .foregroundColor: Theme.foreground,
+        ])
+        worktreeCheck.target = self
+        worktreeCheck.action = #selector(worktreeClicked)
+        worktreeCheck.isHidden = true
 
         styleField(folderField, placeholder: "~/repos/project", mono: true)
         folderField.cell?.isScrollable = true
@@ -342,11 +474,12 @@ final class AgentSpawnView: NSView, NSTableViewDataSource, NSTableViewDelegate, 
         note.cell?.wraps = true
         note.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
 
-        let providerLabel = label("Provider ⌘P"), folderLabel = label("Folder · tab completes"), promptLabel = label("Prompt · ↵ starts")
+        let providerLabel = label("Provider ⌘P"), folderLabel = label("Folder · tab completes · ⌘⇧P pins"), promptLabel = label("Prompt · ↵ starts")
+        let modeLabel = label("Mode ⌘M")
         let buttons = NSStackView(views: [cancelButton, startButton])
         buttons.spacing = 8
-        let views: [NSView] = [heading, providerLabel, providerControl, hostLabel, hostControl, folderLabel, folderField, suggestionScroll,
-                               promptLabel, promptField, note, buttons]
+        let views: [NSView] = [heading, runInLabel, runInControl, providerLabel, providerControl, hostLabel, hostControl, folderLabel, folderField, suggestionScroll,
+                               modeLabel, modeControl, worktreeCheck, promptLabel, promptField, note, buttons]
         for v in views {
             v.translatesAutoresizingMaskIntoConstraints = false
             addSubview(v)
@@ -355,6 +488,10 @@ final class AgentSpawnView: NSView, NSTableViewDataSource, NSTableViewDelegate, 
         NSLayoutConstraint.activate([
             heading.topAnchor.constraint(equalTo: topAnchor, constant: 16),
             heading.leadingAnchor.constraint(equalTo: leadingAnchor, constant: inset),
+            runInControl.centerYAnchor.constraint(equalTo: heading.centerYAnchor),
+            runInControl.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -inset),
+            runInLabel.centerYAnchor.constraint(equalTo: heading.centerYAnchor),
+            runInLabel.trailingAnchor.constraint(equalTo: runInControl.leadingAnchor, constant: -10),
             providerLabel.topAnchor.constraint(equalTo: heading.bottomAnchor, constant: 14),
             providerLabel.leadingAnchor.constraint(equalTo: heading.leadingAnchor),
             providerControl.topAnchor.constraint(equalTo: providerLabel.bottomAnchor, constant: 6),
@@ -374,7 +511,14 @@ final class AgentSpawnView: NSView, NSTableViewDataSource, NSTableViewDelegate, 
             suggestionScroll.leadingAnchor.constraint(equalTo: leadingAnchor, constant: inset - 10),
             suggestionScroll.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -(inset - 10)),
             suggestionScroll.heightAnchor.constraint(greaterThanOrEqualToConstant: 78),
-            promptLabel.topAnchor.constraint(equalTo: suggestionScroll.bottomAnchor, constant: 12),
+            modeLabel.topAnchor.constraint(equalTo: suggestionScroll.bottomAnchor, constant: 12),
+            modeLabel.leadingAnchor.constraint(equalTo: heading.leadingAnchor),
+            modeControl.topAnchor.constraint(equalTo: modeLabel.bottomAnchor, constant: 6),
+            modeControl.leadingAnchor.constraint(equalTo: heading.leadingAnchor),
+            worktreeCheck.centerYAnchor.constraint(equalTo: modeControl.centerYAnchor),
+            worktreeCheck.leadingAnchor.constraint(equalTo: modeControl.trailingAnchor, constant: 24),
+            worktreeCheck.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -inset),
+            promptLabel.topAnchor.constraint(equalTo: modeControl.bottomAnchor, constant: 14),
             promptLabel.leadingAnchor.constraint(equalTo: heading.leadingAnchor),
             promptField.topAnchor.constraint(equalTo: promptLabel.bottomAnchor, constant: 6),
             promptField.leadingAnchor.constraint(equalTo: heading.leadingAnchor),

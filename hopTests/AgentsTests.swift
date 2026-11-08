@@ -498,7 +498,7 @@ struct AgentsTests {
         }
         // A live registry session herdr hosts, and the transcript of a `claude rc` server pane listed as finished.
         let out = Herdr.merge(snap, into: [claude("uuid-live", .idle), claude("uuid-server", .finished)], host: nil)
-        #expect(out.count == 3) // codex is not a provider the panel lists
+        #expect(out.count == 4 && out[3].provider == .codex) // herdr's codex agent becomes a row of its own
         #expect(out[0].herdrPane == "w1:p1" && out[0].status == .running && out[0].isAttachable && out[0].accessTag == "herdr" && !out[0].isViewOnly)
         #expect(out[0].herdrWorkspace == nil)
         #expect(out[1].herdrPane == "w3:p1" && out[1].status == .idle && out[1].kind == .terminal)
@@ -587,6 +587,166 @@ struct AgentsTests {
         #expect(s4 == 0 && out4.contains("fallback: the herdr server is not running"))
     }
 
+    // MARK: - Providers, permission modes, worktrees
+
+    @Test func providerArgumentsForEveryModeAndResume() {
+        var config = HopConfig.Agents()
+        config.claude.remoteControl = false
+        config.codex.args = ["-m", "o3"]
+        func args(_ p: AgentProvider, _ mode: AgentPermissionMode, resume: String? = nil, prompt: String = "go") -> [String] {
+            let spawn = AgentCommands.Spawn(provider: p, cwd: "/w", prompt: prompt, resume: resume,
+                                            tmuxName: AgentNames.tmuxName(provider: p, cwd: "/w", suffix: "0001"), mode: mode)
+            return AgentCommands.agentArguments(spawn, binary: p.rawValue, config: config)
+        }
+        // Claude Code: --permission-mode, nothing for supervised.
+        #expect(args(.claude, .supervised) == ["claude", "--name", "w-0001", "go"])
+        #expect(args(.claude, .acceptEdits) == ["claude", "--permission-mode", "acceptEdits", "--name", "w-0001", "go"])
+        #expect(args(.claude, .auto) == ["claude", "--permission-mode", "auto", "--name", "w-0001", "go"])
+        #expect(args(.claude, .full, resume: "uuid") == ["claude", "--permission-mode", "bypassPermissions", "--resume", "uuid", "go"])
+        // Codex: sandbox and approval flags; `resume <id>` with the flags after the subcommand.
+        #expect(args(.codex, .supervised) == ["codex", "-m", "o3", "--sandbox", "read-only", "--ask-for-approval", "on-request", "go"])
+        #expect(args(.codex, .acceptEdits) == ["codex", "-m", "o3", "--sandbox", "workspace-write", "--ask-for-approval", "on-request", "go"])
+        #expect(args(.codex, .auto, prompt: "") == ["codex", "-m", "o3", "--approve-for-me"])
+        #expect(args(.codex, .full) == ["codex", "-m", "o3", "--dangerously-bypass-approvals-and-sandbox", "go"])
+        #expect(args(.codex, .auto, resume: "01a1-id") == ["codex", "resume", "-m", "o3", "--approve-for-me", "01a1-id", "go"])
+        #expect(args(.codex, .supervised, resume: "01a1-id", prompt: "")
+            == ["codex", "resume", "-m", "o3", "--sandbox", "read-only", "--ask-for-approval", "on-request", "01a1-id"])
+        // OpenCode: no reviewer, so Auto runs supervised; --auto is Full access.
+        #expect(args(.opencode, .supervised) == ["opencode", "--prompt", "go"])
+        #expect(args(.opencode, .acceptEdits) == ["opencode", "--prompt", "go"])
+        #expect(args(.opencode, .auto, resume: "ses_1") == ["opencode", "--session", "ses_1", "--prompt", "go"])
+        #expect(args(.opencode, .full) == ["opencode", "--auto", "--prompt", "go"])
+        // Cursor: --force for full access only; --resume <chat id>; the prompt is positional.
+        #expect(args(.cursor, .supervised) == ["cursor", "go"])
+        #expect(args(.cursor, .auto) == ["cursor", "go"])
+        #expect(args(.cursor, .full, resume: "chat-1") == ["cursor", "--force", "--resume", "chat-1", "go"])
+        #expect(args(.cursor, .acceptEdits, resume: "chat-1", prompt: "") == ["cursor", "--resume", "chat-1"])
+
+        #expect(AgentProvider.allCases.map(\.tag) == ["cc", "oc", "cx", "cu"])
+        #expect(AgentNames.provider(ofTmux: "hop-cx-app-0001") == .codex && AgentNames.provider(ofTmux: "hop-cu-app-0001") == .cursor)
+        #expect(Herdr.provider("codex") == .codex && Herdr.provider("cursor") == .cursor && AgentProvider.codex.herdrKind == "codex")
+        let spawn = AgentCommands.Spawn(provider: .codex, cwd: "~/apps", prompt: "", resume: nil, tmuxName: "hop-cx-apps-1a2b")
+        #expect(AgentCommands.remoteHerdrSpawnScript(spawn, agent: ["codex", "x"], herdr: "herdr").contains("--kind 'codex'"))
+    }
+
+    @Test func codexRolloutParses() throws {
+        let data = Data(Fixtures.text("codex_rollout.jsonl").utf8)
+        let s = CodexSessions.parse(data)
+        #expect(s.cwd == "/Users/me/repos/app" && s.model == "gpt-6-astra")
+        #expect(s.firstPrompt == "Create hello.txt with hi" && s.lastPrompt == "Now run the tests")
+        #expect(s.inTurn && s.pendingTool == "exec_command" && s.error == nil)
+        #expect(s.lastActivity == ClaudeSessions.parseDate("2026-11-08T18:35:12.000Z"))
+        let kinds = s.entries.map(\.kind)
+        #expect(kinds == [.user, .assistant, .tool(name: "exec_command"), .result(isError: false), .tool(name: "apply_patch"),
+                          .result(isError: false), .tool(name: "shell"), .result(isError: true), .assistant, .user, .tool(name: "exec_command")])
+        #expect(s.entries[2].text == #"printf 'hi\n' > hello.txt"# && s.entries[3].text == "done writing")
+        #expect(s.entries[4].text == "/Users/me/repos/app/notes.md" && s.entries[6].text == "git status")
+        #expect(s.entries[7].text == "fatal: not a git repository" && s.entries[10].text == "just test" && s.entries[10].toolID == "call_4")
+        let failed = CodexSessions.toolOutput([["type": "input_text", "text": "Script completed\nOutput:\n"],
+                                               ["type": "input_text", "text": #"{"chunk_id":"1","exit_code":2,"output":"boom\nmore"}"#]])
+        #expect(failed.text == "boom\nmore" && failed.isError)
+
+        // A finished turn clears the pending call; an error is a notice and fails the session.
+        let done = CodexSessions.parse(data + Data("""
+
+            {"timestamp":"2026-11-08T18:36:00Z","type":"event_msg","payload":{"type":"task_complete","error":{"message":"usage limit"}}}
+            """.utf8))
+        #expect(!done.inTurn && done.pendingTool == nil && done.error == "usage limit" && done.entries.last?.kind == .notice)
+
+        #expect(CodexSessions.sessionID(fileName: "rollout-2026-11-08T19-34-38-01a1bc70-e643-7320-9782-2d3fa07bef2d.jsonl")
+            == "01a1bc70-e643-7320-9782-2d3fa07bef2d")
+        #expect(CodexSessions.sessionID(fileName: "rollout-2026-11-08T19-34-38-01a1bc70.jsonl.zst") == nil)
+        #expect(CodexSessions.threadNames(Data((#"{"id":"a","thread_name":"Old"}"# + "\n" + #"{"id":"a","thread_name":"New"}"#).utf8)) == ["a": "New"])
+
+        let url = URL(fileURLWithPath: "/tmp/rollout-x.jsonl")
+        let live = CodexSessions.session(id: "01a1", url: url, modified: .distantPast, summary: s, title: "Make hello", cwd: nil, live: 77)
+        #expect(live.status == .running && live.detail == "exec_command" && live.pid == 77 && live.title == "Make hello" && live.transcript == url.path)
+        let gone = CodexSessions.session(id: "01a1", url: url, modified: .distantPast, summary: done, title: nil, cwd: nil, live: nil)
+        #expect(gone.status == .finished && gone.detail == "failed" && gone.title == "Create hello.txt with hi" && gone.key == "local/codex/01a1")
+
+        // Two codex processes in one folder hold its two most recent sessions.
+        let now = Date()
+        let map = CodexSessions.liveMap([("old", "/a", now.addingTimeInterval(-900)), ("new", "/a", now), ("mid", "/a", now.addingTimeInterval(-60)),
+                                         ("b", "/b", now)], processes: [(10, "/a"), (11, "/a"), (12, "/c")])
+        #expect(Set(map.keys) == ["new", "mid"] && map["new"] == 11)
+
+        // hop's codex tmux session in the same folder is claimed by the live session.
+        let panes = TmuxPane.parse("hop-cx-app-0001|500|1794139000|/Users/me/repos/app\n")
+        var row = live
+        row.cwd = "/Users/me/repos/app"
+        #expect(AgentStore.attach(panes: panes, to: [row], host: nil, parent: { _ in nil }).map(\.tmux) == ["hop-cx-app-0001"])
+    }
+
+    @Test func worktreeScriptLines() throws {
+        let lines = AgentCommands.worktreeLines(name: "app-1a2b", root: "~/.hop-worktrees")
+        #expect(lines.contains(#"wt="$HOME"/'.hop-worktrees'/"$(basename "$top")"/'app-1a2b'"#))
+        #expect(lines.contains("git worktree add -b 'hop/app-1a2b' \"$wt\""))
+        #expect(lines.contains("git config 'branch.hop/app-1a2b.hopBase' \"$base\""))
+        #expect(AgentCommands.worktreeLines(name: "x; rm -rf /", root: ".worktrees").contains(#"wt="$top"/'.worktrees'/'xrm-rf'"#))
+        let spawn = AgentCommands.Spawn(provider: .claude, cwd: "~/apps", prompt: "", resume: nil, tmuxName: "hop-cc-apps-1a2b", worktree: "apps-1a2b")
+        let script = AgentCommands.remoteSpawnScript(spawn, agent: ["claude"])
+        #expect(script.hasPrefix(#"cd "$HOME"/'apps' || "#) && script.contains("git worktree add"))
+        #expect(script.range(of: "git worktree add")!.lowerBound < script.range(of: "tmux new-session")!.lowerBound)
+        #expect(!AgentCommands.remoteSpawnScript(AgentCommands.Spawn(provider: .claude, cwd: "~", prompt: "", resume: nil, tmuxName: "t"),
+                                                 agent: ["claude"]).contains("worktree"))
+
+        // Run for real: a repo with a commit, a worktree from a subfolder, then the diff against its fork point.
+        let dir = FileManager.default.temporaryDirectory.appending(path: "hop-wt-\(UUID().uuidString)").resolvingSymlinksInPath()
+        let repo = dir.appending(path: "repo")
+        try FileManager.default.createDirectory(at: repo.appending(path: "sub"), withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        func bash(_ script: String) throws -> (Int32, String, String) {
+            let p = Process()
+            p.executableURL = URL(fileURLWithPath: "/bin/bash")
+            p.arguments = ["-c", script]
+            p.environment = ["PATH": "/usr/bin:/bin", "HOME": dir.path, "GIT_CONFIG_NOSYSTEM": "1"]
+            let out = Pipe(), err = Pipe()
+            p.standardOutput = out
+            p.standardError = err
+            try p.run()
+            let o = String(decoding: out.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+            let e = String(decoding: err.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+            p.waitUntilExit()
+            return (p.terminationStatus, o, e)
+        }
+        let setup = try bash("""
+            cd \(AgentCommands.quote(repo.path)) && git init -q -b main && git config user.email t@t && git config user.name t \
+              && git config commit.gpgsign false && echo one > sub/a.txt && git add -A && git commit -qm init
+            """)
+        try #require(setup.0 == 0, "\(setup.2)")
+        var config = HopConfig.Agents()
+        config.worktreeRoot = dir.appending(path: "wts").path
+        let local = AgentCommands.Spawn(provider: .codex, cwd: repo.appending(path: "sub").path, prompt: "", resume: nil, tmuxName: "hop-cx-sub-0001",
+                                        worktree: "sub-0001")
+        let made = try bash(AgentCommands.localWorktreeScript(local, config: config))
+        try #require(made.0 == 0, "\(made.2)")
+        let wt = dir.appending(path: "wts/repo/sub-0001")
+        #expect(made.1.trimmingCharacters(in: .whitespacesAndNewlines) == wt.appending(path: "sub").path)
+        let commit = try bash("""
+            cd \(AgentCommands.quote(wt.path)) && git config user.email t@t && git config user.name t && echo two >> sub/a.txt \
+              && git commit -qam change --no-gpg-sign && echo new > b.txt
+            """)
+        try #require(commit.0 == 0, "\(commit.2)")
+        let (status, out, _) = try bash(AgentCommands.diffScript(cwd: wt.path))
+        #expect(status == 0)
+        let changes = GitChanges.parse(out)
+        #expect(changes.branch == "hop/sub-0001" && changes.base == "main" && changes.status == ["?? b.txt"])
+        #expect(changes.diff.contains("+two") && changes.diff.contains("diff --git a/sub/a.txt"))
+        let again = try bash(AgentCommands.localWorktreeScript(local, config: config))
+        #expect(again.0 == 8)
+        let notRepo = try bash(AgentCommands.diffScript(cwd: dir.path))
+        #expect(notRepo.0 == 4 && notRepo.2.contains("not a git repository"))
+    }
+
+    @Test func diffParsingAndStyles() {
+        let c = GitChanges.parse("B|main|\nS| M a.swift\nS|?? new.txt\nD|\ndiff --git a/a.swift b/a.swift\n--- a/a.swift\n+++ b/a.swift\n@@ -1 +1 @@\n-old\n+new\n")
+        #expect(c.branch == "main" && c.base == nil && c.status == [" M a.swift", "?? new.txt"] && !c.isClean)
+        #expect(c.diff.split(separator: "\n").map(GitChanges.style)
+            == [.file, .file, .file, .hunk, .removed, .added])
+        #expect(GitChanges.parse("B|hop/x|main\nD|\n").isClean && GitChanges.parse("B|hop/x|main\nD|\n").base == "main")
+        #expect(GitChanges.style(" context") == .context)
+    }
+
     // MARK: - Config
 
     @Test func agentsConfig() throws {
@@ -596,6 +756,15 @@ struct AgentsTests {
         #expect(d.enabled && d.hotkey == "shift+cmd+space" && d.defaultProvider == .claude && d.terminal == .auto)
         #expect(d.claude.remoteControl && d.opencode.enabled && d.hosts.isEmpty && d.historyHours == 24)
         #expect(d.multiplexer == .tmux && d.herdr == "")
+        #expect(d.permissionMode == .supervised && d.worktreeRoot == "~/.hop-worktrees" && d.codex.enabled && d.cursor.enabled)
+        let more = try decoder.decode(HopConfig.self, from: Data("""
+            { agents: { permissionMode: "acceptEdits", worktreeRoot: ".worktrees", codex: { args: ["-m", "o3"] }, cursor: { enabled: false },
+              hosts: [{ ssh: "box", codex: "/opt/codex" }] } }
+            """.utf8)).agents
+        #expect(more.permissionMode == .acceptEdits && more.worktreeRoot == ".worktrees" && more.args(.codex) == ["-m", "o3"])
+        #expect(!more.isEnabled(.cursor) && more.isEnabled(.codex))
+        #expect(more.hosts[0].binary(for: .codex) == "/opt/codex" && more.hosts[0].binary(for: .cursor) == "cursor-agent"
+            && more.hosts[0].binary(for: .claude) == "claude")
         #expect(HotkeySpec.parse(d.hotkey) != nil)
 
         let text = """
@@ -617,7 +786,8 @@ struct AgentsTests {
         #expect(template.agents == HopConfig.Agents())
 
         #expect(ConfigSchema.hop.node(at: ["agents", "terminal"]) == .choice(["auto", "ghostty", "iterm", "terminal"]))
-        #expect(ConfigSchema.hop.node(at: ["agents", "defaultProvider"]) == .choice(["claude", "opencode"]))
+        #expect(ConfigSchema.hop.node(at: ["agents", "defaultProvider"]) == .choice(["claude", "opencode", "codex", "cursor"]))
+        #expect(ConfigSchema.hop.node(at: ["agents", "permissionMode"]) == .choice(["supervised", "acceptEdits", "auto", "full"]))
         #expect(ConfigSchema.hop.node(at: ["agents", "multiplexer"]) == .choice(["tmux", "herdr"]))
         #expect(ConfigSchema.hop.node(at: ["agents", "hosts", "0", "multiplexer"]) == .choice(["tmux", "herdr"]))
         do {

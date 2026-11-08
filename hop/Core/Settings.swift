@@ -15,6 +15,12 @@ nonisolated struct HopConfig: Decodable, Equatable, Sendable {
         var fallbacks = ["chatgpt", "google", "github"]
         var openAtLogin = true
         var menuBarIcon = true
+        /// "og" (Outfit + Geist Mono, warm black) or "modern" (system fonts, softer contrast).
+        var theme: ThemeName = .og
+
+        nonisolated enum ThemeName: String, Decodable, Equatable, Sendable, CaseIterable {
+            case og, modern
+        }
     }
 
     nonisolated struct HyperKey: Decodable, Equatable, Sendable {
@@ -243,7 +249,7 @@ nonisolated struct HopConfig: Decodable, Equatable, Sendable {
         var languages = ["en-US"]
     }
 
-    /// The Agents panel: Claude Code and OpenCode sessions here and on SSH hosts.
+    /// The Agents panel: Claude Code, OpenCode, Codex and Cursor sessions here and on SSH hosts.
     nonisolated struct Agents: Decodable, Equatable, Sendable {
         nonisolated enum Terminal: String, Decodable, Equatable, Sendable, CaseIterable {
             /// Ghostty, then iTerm, then Terminal: the first one installed.
@@ -253,6 +259,12 @@ nonisolated struct HopConfig: Decodable, Equatable, Sendable {
         /// What new sessions run in: tmux, or herdr (herdr.dev) with tmux as the fallback.
         nonisolated enum Multiplexer: String, Decodable, Equatable, Sendable, CaseIterable {
             case tmux, herdr
+        }
+
+        /// Where the new session form starts Claude Code and Codex: a terminal (tmux / herdr)
+        /// or a chat in the panel that hop drives itself.
+        nonisolated enum RunIn: String, Decodable, Equatable, Sendable, CaseIterable {
+            case terminal, chat
         }
 
         nonisolated struct Provider: Decodable, Equatable, Sendable {
@@ -284,12 +296,25 @@ nonisolated struct HopConfig: Decodable, Equatable, Sendable {
             /// Binaries on that host (its login PATH finds them).
             var claude = "claude"
             var opencode = "opencode"
+            var codex = "codex"
+            var cursor = "cursor-agent"
             /// "tmux" or "herdr" for new sessions there; nil follows `agents.multiplexer`.
             var multiplexer: Multiplexer?
             /// herdr on that host (its login PATH finds it).
             var herdr = "herdr"
 
             var label: String { name.isEmpty ? ssh : name }
+
+            /// The command for `provider` there; "" falls back to its usual name.
+            func binary(for provider: AgentProvider) -> String {
+                let b = switch provider {
+                case .claude: claude
+                case .opencode: opencode
+                case .codex: codex
+                case .cursor: cursor
+                }
+                return b.isEmpty ? (provider == .cursor ? "cursor-agent" : provider.rawValue) : b
+            }
         }
 
         var enabled = true
@@ -313,9 +338,49 @@ nonisolated struct HopConfig: Decodable, Equatable, Sendable {
         var floating = true
         /// Seconds between remote host refreshes while the panel is open.
         var remoteRefreshSeconds = 15
+        /// How much new sessions may do without asking; ⌘M in the form changes it per session.
+        var permissionMode: AgentPermissionMode = .supervised
+        /// Where "New worktree" puts its git worktrees: an absolute or ~ path gets <repo>/<name>
+        /// under it, a relative one (".worktrees") is taken inside the repository.
+        var worktreeRoot = "~/.hop-worktrees"
+        /// The form's Run in choice (⌘E) for Claude Code and Codex.
+        var runIn: RunIn = .terminal
         var claude = Claude()
         var opencode = Provider()
+        var codex = Provider()
+        /// Cursor's CLI (`cursor-agent`, also installed as `agent`): started and resumed, not listed.
+        var cursor = Provider()
         var hosts: [Host] = []
+
+        /// Whether the panel offers `p` for new sessions.
+        func isEnabled(_ p: AgentProvider) -> Bool {
+            switch p {
+            case .claude: claude.enabled
+            case .opencode: opencode.enabled
+            case .codex: codex.enabled
+            case .cursor: cursor.enabled
+            }
+        }
+
+        /// Flags added to every session `p` starts.
+        func args(_ p: AgentProvider) -> [String] {
+            switch p {
+            case .claude: claude.args
+            case .opencode: opencode.args
+            case .codex: codex.args
+            case .cursor: cursor.args
+            }
+        }
+
+        /// Configured binary path for `p` ("" finds it).
+        func binary(_ p: AgentProvider) -> String {
+            switch p {
+            case .claude: claude.binary
+            case .opencode: opencode.binary
+            case .codex: codex.binary
+            case .cursor: cursor.binary
+            }
+        }
     }
 
     nonisolated struct CalculatorSettings: Decodable, Equatable, Sendable {
@@ -384,7 +449,7 @@ nonisolated extension HopConfig {
 }
 
 nonisolated extension HopConfig.General {
-    private enum Keys: String, CodingKey { case hotkey, sensitivity, popToRootSeconds, keepQueryFor, fallbacks, openAtLogin, menuBarIcon }
+    private enum Keys: String, CodingKey { case hotkey, sensitivity, popToRootSeconds, keepQueryFor, fallbacks, openAtLogin, menuBarIcon, theme }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: Keys.self), d = Self()
         hotkey = try c.value(.hotkey, d.hotkey)
@@ -394,6 +459,7 @@ nonisolated extension HopConfig.General {
         fallbacks = try c.value(.fallbacks, d.fallbacks)
         openAtLogin = try c.value(.openAtLogin, d.openAtLogin)
         menuBarIcon = try c.value(.menuBarIcon, d.menuBarIcon)
+        theme = try c.value(.theme, d.theme)
     }
 }
 
@@ -533,7 +599,7 @@ nonisolated extension HopConfig.Emoji {
 nonisolated extension HopConfig.Agents {
     private enum Keys: String, CodingKey {
         case enabled, hotkey, defaultProvider, defaultCwd, projectRoots, historyHours, terminal, tmux, multiplexer, herdr, floating,
-             remoteRefreshSeconds, claude, opencode, hosts
+             remoteRefreshSeconds, permissionMode, worktreeRoot, runIn, claude, opencode, codex, cursor, hosts
     }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: Keys.self), d = Self()
@@ -549,8 +615,13 @@ nonisolated extension HopConfig.Agents {
         herdr = try c.value(.herdr, d.herdr)
         floating = try c.value(.floating, d.floating)
         remoteRefreshSeconds = try c.value(.remoteRefreshSeconds, d.remoteRefreshSeconds)
+        permissionMode = try c.value(.permissionMode, d.permissionMode)
+        worktreeRoot = try c.value(.worktreeRoot, d.worktreeRoot)
+        runIn = try c.value(.runIn, d.runIn)
         claude = try c.value(.claude, d.claude)
         opencode = try c.value(.opencode, d.opencode)
+        codex = try c.value(.codex, d.codex)
+        cursor = try c.value(.cursor, d.cursor)
         hosts = try c.value(.hosts, d.hosts)
     }
 }
@@ -577,7 +648,7 @@ nonisolated extension HopConfig.Agents.Claude {
 }
 
 nonisolated extension HopConfig.Agents.Host {
-    private enum Keys: String, CodingKey { case name, ssh, cwd, projects, claude, opencode, multiplexer, herdr }
+    private enum Keys: String, CodingKey { case name, ssh, cwd, projects, claude, opencode, codex, cursor, multiplexer, herdr }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: Keys.self), d = Self()
         name = try c.value(.name, d.name)
@@ -586,6 +657,8 @@ nonisolated extension HopConfig.Agents.Host {
         projects = try c.value(.projects, d.projects)
         claude = try c.value(.claude, d.claude)
         opencode = try c.value(.opencode, d.opencode)
+        codex = try c.value(.codex, d.codex)
+        cursor = try c.value(.cursor, d.cursor)
         multiplexer = try c.decodeIfPresent(HopConfig.Agents.Multiplexer.self, forKey: .multiplexer)
         herdr = try c.value(.herdr, d.herdr)
     }
@@ -793,6 +866,8 @@ final class AppSettings {
         fallbacks: ["chatgpt", "google", "github"],
         openAtLogin: true,
         menuBarIcon: true,
+        // "og" or "modern" (system fonts, softer contrast); hop restarts to switch
+        theme: "og",
       },
 
       // Global hotkeys for any command or app, on top of general.hotkey, notes.hotkey and
@@ -1000,12 +1075,12 @@ final class AppSettings {
       },
 
       agents: {
-        // Agents panel: Claude Code and OpenCode sessions on this Mac and on SSH hosts,
-        // live status and transcript; start new ones in tmux and attach from a terminal
+        // Agents panel: Claude Code, OpenCode and Codex sessions on this Mac and on SSH hosts,
+        // live status and transcript; start new ones (Cursor too) in tmux and attach from a terminal
         enabled: true,
         // Opens the panel (it follows you across Spaces until Esc); pressed again in front, it closes
         hotkey: "shift+cmd+space",
-        // "claude" or "opencode": what a new session starts with
+        // "claude", "opencode", "codex" or "cursor": what a new session starts with
         defaultProvider: "claude",
         // Where new sessions start when no folder is typed
         defaultCwd: "~/repos",
@@ -1027,6 +1102,17 @@ final class AppSettings {
         floating: true,
         // Seconds between refreshes of remote hosts while the panel is open
         remoteRefreshSeconds: 15,
+        // How much new sessions may do without asking (⌘M in the new session form changes it):
+        // "supervised" (asks first), "acceptEdits", "auto" (the agent's own auto mode) or "full"
+        // (no questions, no sandbox). Agents without a matching flag start as they would anyway
+        permissionMode: "supervised",
+        // Where ⌘G in the new session form puts git worktrees: <repo>/<name> under an absolute
+        // or ~ path, or a path relative to the repository (e.g. ".worktrees"); branch hop/<name>
+        worktreeRoot: "~/.hop-worktrees",
+        // Where the new session form (⌘E switches) starts Claude Code and Codex: "terminal"
+        // (tmux or herdr, keeps running after hop quits) or "chat" (a live chat in the panel with
+        // approvals, driven by hop; it ends when hop quits, Continue in Chat picks it up again)
+        runIn: "terminal",
         claude: {
           enabled: true,
           // "" finds claude (~/.local/bin, Homebrew, the login PATH)
@@ -1041,10 +1127,24 @@ final class AppSettings {
           binary: "",
           args: [],
         },
+        // Codex CLI: sessions from ~/.codex/sessions, started with codex / codex resume
+        codex: {
+          enabled: true,
+          binary: "",
+          args: [],
+        },
+        // Cursor's CLI (cursor-agent, or agent): started and resumed, its sessions are not listed;
+        // offered only when it is installed (or a host is configured)
+        cursor: {
+          enabled: true,
+          binary: "",
+          args: [],
+        },
         // Machines reached over SSH: sessions there are listed (herdr's too, when it runs
         // there), new ones start there in tmux, or in herdr with multiplexer: "herdr"
         hosts: [
           // { name: "my-server", ssh: "my-server", cwd: "~", projects: ["~/code/app"], multiplexer: "herdr" },
+          // Binaries there default to claude, opencode, codex and cursor-agent (keys of the same names)
         ],
       },
 

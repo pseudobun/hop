@@ -21,7 +21,9 @@ nonisolated extension ShakeDetector.Sensitivity: ConfigChoice {}
 nonisolated extension HopConfig.KeePass.PasswordSource: ConfigChoice {}
 nonisolated extension HopConfig.Agents.Terminal: ConfigChoice {}
 nonisolated extension HopConfig.Agents.Multiplexer: ConfigChoice {}
+nonisolated extension HopConfig.Agents.RunIn: ConfigChoice {}
 nonisolated extension AgentProvider: ConfigChoice {}
+nonisolated extension AgentPermissionMode: ConfigChoice {}
 
 /// The keys the config understands, read off the default `HopConfig` (property names are
 /// the JSON keys), so a new setting is known without listing it twice.

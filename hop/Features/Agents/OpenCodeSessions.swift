@@ -161,11 +161,16 @@ nonisolated enum OpenCodeSessions {
 
     /// Working directories of running processes named `name` (the OpenCode TUI runs in its project).
     static func processDirectories(named name: String = "opencode") -> Set<String> {
+        Set(processes(named: name).map(\.cwd))
+    }
+
+    /// Running processes named `name` and their working directories.
+    static func processes(named name: String) -> [(pid: Int32, cwd: String)] {
         let count = proc_listallpids(nil, 0)
         guard count > 0 else { return [] }
         var pids = [pid_t](repeating: 0, count: Int(count) + 32)
         let n = proc_listallpids(&pids, Int32(pids.count * MemoryLayout<pid_t>.size))
-        var dirs = Set<String>()
+        var out: [(pid: Int32, cwd: String)] = []
         var nameBuf = [CChar](repeating: 0, count: 256)
         for pid in pids.prefix(Int(max(0, n))) where pid > 0 {
             guard proc_name(pid, &nameBuf, UInt32(nameBuf.count)) > 0 else { continue }
@@ -177,8 +182,8 @@ nonisolated enum OpenCodeSessions {
             let path = withUnsafeBytes(of: info.pvi_cdir.vip_path) { raw in
                 String(decoding: raw.prefix { $0 != 0 }, as: UTF8.self)
             }
-            if !path.isEmpty { dirs.insert(path) }
+            if !path.isEmpty { out.append((pid, path)) }
         }
-        return dirs
+        return out
     }
 }

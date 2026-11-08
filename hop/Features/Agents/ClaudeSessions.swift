@@ -195,8 +195,9 @@ nonisolated enum ClaudeSessions {
                     case "tool_use":
                         let name = part["name"] as? String ?? "tool"
                         let id = part["id"] as? String
-                        s.entries.append(TranscriptEntry(kind: .tool(name: name), text: toolSummary(name, part["input"] as? [String: Any]),
-                                                         date: date, toolID: id))
+                        let input = part["input"] as? [String: Any]
+                        s.entries.append(TranscriptEntry(kind: .tool(name: name), text: toolSummary(name, input), date: date, toolID: id,
+                                                         diff: input.flatMap { ChatClaude.editDiff(name, $0) }))
                         if let id { calls.append((id, name)) }
                     case "tool_result":
                         if let id = part["tool_use_id"] as? String { answered.insert(id) }

@@ -28,15 +28,19 @@ nonisolated enum AgentCommands {
         /// Continue this session instead of starting a new one.
         var resume: String?
         var tmuxName: String
+        var mode: AgentPermissionMode = .supervised
+        /// Start in a new git worktree of `cwd` by this name (branch hop/<name>).
+        var worktree: String? = nil
     }
 
-    /// The agent's own command: binary, configured flags, then name / resume / prompt.
+    /// The agent's own command: binary, configured flags, permission mode, then name / resume / prompt.
     static func agentArguments(_ s: Spawn, binary: String, config: HopConfig.Agents) -> [String] {
         var args = [binary]
         let prompt = s.prompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        let mode = s.mode.arguments(for: s.provider)
         switch s.provider {
         case .claude:
-            args += config.claude.args
+            args += config.claude.args + mode
             let label = String(s.tmuxName.dropFirst("hop-cc-".count))
             if let resume = s.resume {
                 args += ["--resume", resume]
@@ -48,11 +52,75 @@ nonisolated enum AgentCommands {
             if config.claude.remoteControl { args += ["--remote-control", label] }
             if !prompt.isEmpty { args += [prompt] }
         case .opencode:
-            args += config.opencode.args
+            args += config.opencode.args + mode
             if let resume = s.resume { args += ["--session", resume] }
             if !prompt.isEmpty { args += ["--prompt", prompt] }
+        case .codex:
+            // `codex resume` takes the same flags as `codex`; the id and the prompt are positional.
+            if s.resume != nil { args.append("resume") }
+            args += config.codex.args + mode
+            if let resume = s.resume { args.append(resume) }
+            if !prompt.isEmpty { args.append(prompt) }
+        case .cursor:
+            args += config.cursor.args + mode
+            if let resume = s.resume { args += ["--resume", resume] }
+            if !prompt.isEmpty { args.append(prompt) }
         }
         return args
+    }
+
+    // MARK: - Worktrees
+
+    /// Bash run in the chosen folder: a new git worktree for `name` on branch hop/<name>, from
+    /// what is checked out there (kept in `branch.hop/<name>.hopBase` for Show Changes), and a
+    /// `cd` into it at the same subfolder. `root`: `agents.worktreeRoot`.
+    static func worktreeLines(name: String, root: String) -> String {
+        let safe = String(name.filter { $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "-" || $0 == "_") }.prefix(48))
+        let dest = root.hasPrefix("/") || root.hasPrefix("~") || root.isEmpty
+            ? "\(remotePath(root.isEmpty ? "~/.hop-worktrees" : root))/\"$(basename \"$top\")\"/\(quote(safe))"
+            : "\"$top\"/\(quote(root))/\(quote(safe))"
+        return """
+            top=$(git rev-parse --show-toplevel 2>/dev/null) || { echo "not a git repository: $PWD" >&2; exit 8; }
+            rel=$(git rev-parse --show-prefix 2>/dev/null)
+            base=$(git symbolic-ref --quiet --short HEAD 2>/dev/null || git rev-parse HEAD 2>/dev/null)
+            wt=\(dest)
+            mkdir -p "$(dirname "$wt")" || exit 8
+            out=$(git worktree add -b \(quote("hop/" + safe)) "$wt" 2>&1) || { printf '%s\\n' "$out" | tail -1 >&2; exit 8; }
+            [ -n "$base" ] && git config \(quote("branch.hop/\(safe).hopBase")) "$base"
+            cd "$wt/$rel" 2>/dev/null || cd "$wt" || exit 8
+            """
+    }
+
+    /// The worktree lines for a spawn that asks for one, else nothing.
+    static func worktreePrefix(_ s: Spawn, config: HopConfig.Agents) -> String {
+        guard let name = s.worktree, !name.isEmpty else { return "" }
+        return worktreeLines(name: name, root: config.worktreeRoot) + "\n"
+    }
+
+    /// Bash for this Mac: make the worktree and print where the agent should start.
+    static func localWorktreeScript(_ s: Spawn, config: HopConfig.Agents) -> String {
+        "\(remoteCdLine(Spawn(provider: s.provider, cwd: s.cwd.expandingTilde, prompt: "", resume: nil, tmuxName: "")))\n"
+            + worktreePrefix(s, config: config) + "pwd\n"
+    }
+
+    // MARK: - Changes
+
+    /// Bash that prints a folder's branch ("B|branch|base"), `git status --short` ("S|…"), then
+    /// after "D|" the diff: against the fork point for a hop worktree branch, else HEAD.
+    static func diffScript(cwd: String) -> String {
+        """
+        cd \(remotePath(cwd)) 2>/dev/null || { echo "no such folder: \(cwd.replacingOccurrences(of: "\"", with: ""))" >&2; exit 3; }
+        git rev-parse --is-inside-work-tree >/dev/null 2>&1 || { echo "not a git repository" >&2; exit 4; }
+        b=$(git symbolic-ref --quiet --short HEAD 2>/dev/null)
+        base=""; from=HEAD
+        if [ -n "$b" ]; then base=$(git config --get "branch.$b.hopBase" 2>/dev/null); fi
+        if [ -n "$base" ]; then f=$(git merge-base HEAD "$base" 2>/dev/null) && from=$f; fi
+        printf 'B|%s|%s\\n' "${b:-detached}" "$base"
+        git status --short 2>/dev/null | head -400 | sed 's/^/S|/'
+        echo 'D|'
+        git -c core.quotepath=off diff --no-color --no-ext-diff "$from" 2>/dev/null | head -c 800000
+        exit 0
+        """
     }
 
     /// `tmux new-session` arguments for this Mac (the command runs directly, no shell).
@@ -63,20 +131,20 @@ nonisolated enum AgentCommands {
     }
 
     /// Bash for a remote host: cd, check tmux, start the session with the login PATH.
-    static func remoteSpawnScript(_ s: Spawn, agent: [String]) -> String {
+    static func remoteSpawnScript(_ s: Spawn, agent: [String], config: HopConfig.Agents = HopConfig.Agents()) -> String {
         """
         \(remoteCdLine(s))
-        command -v tmux >/dev/null 2>&1 || { echo "tmux is not installed" >&2; exit 4; }
+        \(worktreePrefix(s, config: config))command -v tmux >/dev/null 2>&1 || { echo "tmux is not installed" >&2; exit 4; }
         \(remoteAgentCheckLine(agent))
         \(remoteTmuxLine(s, agent: agent))
         """
     }
 
     /// The same in herdr, with tmux as the fallback.
-    static func remoteHerdrSpawnScript(_ s: Spawn, agent: [String], herdr: String) -> String {
+    static func remoteHerdrSpawnScript(_ s: Spawn, agent: [String], herdr: String, config: HopConfig.Agents = HopConfig.Agents()) -> String {
         """
         \(remoteCdLine(s))
-        \(Herdr.spawnScript(herdr: herdr, name: s.tmuxName, kind: s.provider == .claude ? "claude" : "opencode",
+        \(worktreePrefix(s, config: config))\(Herdr.spawnScript(herdr: herdr, name: s.tmuxName, kind: s.provider.herdrKind,
                             agentArgs: Herdr.agentStartArguments(agent),
                             tmuxFallback: remoteAgentCheckLine(agent) + "\n  " + remoteTmuxLine(s, agent: agent)))
         """

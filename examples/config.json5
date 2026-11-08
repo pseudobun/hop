@@ -16,6 +16,8 @@
     fallbacks: ["chatgpt", "google", "github"],
     openAtLogin: true,
     menuBarIcon: true,
+    // "og" or "modern" (system fonts, softer contrast); hop restarts to switch
+    theme: "og",
   },
 
   // Global hotkeys for any command or app, on top of general.hotkey, notes.hotkey and
@@ -223,12 +225,12 @@
   },
 
   agents: {
-    // Agents panel: Claude Code and OpenCode sessions on this Mac and on SSH hosts,
-    // live status and transcript; start new ones in tmux and attach from a terminal
+    // Agents panel: Claude Code, OpenCode and Codex sessions on this Mac and on SSH hosts,
+    // live status and transcript; start new ones (Cursor too) in tmux and attach from a terminal
     enabled: true,
     // Opens the panel (it follows you across Spaces until Esc); pressed again in front, it closes
     hotkey: "shift+cmd+space",
-    // "claude" or "opencode": what a new session starts with
+    // "claude", "opencode", "codex" or "cursor": what a new session starts with
     defaultProvider: "claude",
     // Where new sessions start when no folder is typed
     defaultCwd: "~/repos",
@@ -250,6 +252,17 @@
     floating: true,
     // Seconds between refreshes of remote hosts while the panel is open
     remoteRefreshSeconds: 15,
+    // How much new sessions may do without asking (⌘M in the new session form changes it):
+    // "supervised" (asks first), "acceptEdits", "auto" (the agent's own auto mode) or "full"
+    // (no questions, no sandbox). Agents without a matching flag start as they would anyway
+    permissionMode: "supervised",
+    // Where ⌘G in the new session form puts git worktrees: <repo>/<name> under an absolute
+    // or ~ path, or a path relative to the repository (e.g. ".worktrees"); branch hop/<name>
+    worktreeRoot: "~/.hop-worktrees",
+    // Where the new session form (⌘E switches) starts Claude Code and Codex: "terminal"
+    // (tmux or herdr, keeps running after hop quits) or "chat" (a live chat in the panel with
+    // approvals, driven by hop; it ends when hop quits, Continue in Chat picks it up again)
+    runIn: "terminal",
     claude: {
       enabled: true,
       // "" finds claude (~/.local/bin, Homebrew, the login PATH)
@@ -264,10 +277,24 @@
       binary: "",
       args: [],
     },
+    // Codex CLI: sessions from ~/.codex/sessions, started with codex / codex resume
+    codex: {
+      enabled: true,
+      binary: "",
+      args: [],
+    },
+    // Cursor's CLI (cursor-agent, or agent): started and resumed, its sessions are not listed;
+    // offered only when it is installed (or a host is configured)
+    cursor: {
+      enabled: true,
+      binary: "",
+      args: [],
+    },
     // Machines reached over SSH: sessions there are listed (herdr's too, when it runs
     // there), new ones start there in tmux, or in herdr with multiplexer: "herdr"
     hosts: [
       // { name: "my-server", ssh: "my-server", cwd: "~", projects: ["~/code/app"], multiplexer: "herdr" },
+      // Binaries there default to claude, opencode, codex and cursor-agent (keys of the same names)
     ],
   },
 

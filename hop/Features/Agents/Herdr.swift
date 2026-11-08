@@ -76,6 +76,8 @@ nonisolated enum Herdr {
         switch agent {
         case "claude": .claude
         case "opencode": .opencode
+        case "codex": .codex
+        case "cursor": .cursor
         default: nil
         }
     }
@@ -109,8 +111,9 @@ nonisolated enum Herdr {
             let owned = isHopOwned(a, snapshot: snapshot)
             var index: Int?
             if let id = a.sessionID { index = out.firstIndex { $0.provider == provider && $0.id == id && $0.host == host } }
-            if index == nil, provider == .opencode, let cwd = a.cwd {
-                index = out.firstIndex { $0.provider == .opencode && $0.host == host && $0.cwd == cwd && $0.status != .finished && $0.herdrPane == nil
+            // Agents without a session id herdr knows: matched by folder.
+            if index == nil, provider != .claude, let cwd = a.cwd {
+                index = out.firstIndex { $0.provider == provider && $0.host == host && $0.cwd == cwd && $0.status != .finished && $0.herdrPane == nil
                     && $0.tmux == nil }
             }
             if let i = index {

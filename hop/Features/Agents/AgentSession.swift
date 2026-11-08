@@ -2,20 +2,77 @@ import Foundation
 
 /// Coding agents the panel knows about.
 nonisolated enum AgentProvider: String, CaseIterable, Sendable, Codable {
-    case claude, opencode
+    case claude, opencode, codex, cursor
 
     var label: String {
         switch self {
         case .claude: "Claude Code"
         case .opencode: "OpenCode"
+        case .codex: "Codex"
+        case .cursor: "Cursor"
         }
     }
 
-    /// Short tag in tmux session names hop creates: hop-cc-…, hop-oc-….
+    /// Short tag in tmux session names hop creates: hop-cc-…, hop-oc-…, hop-cx-…, hop-cu-….
     var tag: String {
         switch self {
         case .claude: "cc"
         case .opencode: "oc"
+        case .codex: "cx"
+        case .cursor: "cu"
+        }
+    }
+
+    /// herdr's `--kind` for it (herdr starts its canonical executable).
+    var herdrKind: String { rawValue }
+
+    /// Who speaks in the transcript.
+    var speaker: String {
+        switch self {
+        case .claude: "Claude"
+        case .opencode: "OpenCode"
+        case .codex: "Codex"
+        case .cursor: "Cursor"
+        }
+    }
+}
+
+/// How much a new session may do without asking (⌘M in the form), mapped onto each agent's flags.
+nonisolated enum AgentPermissionMode: String, CaseIterable, Sendable, Decodable {
+    /// Asks before edits and commands: the agent's own default.
+    case supervised
+    /// Edits files on its own, asks before commands.
+    case acceptEdits
+    /// The agent's automatic approval mode (a classifier or reviewer decides).
+    case auto
+    /// No questions and no sandbox.
+    case full
+
+    var label: String {
+        switch self {
+        case .supervised: "Supervised"
+        case .acceptEdits: "Auto-accept edits"
+        case .auto: "Auto"
+        case .full: "Full access"
+        }
+    }
+
+    /// The flags that select it. Supervised adds none for Claude Code (its default, and the
+    /// value's name changed between versions); an agent without a match gets none.
+    func arguments(for provider: AgentProvider) -> [String] {
+        switch (provider, self) {
+        case (.claude, .supervised): []
+        case (.claude, .acceptEdits): ["--permission-mode", "acceptEdits"]
+        case (.claude, .auto): ["--permission-mode", "auto"]
+        case (.claude, .full): ["--permission-mode", "bypassPermissions"]
+        case (.codex, .supervised): ["--sandbox", "read-only", "--ask-for-approval", "on-request"]
+        case (.codex, .acceptEdits): ["--sandbox", "workspace-write", "--ask-for-approval", "on-request"]
+        case (.codex, .auto): ["--approve-for-me"]
+        case (.codex, .full): ["--dangerously-bypass-approvals-and-sandbox"]
+        // OpenCode has no reviewer: Auto runs supervised (as in T3 Code); --auto is Full access.
+        case (.opencode, .full): ["--auto"]
+        case (.cursor, .full): ["--force"]
+        default: []
         }
     }
 }
@@ -27,6 +84,8 @@ nonisolated enum AgentKind: String, Sendable {
     /// A headless child of `claude rc` (Remote Control server mode): no terminal to attach,
     /// continued in the Claude app or on claude.ai/code.
     case remoteControl
+    /// A chat hop drives itself (`ChatSessions`): no terminal, the panel is its window.
+    case chat
 }
 
 /// What a session is doing, in the order the panel lists them.
@@ -79,6 +138,8 @@ nonisolated struct TranscriptEntry: Equatable, Sendable {
     var date: Date?
     /// Tool calls: the id their result refers to.
     var toolID: String?
+    /// File-editing tool calls: what they change, as a unified-ish diff.
+    var diff: String? = nil
 }
 
 /// An agent session: live (a process or tmux session) or recently finished.
@@ -97,7 +158,7 @@ nonisolated struct AgentSession: Equatable, Sendable {
     var tmux: String?
     /// Claude Code remote-control session ("session_…"), open on claude.ai/code.
     var bridgeID: String?
-    /// Local transcript (Claude JSONL); nil for OpenCode and remote sessions.
+    /// Local transcript (Claude JSONL, Codex rollout); nil for OpenCode and remote sessions.
     var transcript: String?
     /// Short extra detail for the status: "Bash permission", "failed".
     var detail: String?
@@ -136,11 +197,12 @@ nonisolated struct AgentSession: Equatable, Sendable {
     var isAttachable: Bool { tmux != nil || herdrPane != nil }
 
     /// Live but in neither (a `claude rc` child, or a terminal hop cannot reach): watch only.
-    var isViewOnly: Bool { status != .finished && !isAttachable }
+    var isViewOnly: Bool { status != .finished && !isAttachable && kind != .chat }
 
     /// Short row tag for how it can be reached: "tmux" (attach), "rc" (view only, open in
     /// Claude), "view only"; nil once finished. The detail header spells it out.
     var accessTag: String? {
+        if kind == .chat { return "chat" }
         if tmux != nil { return "tmux" }
         if herdrPane != nil { return "herdr" }
         guard isViewOnly else { return nil }
@@ -211,6 +273,8 @@ nonisolated enum AgentNames {
     static func provider(ofTmux name: String) -> AgentProvider? {
         if name.hasPrefix("hop-cc-") { return .claude }
         if name.hasPrefix("hop-oc-") { return .opencode }
+        if name.hasPrefix("hop-cx-") { return .codex }
+        if name.hasPrefix("hop-cu-") { return .cursor }
         return nil
     }
 

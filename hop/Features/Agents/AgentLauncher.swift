@@ -12,12 +12,21 @@ enum AgentLauncher {
 
     /// Starts `spawn` in what `agents.multiplexer` (or the host's) asks for.
     static func start(_ spawn: AgentCommands.Spawn, host: HopConfig.Agents.Host?, config: HopConfig.Agents) async -> Started {
+        var spawn = spawn
+        if host == nil, spawn.worktree != nil {
+            switch await makeLocalWorktree(spawn, config: config) {
+            case .success(let path):
+                spawn.cwd = path
+                spawn.worktree = nil
+            case .failure(let f):
+                return Started(error: f.text)
+            }
+        }
         guard config.multiplexer(for: host) == .herdr else { return Started(error: await startTmux(spawn, host: host, config: config)) }
         if let host {
-            let binary = spawn.provider == .claude ? host.claude : host.opencode
-            let agent = AgentCommands.agentArguments(spawn, binary: binary.isEmpty ? spawn.provider.rawValue : binary, config: config)
+            let agent = AgentCommands.agentArguments(spawn, binary: host.binary(for: spawn.provider), config: config)
             guard Herdr.isValidName(spawn.tmuxName) else { return Started(error: "“\(spawn.tmuxName)” is not a name herdr takes") }
-            let script = AgentCommands.remoteHerdrSpawnScript(spawn, agent: agent, herdr: host.herdr.isEmpty ? "herdr" : host.herdr)
+            let script = AgentCommands.remoteHerdrSpawnScript(spawn, agent: agent, herdr: host.herdr.isEmpty ? "herdr" : host.herdr, config: config)
             guard let r = try? await ProcessRunner.run("/usr/bin/ssh", AgentCommands.sshArguments(host.ssh), stdin: Data(script.utf8),
                                                        timeout: .seconds(40)) else { return Started(error: "ssh could not start") }
             let fallback = r.out.split(whereSeparator: \.isNewline).first { $0.hasPrefix("fallback: ") }.map { String($0.dropFirst(10)) }
@@ -51,7 +60,7 @@ enum AgentLauncher {
         guard ws.ok, let pane = Herdr.rootPane(ws.stdout) else { return Herdr.errorMessage(ws.err + ws.out) }
         // herdr starts its own `claude` / `opencode`; the arguments follow `--`.
         let agent = Herdr.agentStartArguments(AgentCommands.agentArguments(spawn, binary: spawn.provider.rawValue, config: config))
-        let args = ["agent", "start", spawn.tmuxName, "--kind", spawn.provider == .claude ? "claude" : "opencode", "--pane", pane,
+        let args = ["agent", "start", spawn.tmuxName, "--kind", spawn.provider.herdrKind, "--pane", pane,
                     "--timeout", "20000", "--"] + agent
         guard let r = try? await ProcessRunner.run(herdr, args, timeout: .seconds(30)) else { return "herdr agent start did not answer" }
         // Blocked at startup (Claude's trust question, say) still started it: the panel shows why.
@@ -62,9 +71,8 @@ enum AgentLauncher {
     /// Starts `spawn` in tmux; returns an error message, or nil when tmux took it.
     static func startTmux(_ spawn: AgentCommands.Spawn, host: HopConfig.Agents.Host?, config: HopConfig.Agents) async -> String? {
         if let host {
-            let binary = spawn.provider == .claude ? host.claude : host.opencode
-            let agent = AgentCommands.agentArguments(spawn, binary: binary.isEmpty ? spawn.provider.rawValue : binary, config: config)
-            let script = AgentCommands.remoteSpawnScript(spawn, agent: agent)
+            let agent = AgentCommands.agentArguments(spawn, binary: host.binary(for: spawn.provider), config: config)
+            let script = AgentCommands.remoteSpawnScript(spawn, agent: agent, config: config)
             guard let r = try? await ProcessRunner.run("/usr/bin/ssh", AgentCommands.sshArguments(host.ssh), stdin: Data(script.utf8),
                                                        timeout: .seconds(20)) else { return "ssh could not start" }
             return r.ok ? nil : (r.err.split(whereSeparator: \.isNewline).last.map(String.init) ?? "ssh exited with \(r.status)")
@@ -82,6 +90,37 @@ enum AgentLauncher {
         let args = AgentCommands.localTmuxArguments(spawn, agent: agent, path: path)
         guard let r = try? await ProcessRunner.run(tmux, args, timeout: .seconds(10)) else { return "tmux could not start" }
         return r.ok ? nil : r.err.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    nonisolated struct Failure: Error { let text: String }
+
+    /// A new git worktree of the spawn's folder on this Mac; its path (at the same subfolder).
+    static func makeLocalWorktree(_ spawn: AgentCommands.Spawn, config: HopConfig.Agents) async -> Result<String, Failure> {
+        let path = await AgentTools.loginPath()
+        let env = ["PATH": path, "HOME": FileManager.default.homeDirectoryForCurrentUser.path]
+        guard let r = try? await ProcessRunner.run("/bin/bash", ["-s"], stdin: Data(AgentCommands.localWorktreeScript(spawn, config: config).utf8),
+                                                   environment: env, timeout: .seconds(30))
+        else { return .failure(Failure(text: "git could not start")) }
+        let last = r.out.split(whereSeparator: \.isNewline).last.map(String.init) ?? ""
+        guard r.ok, last.hasPrefix("/") else {
+            return .failure(Failure(text: r.err.split(whereSeparator: \.isNewline).last.map(String.init) ?? "git worktree failed (\(r.status))"))
+        }
+        return .success(last)
+    }
+
+    /// `git status` and the diff of a session's folder, here or over ssh (`AgentCommands.diffScript`).
+    static func changes(cwd: String, host: HopConfig.Agents.Host?) async -> Result<GitChanges, Failure> {
+        let script = Data(AgentCommands.diffScript(cwd: cwd).utf8)
+        let r: ProcessResult?
+        if let host {
+            r = try? await ProcessRunner.run("/usr/bin/ssh", AgentCommands.sshArguments(host.ssh), stdin: script, timeout: .seconds(20))
+        } else {
+            let env = ["PATH": await AgentTools.loginPath(), "HOME": FileManager.default.homeDirectoryForCurrentUser.path]
+            r = try? await ProcessRunner.run("/bin/bash", ["-s"], stdin: script, environment: env, timeout: .seconds(15))
+        }
+        guard let r else { return .failure(Failure(text: host == nil ? "git could not start" : "ssh could not start")) }
+        guard r.ok else { return .failure(Failure(text: r.err.split(whereSeparator: \.isNewline).last.map(String.init) ?? "exit \(r.status)")) }
+        return .success(GitChanges.parse(r.out))
     }
 
     /// Ends a tmux session hop started.

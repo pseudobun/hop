@@ -52,6 +52,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Theme.registerFonts()
 
         let settings = AppSettings()
+        Theme.variant = settings.data.general.theme
         let frecency = FrecencyStore(store: JSONStore(url: AppPaths.file("frecency.json")))
         let apps = AppIndex()
         services = Services(settings: settings, frecency: frecency, apps: apps)
@@ -350,6 +351,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Applies config changes: hotkey, login item, menu bar icon, feature commands.
     private func apply(_ config: HopConfig, previous: HopConfig?) {
+        if let previous, previous.general.theme != config.general.theme {
+            relaunch()
+            return
+        }
         if previous?.hyperKey != config.hyperKey {
             hyper.update(enabled: config.hyperKey.enabled, quickPressEscape: config.hyperKey.quickPressEscape)
         }
@@ -636,6 +641,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         hyper.stop()
         expander.stop()
         messageWatcher.stop()
+        // hop's chats end with it (Continue in Chat picks them up again).
+        agents?.chats.detachAll()
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
@@ -643,3 +650,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return false
     }
 }
+
+extension AppDelegate {
+    /// Views take their colours and fonts when they are built: a new theme needs a fresh start.
+    func relaunch() {
+        let path = Bundle.main.bundleURL.path
+        let task = Process()
+        task.executableURL = URL(fileURLWithPath: "/bin/sh")
+        task.arguments = ["-c", "sleep 0.5; /usr/bin/open \"$0\"", path]
+        try? task.run()
+        NSApp.terminate(nil)
+    }
+}
+

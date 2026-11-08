@@ -1,0 +1,8 @@
+{"type":"system","subtype":"init","cwd":"/private/tmp/claude-501/l2-engine/cc1","session_id":"39f5458e-665b-443a-9771-6607b1566351","model":"claude-haiku-5-5","permissionMode":"default"}
+{"type":"system","subtype":"status","status":"requesting","session_id":"39f5458e-665b-443a-9771-6607b1566351","uuid":"90eb0889-863e-43bb-a8e1-833077cb7538"}
+{"type":"stream_event","event":{"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}},"session_id":"39f5458e-665b-443a-9771-6607b1566351","parent_tool_use_id":null}
+{"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"ok"}},"session_id":"39f5458e-665b-443a-9771-6607b1566351","parent_tool_use_id":null}
+{"type":"assistant","message":{"model":"claude-haiku-5-5","id":"msg_011CgqwYkkxDgKm8TmNBsvBq","type":"message","role":"assistant","content":[{"type":"text","text":"ok"}]},"parent_tool_use_id":null,"session_id":"39f5458e-665b-443a-9771-6607b1566351","uuid":"95be55ca-609b-4c2b-83ab-af1fd687d438"}
+{"type":"stream_event","event":{"type":"content_block_stop","index":0},"session_id":"39f5458e-665b-443a-9771-6607b1566351","parent_tool_use_id":null}
+{"type":"system","subtype":"post_turn_summary","summarizes_uuid":"95be55ca-609b-4c2b-83ab-af1fd687d438","status_category":"completed","status_detail":"replied with the requested word: ok","needs_action":"","uuid":"7cbb578b-657e-4735-863c-c6ab514095e9","session_id":"39f5458e-665b-443a-9771-6607b1566351"}
+{"type":"result","subtype":"success","is_error":false,"result":"ok","session_id":"39f5458e-665b-443a-9771-6607b1566351","num_turns":1,"duration_ms":4640,"total_cost_usd":0.010361800000000001,"stop_reason":"end_turn"}
