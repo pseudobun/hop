@@ -145,7 +145,8 @@ final class RootMode: Mode {
                               }], tracksFrecency: false))
         }
         checkPermissions()
-        let missing = missingPermissions
+        // ⌘Space has its own one-click row below.
+        let missing = missingPermissions.filter { $0 != .spotlightShortcut }
         if !missing.isEmpty, let make = permissionsMode {
             setup.append(Item(id: "setup.permissions", title: "Finish Setup",
                               subtitle: "Allow \(missing.map(\.title).joined(separator: ", "))",
@@ -153,8 +154,7 @@ final class RootMode: Mode {
                               actions: [Action(title: "Show Permissions") { .push(make()) }],
                               tracksFrecency: false, pushesMode: true))
         }
-        if settings.data.general.hotkey.lowercased().replacingOccurrences(of: " ", with: "") == "cmd+space",
-           let hint = SpotlightHotkey.hintItem() {
+        if missingPermissions.contains(.spotlightShortcut), let hint = SpotlightHotkey.hintItem() {
             setup.append(hint)
         }
         sections.append(ResultSection(title: "Setup", items: setup))
@@ -263,7 +263,7 @@ final class RootMode: Mode {
 
 /// Spotlight's symbolic hotkey (64) takes ⌘Space unless it is disabled or rebound.
 enum SpotlightHotkey {
-    static var ownsCommandSpace: Bool {
+    nonisolated static var ownsCommandSpace: Bool {
         guard let all = CFPreferencesCopyAppValue("AppleSymbolicHotKeys" as CFString,
                                                   "com.apple.symbolichotkeys" as CFString) as? [String: Any],
               let entry = all["64"] as? [String: Any]
@@ -276,13 +276,45 @@ enum SpotlightHotkey {
         return p[1] == 49 && p[2] == 1 << 20
     }
 
+    /// Only matters while hop's own hotkey is ⌘Space.
+    nonisolated static func relevant(for config: HopConfig) -> Bool {
+        config.general.hotkey.lowercased().replacingOccurrences(of: " ", with: "") == "cmd+space"
+    }
+
+    /// Disables Spotlight's ⌘Space (symbolic hotkey 64) and applies it to the running session.
+    /// Returns whether ⌘Space is free afterwards.
+    nonisolated static func disable() -> Bool {
+        let domain = "com.apple.symbolichotkeys" as CFString, key = "AppleSymbolicHotKeys" as CFString
+        var all = (CFPreferencesCopyAppValue(key, domain) as? [String: Any]) ?? [:]
+        var entry = (all["64"] as? [String: Any]) ?? [
+            "value": ["parameters": [32, 49, 1 << 20], "type": "standard"] as [String: Any],
+        ]
+        entry["enabled"] = false
+        all["64"] = entry
+        CFPreferencesSetAppValue(key, all as CFDictionary, domain)
+        CFPreferencesAppSynchronize(domain)
+        // Without this the change only lands at the next login.
+        let activate = Process()
+        activate.executableURL = URL(fileURLWithPath: "/System/Library/PrivateFrameworks/SystemAdministration.framework/Resources/activateSettings")
+        activate.arguments = ["-u"]
+        try? activate.run()
+        activate.waitUntilExit()
+        return !ownsCommandSpace
+    }
+
     static func hintItem() -> Item? {
         guard ownsCommandSpace else { return nil }
         return Item(id: "setup.spotlight", title: "Free ⌘Space for hop",
-                    subtitle: "Turn off “Show Spotlight search” in Keyboard Shortcuts",
+                    subtitle: "↵ turns off Spotlight's shortcut",
                     icon: .tile("command", Theme.warn), accessory: "Setup",
                     actions: [
-                        Action(title: "Open Keyboard Settings") {
+                        Action(title: "Turn Off Spotlight's ⌘Space") {
+                            let freed = await Task.detached { disable() }.value
+                            if freed { return .dismissWithHUD("⌘Space now opens hop") }
+                            NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.Keyboard-Settings.extension")!)
+                            return .dismiss
+                        },
+                        Action(title: "Open Keyboard Settings", shortcut: .ret(.command)) {
                             NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.Keyboard-Settings.extension")!)
                             return .dismiss
                         },

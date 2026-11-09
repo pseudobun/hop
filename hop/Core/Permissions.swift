@@ -8,7 +8,7 @@ import ServiceManagement
 /// system prompts that grant them.
 /// Nonisolated so the status checks can run off the main thread.
 nonisolated enum Permission: CaseIterable {
-    case accessibility, finderAutomation, downloads, fullDiskAccess, calendar, loginItem
+    case accessibility, finderAutomation, downloads, fullDiskAccess, calendar, loginItem, spotlightShortcut
 
     nonisolated enum Status { case granted, missing, unknown }
 
@@ -20,6 +20,7 @@ nonisolated enum Permission: CaseIterable {
         case .fullDiskAccess: "Full Disk Access"
         case .calendar: "Calendar"
         case .loginItem: "Open at Login"
+        case .spotlightShortcut: "Free ⌘Space"
         }
     }
 
@@ -31,6 +32,7 @@ nonisolated enum Permission: CaseIterable {
         case .fullDiskAccess: "Optional: codes from Messages, removing app data in ~/Library/Containers"
         case .calendar: "Optional: upcoming events and birthdays in search"
         case .loginItem: "Start hop when you log in"
+        case .spotlightShortcut: "Turn off Spotlight's ⌘Space so it opens hop"
         }
     }
 
@@ -42,6 +44,7 @@ nonisolated enum Permission: CaseIterable {
         case .fullDiskAccess: "externaldrive.fill"
         case .calendar: "calendar"
         case .loginItem: "power"
+        case .spotlightShortcut: "command"
         }
     }
 
@@ -53,6 +56,7 @@ nonisolated enum Permission: CaseIterable {
         case .fullDiskAccess: Palette.neutral
         case .calendar: Palette.calendar
         case .loginItem: Theme.good
+        case .spotlightShortcut: Theme.warn
         }
     }
 
@@ -66,6 +70,7 @@ nonisolated enum Permission: CaseIterable {
         case .fullDiskAccess: "com.apple.preference.security?Privacy_AllFiles"
         case .calendar: "com.apple.preference.security?Privacy_Calendars"
         case .loginItem: "com.apple.LoginItems-Settings.extension"
+        case .spotlightShortcut: "com.apple.Keyboard-Settings.extension"
         }
         return URL(string: "x-apple.systempreferences:\(pane)")!
     }
@@ -95,6 +100,8 @@ nonisolated enum Permission: CaseIterable {
             }
         case .loginItem:
             return SMAppService.mainApp.status == .enabled ? .granted : .missing
+        case .spotlightShortcut:
+            return SpotlightHotkey.ownsCommandSpace ? .missing : .granted
         }
     }
 
@@ -121,6 +128,9 @@ nonisolated enum Permission: CaseIterable {
             ConfigEditor.setBool("openAtLogin", true)
             do { try SMAppService.mainApp.register() } catch { SMAppService.openSystemSettingsLoginItems() }
             if SMAppService.mainApp.status == .requiresApproval { SMAppService.openSystemSettingsLoginItems() }
+        case .spotlightShortcut:
+            let freed = await Task.detached { SpotlightHotkey.disable() }.value
+            if !freed { NSWorkspace.shared.open(settingsURL) }
         }
     }
 
@@ -140,6 +150,7 @@ nonisolated enum Permission: CaseIterable {
         if config.hyperKey.enabled || config.keepass.enabled || config.clipboard.enabled
             || (config.snippets.enabled && config.snippets.expand) { needed.insert(.accessibility, at: 0) }
         if !config.general.openAtLogin { needed.removeAll { $0 == .loginItem } }
+        if SpotlightHotkey.relevant(for: config) { needed.append(.spotlightShortcut) }
         return needed.filter { $0.status() != .granted }
     }
 }
@@ -199,8 +210,7 @@ final class PermissionsMode: Mode {
 
     func sections(for query: String) -> [ResultSection] {
         let config = config()
-        let all = Permission.allCases
-        _ = config
+        let all = Permission.allCases.filter { $0 != .spotlightShortcut || SpotlightHotkey.relevant(for: config) }
         let missing = all.filter { !$0.isOptional && $0.status() != .granted }
         var top: [Item] = []
         if !missing.isEmpty {
