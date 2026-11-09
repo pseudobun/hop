@@ -2,7 +2,7 @@
 
 <h1>hop</h1>
 
-A tiny native macOS launcher. Pure Swift + AppKit, no WebKit. ~3.5 MB binary, ~40 MB RAM, 0 % idle CPU. Dark, dense and quiet: Outfit for text, Geist Mono for values, colours from a small set of design tokens.
+A tiny native macOS launcher. Pure Swift + AppKit, no WebKit. ~3 MB binary, ~40 MB RAM, 0 % idle CPU. Dark, dense and quiet: Outfit for text, Geist Mono for values, colours from a small set of design tokens.
 
 </div>
 
