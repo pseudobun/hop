@@ -605,12 +605,14 @@ final class AppSettings {
             return
         }
         let text = String(decoding: raw, as: UTF8.self)
+        let (expanded, missing) = ConfigEnv.expand(text, env: ConfigEnv.load(beside: url))
         do {
             let decoder = JSONDecoder()
             decoder.allowsJSON5 = true
-            data = try decoder.decode(HopConfig.self, from: raw)
+            data = try decoder.decode(HopConfig.self, from: Data(expanded.utf8))
             error = nil
-            warnings = ConfigDiagnostics.warnings(in: text)
+            warnings = missing.map { ConfigIssue(message: "${\($0)} is not set (.env beside the config)") }
+                + ConfigDiagnostics.warnings(in: text)
         } catch {
             self.error = ConfigDiagnostics.issue(for: error, in: text)
             warnings = []
@@ -664,6 +666,7 @@ final class AppSettings {
     static let template = """
     // hop configuration (JSON5: comments and trailing commas are fine).
     // Saved changes apply immediately. Delete a key to use its default.
+    // ${NAME} in any value is filled from .env beside this file (KEY=value lines).
     {
       general: {
         // cmd, ctrl, alt/opt, shift or hyper, plus a key: "cmd+space", "alt+space", "hyper+k"

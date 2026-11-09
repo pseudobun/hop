@@ -66,6 +66,12 @@ Free ⌘Space first: System Settings → Keyboard → Keyboard Shortcuts → Spo
 
 `~/.config/hop/config.json5` (JSON5, comments allowed) is created on first launch and reloaded on save. `HOP_CONFIG` overrides the path. `hop config check` validates it. Settings (⌘,) edits the same file in place: a changed value is replaced where it stands, a missing key is added at the top of its section, comments and layout stay; a symlinked config is written through the link.
 
+`${NAME}` anywhere in the config is replaced by `NAME` from a `.env` file beside it (`KEY=value` lines), or from hop's environment, so the config can sit in a public dotfiles repo while hosts, paths and other private values stay in a gitignored `.env` (or a sops-encrypted `.env.enc` you decrypt on each machine). A name that is not set stays as written and shows as a config warning. The file keeps its placeholders; Settings never writes the values back.
+
+```json5
+bookmarks: [ { name: "Dashboard", url: "${DASH_URL}" } ],
+```
+
 KeePassXC master password: never put it in the config. Choose `keepass.password`:
 
 | value | where the password comes from |

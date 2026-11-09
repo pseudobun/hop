@@ -1,5 +1,6 @@
 // hop configuration (JSON5: comments and trailing commas are fine).
 // Saved changes apply immediately. Delete a key to use its default.
+// ${NAME} in any value is filled from .env beside this file (KEY=value lines).
 {
   general: {
     // cmd, ctrl, alt/opt, shift or hyper, plus a key: "cmd+space", "alt+space", "hyper+k"
