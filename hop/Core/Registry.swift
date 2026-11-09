@@ -38,6 +38,7 @@ enum Registry {
         var items: [Item] = []
         items += SystemCommands.items(services)
         items += ThemeCommands.items(services)
+        items += PawCommands.items(services)
         items += WireGuardCommands.items(services)
         items += KeePassCommands.items(services)
         items += BookmarkCommands.items(services)
