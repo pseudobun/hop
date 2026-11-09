@@ -27,7 +27,9 @@ install: (build "Release")
     @if [ "{{signing}}" = local ]; then \
       app=build/Build/Products/Release/hop.app; ent=$(mktemp); \
       codesign -d --entitlements :- "$app" > "$ent" 2>/dev/null; \
-      codesign --force --deep --options runtime --entitlements "$ent" -s "{{local_identity}}" "$app" 2>&1 | grep -v "replacing existing"; \
+      if ! codesign --force --deep --options runtime --entitlements "$ent" -s "{{local_identity}}" "$app" 2>/dev/null; then \
+        echo "signing with {{local_identity}} failed (keychain locked?); ad-hoc instead" >&2; \
+        codesign --force --deep --entitlements "$ent" -s - "$app"; fi; \
       rm -f "$ent"; codesign -v "$app"; fi
     -pkill -x hop
     @# hop restores the Caps Lock mapping before it exits; `open` fails (-600) while it is still going
@@ -47,7 +49,9 @@ local-cert:
     d=$(mktemp -d); trap 'rm -rf "$d"' EXIT
     printf '[req]\ndistinguished_name=dn\nprompt=no\nx509_extensions=ext\n[dn]\nCN={{local_identity}}\n[ext]\nbasicConstraints=critical,CA:false\nkeyUsage=critical,digitalSignature\nextendedKeyUsage=critical,codeSigning\n' > "$d/c.cnf"
     openssl req -x509 -newkey rsa:2048 -nodes -keyout "$d/k.pem" -out "$d/c.pem" -days 3650 -config "$d/c.cnf" 2>/dev/null
-    openssl pkcs12 -export -legacy -inkey "$d/k.pem" -in "$d/c.pem" -out "$d/c.p12" -passout pass:hop
+    # macOS's /usr/bin/openssl is LibreSSL: its pkcs12 already uses the legacy algorithms and has no -legacy flag
+    legacy=$(openssl version | grep -q LibreSSL || echo -legacy)
+    openssl pkcs12 -export $legacy -inkey "$d/k.pem" -in "$d/c.pem" -out "$d/c.p12" -passout pass:hop
     security import "$d/c.p12" -k ~/Library/Keychains/login.keychain-db -P hop -T /usr/bin/codesign
     echo "created {{local_identity}}; run just install, then re-grant permissions once"
 
