@@ -120,7 +120,9 @@ nonisolated enum Permission: CaseIterable {
             PermissionLog.downloadsGranted = ok
             if !ok { NSWorkspace.shared.open(settingsURL) }
         case .fullDiskAccess:
+            // macOS has no prompt for Full Disk Access: open the list and show hop.app to drag in.
             NSWorkspace.shared.open(settingsURL)
+            NSWorkspace.shared.activateFileViewerSelecting([Bundle.main.bundleURL])
         case .calendar:
             let granted = CalendarEvents.isUndetermined ? await CalendarEvents.requestAccess() : false
             if !granted { NSWorkspace.shared.open(settingsURL) }

@@ -46,7 +46,7 @@ A full commented config is in [`examples/config.json5`](examples/config.json5) (
 just install   # Release build → /Applications/hop.app, CLI → /opt/homebrew/bin/hop
 ```
 
-With an Apple Development identity in the keychain and a team in `Local.xcconfig` the build is signed, so the Accessibility grant survives updates. Otherwise it is ad-hoc signed (grants reset on every rebuild).
+With an Apple Development identity in the keychain and a team in `Local.xcconfig` the build is signed, so the Accessibility grant survives updates. Without one, `just local-cert` creates a self-signed "hop Local Signing" certificate and `just install` signs with it, which keeps grants across rebuilds too. Otherwise it is ad-hoc signed (grants reset on every rebuild).
 
 ### Building your own copy
 
