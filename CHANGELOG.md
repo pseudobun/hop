@@ -3,6 +3,13 @@
 All notable changes to hop. Versions follow [Semantic Versioning](https://semver.org); entries
 come from [Conventional Commits](https://www.conventionalcommits.org) via release-please.
 
+## [0.1.0-beta.4](https://github.com/pseudobun/hop/compare/v0.1.0-beta.3...v0.1.0-beta.4) (2026-11-10)
+
+
+### Features
+
+* **dev:** build from source as hop Dev, next to the release hop ([#8](https://github.com/pseudobun/hop/issues/8)) ([a3f0603](https://github.com/pseudobun/hop/commit/a3f060386d755985fc75c0e1591ec1d7856ea047))
+
 ## [0.1.0-beta.3](https://github.com/pseudobun/hop/compare/v0.1.0-beta.2...v0.1.0-beta.3) (2026-11-10)
 
 
