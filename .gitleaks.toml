@@ -1,0 +1,7 @@
+# Secret scan (CI runs gitleaks over the whole history).
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Test vectors: an RFC 6238 style TOTP secret (base32 of "1234567890")"
+regexes = ['''GEZDGNBVGY3TQOJQ''']
