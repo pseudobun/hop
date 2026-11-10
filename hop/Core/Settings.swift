@@ -27,9 +27,9 @@ nonisolated struct HopConfig: Decodable, Equatable, Sendable {
 
     /// Sparkle updates from the appcast on GitHub; only release builds (Homebrew, release zip) check.
     nonisolated struct Updates: Decodable, Equatable, Sendable {
-        /// Look for a new version once a day.
+        /// Look for a new version once a day and download it in the background; it installs when hop quits.
         var check = true
-        /// Download and install new versions without asking (hop relaunches by itself).
+        /// Install as soon as it is downloaded (hop restarts by itself).
         var automatic = false
     }
 
@@ -707,11 +707,12 @@ final class AppSettings {
       },
 
       // New versions from GitHub (Sparkle), for builds from Homebrew or a release zip (builds
-      // from source don't check). "Check for Updates…" in the menu bar bunny checks now.
+      // from source don't check). Downloaded in the background without windows; the launcher
+      // shows "Update hop" (and "Update paw") once one is ready, `hop update` installs it now.
       updates: {
-        // Look once a day and offer to install
+        // Look once a day, download in the background, install when hop quits
         check: true,
-        // Install without asking; hop relaunches
+        // Install as soon as it is downloaded; hop restarts
         automatic: false,
       },
 

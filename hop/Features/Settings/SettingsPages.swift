@@ -165,11 +165,12 @@ enum SettingsCatalog {
             ]),
             SettingsSection("Updates", [
                 f("updates.check", "Check for updates", .toggle,
-                  "Once a day; offers new versions from GitHub. Builds from source don't check."),
-                f("updates.automatic", "Install automatically", .toggle, "Without asking; hop relaunches."),
+                  "Once a day, downloaded in the background; installs when hop quits, or from the launcher or hop update."),
+                f("updates.automatic", "Install right away", .toggle, "As soon as it is downloaded; hop restarts."),
                 .info(SettingsInfo(label: "Latest release", lines: { _ in
-                    [Updater.shared.isAvailable ? Updater.shared.state.text : "Builds from source don't check"]
-                }, button: "Check Now", action: .checkForUpdates)),
+                    guard Updater.shared.isAvailable else { return ["Builds from source don't check"] }
+                    return [Updater.shared.pending.map { "hop \($0) is downloaded and ready" } ?? Updater.shared.state.text]
+                }, button: "Update Now", action: .checkForUpdates)),
             ]),
         ])
     }

@@ -63,7 +63,7 @@ Pure Swift and AppKit, no web views of its own. ~40 MB RAM, 0 % idle CPU.
 brew install --cask pseudobun/tap/hop
 ```
 
-The cask installs the signed, notarized `hop.app` and links the `hop` CLI. Releases are on [GitHub](https://github.com/pseudobun/hop/releases) too (`hop-<version>-macos.zip`). hop checks once a day and offers new versions (Sparkle); menu bar bunny → *Check for Updates…* or `hop update` looks right away, `updates.automatic: true` installs them without asking, and `updates.check: false` turns it off. Or `brew upgrade --cask pseudobun/tap/hop`. Builds from source don't check.
+The cask installs the signed, notarized `hop.app` and links the `hop` CLI. Releases are on [GitHub](https://github.com/pseudobun/hop/releases) too (`hop-<version>-macos.zip`). hop looks once a day and downloads a new version in the background (Sparkle, without windows); it installs when hop quits. The launcher shows *Update hop* once one is ready (and *Update paw* for [paw](https://github.com/pseudobun/paw)), `hop update` installs it now and restarts hop, `hop update --check` only looks, `updates.automatic: true` installs right after downloading, and `updates.check: false` turns it off. Or `brew upgrade --cask pseudobun/tap/hop`. Builds from source don't check.
 
 Requires macOS 26 on Apple Silicon.
 

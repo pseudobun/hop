@@ -37,7 +37,7 @@ enum CLI {
         "permissions": permissions,
         "version": { _ in version() },
         "--version": { _ in version() },
-        "update": { _ in await update() },
+        "update": { a in await update(a) },
     ]
 
     /// Runs a CLI command and exits if argv names one; otherwise returns.
@@ -59,17 +59,25 @@ enum CLI {
         return 0
     }
 
-    /// Asks the running hop to check now: Sparkle's window offers a new version, the HUD says the rest.
-    static func update() async -> Int32 {
+    /// `hop update`: the running hop installs the newest version and restarts. `--check` only
+    /// looks (the HUD answers), `status` prints a downloaded version waiting to install (exit 10).
+    static func update(_ a: Args) async -> Int32 {
         guard Updater.isConfigured else {
             return Output.fail("this hop was built from source and has no updater; update it with git pull && just install")
+        }
+        if a.positional.first == "status" {
+            guard let p = PendingUpdate.read() else { print("hop \(AppPaths.version): nothing waiting to install"); return 0 }
+            print("hop \(p.version) is downloaded and installs when hop quits, or now with hop update")
+            return 10
         }
         guard !NSRunningApplication.runningApplications(withBundleIdentifier: AppPaths.bundleID).isEmpty else {
             return Output.fail("hop is not running")
         }
-        DistributedNotificationCenter.default().postNotificationName(Updater.checkNotification, object: nil,
-                                                                     userInfo: nil, deliverImmediately: true)
-        print("checking in the running hop (current: \(AppPaths.version))")
+        let check = a.flags.contains("check")
+        DistributedNotificationCenter.default().postNotificationName(check ? Updater.checkNotification : Updater.installNotification,
+                                                                     object: nil, userInfo: nil, deliverImmediately: true)
+        print(check ? "checking in the running hop (current: \(AppPaths.version)); the HUD answers"
+                    : "the running hop installs the newest version and restarts, if there is one (current: \(AppPaths.version))")
         return 0
     }
 
@@ -101,7 +109,7 @@ enum CLI {
           bookmarks [query] [--json]          Bookmarks from the config; bookmarks open <name>
           permissions [--json]                Which macOS permissions hop has
           version                             hop's version and build
-          update                              Check for a new version in the running hop (Sparkle offers it)
+          update [--check] | status           Install the newest version now (hop restarts); --check only looks
           snippets [list] [--json]            Snippets from snippets.json5 with their keywords
           snippets expand <name|keyword> [--arg=value…]   Print a snippet with its placeholders filled in
           snippets add <name> [text] [--keyword=;k]       Append a snippet (text or stdin)

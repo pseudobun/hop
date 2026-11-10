@@ -53,6 +53,13 @@ nonisolated enum Paw {
         return parse(r.out)
     }
 
+    /// `paw update`: paw installs its downloaded version and restarts.
+    @discardableResult
+    static func update() async -> Bool {
+        guard let exe = executable, let r = try? await ProcessRunner.run(exe, ["update"], timeout: .seconds(120)) else { return false }
+        return r.ok
+    }
+
     static func initiate(_ setup: String) async -> Bool {
         guard let exe = executable, let r = try? await ProcessRunner.run(exe, ["initiate", setup], timeout: .seconds(10)) else { return false }
         return r.ok

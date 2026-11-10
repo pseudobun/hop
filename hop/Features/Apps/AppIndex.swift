@@ -182,9 +182,9 @@ final class AppIndex {
             return
         }
         scanning = true
-        AppScanner.queue.async {
+        AppScanner.queue.async { [weak self] in
             let result = AppScanner.scanBlocking()
-            DispatchQueue.main.async { [weak self] in self?.finished(result) }
+            DispatchQueue.main.async { self?.finished(result) }
         }
     }
 
