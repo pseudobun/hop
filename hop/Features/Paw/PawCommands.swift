@@ -33,7 +33,8 @@ nonisolated struct PawSetup: Sendable, Equatable {
 nonisolated enum Paw {
     /// The paw CLI: on PATH from `just install`, else inside the app.
     static var executable: String? {
-        ["/opt/homebrew/bin/paw", "/usr/local/bin/paw", "/Applications/paw.app/Contents/MacOS/paw"]
+        // `paw` also reaches a running paw Dev; paw-dev is there when only the dev build is installed.
+        ["/opt/homebrew/bin/paw", "/usr/local/bin/paw", "/Applications/paw.app/Contents/MacOS/paw", "/opt/homebrew/bin/paw-dev"]
             .first { FileManager.default.isExecutableFile(atPath: $0) }
     }
 

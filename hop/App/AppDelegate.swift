@@ -451,8 +451,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         Updater.shared.apply(config.updates)
 
+        // A dev build never starts at login; the release hop does.
         let loginEnabled = SMAppService.mainApp.status == .enabled
-        if config.general.openAtLogin != loginEnabled {
+        if !AppPaths.isDev, config.general.openAtLogin != loginEnabled {
             do {
                 if config.general.openAtLogin { try SMAppService.mainApp.register() } else { try SMAppService.mainApp.unregister() }
             } catch {

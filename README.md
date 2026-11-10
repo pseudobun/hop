@@ -94,15 +94,25 @@ brew uninstall --cask pseudobun/tap/hop          # add --zap to remove the confi
 
 ### Building from source
 
-```sh
-git clone https://github.com/pseudobun/hop && cd hop
-cp Local.xcconfig.example Local.xcconfig   # optional: your team id and bundle id
-just install   # Release build → /Applications/hop.app, CLI → /opt/homebrew/bin/hop
-```
+A build from source is **hop Dev**: its own bundle id (`com.pseudobun.hop.dev`), data folder,
+Keychain items and permissions, no updates and no login item. It runs *instead of* the release hop
+without touching it, so you can keep the Homebrew hop installed and switch back and forth.
 
-With an Apple Development identity in the keychain and a team in `Local.xcconfig` the build is signed, so the Accessibility grant survives updates. Without one, `just local-cert` creates a self-signed "hop Local Signing" certificate and `just install` signs with it, which keeps grants across rebuilds too. Otherwise it is ad-hoc signed (grants reset on every rebuild).
+1. Clone and, optionally, add your Apple Developer team:
 
-`Local.xcconfig` is gitignored. It sets `DEVELOPMENT_TEAM` (your Apple Developer team id, for signed builds) and `HOP_BUNDLE_ID` (default `com.pseudobun.hop`, the same as release builds). The bundle id also names hop's data folder (`~/Library/Application Support/<bundle id>`), its Keychain items and its log subsystem, so keep it once you have data; give a build of your own its own id if it runs next to a release hop. Builds from source don't check for releases. Data of the earlier default id `dev.hop.app` is copied over on the first launch.
+   ```sh
+   git clone https://github.com/pseudobun/hop && cd hop
+   cp Local.xcconfig.example Local.xcconfig   # optional: DEVELOPMENT_TEAM, for signed builds
+   ```
+
+2. Without an Apple Development identity, create a stable self-signed one once, so permissions
+   survive rebuilds: `just local-cert`.
+3. `just dev` builds hop Dev into `~/Applications`, quits the release hop and starts the dev one
+   (CLI: `hop-dev`). Grant hop Dev its permissions once.
+4. `just undev` quits hop Dev and starts the release hop again. `just uninstall` removes hop Dev.
+
+`just log` follows both. Data of the earlier default id `dev.hop.app` is copied over on the first
+launch.
 
 ## With paw
 

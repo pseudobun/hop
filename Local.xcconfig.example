@@ -5,9 +5,4 @@
 // signs hop, so macOS keeps its Accessibility grant across rebuilds.
 DEVELOPMENT_TEAM = ABCDE12345
 
-// Your bundle id, so a build of your own doesn't share data, Keychain items and
-// permissions with a release hop (com.pseudobun.hop). Changing it later starts hop
-// with a fresh data folder, Keychain items and permissions.
-HOP_BUNDLE_ID = com.example.hop
-
 // HOP_COPYRIGHT = © Your Name
