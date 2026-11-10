@@ -23,7 +23,7 @@ jobs:
       tag: ${{ steps.rp.outputs.tag_name }}
     steps:
       - id: rp
-        uses: googleapis/release-please-action@v4
+        uses: googleapis/release-please-action@5c625bfb5d1ff62eadeeb3772007f7f66fdcf071 # v4.4.1
         with:
           # A PAT lets CI run on the release PR; GITHUB_TOKEN works without it.
           token: ${{ secrets.RELEASE_TOKEN || github.token }}
