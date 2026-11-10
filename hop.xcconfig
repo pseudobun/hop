@@ -4,7 +4,7 @@
 // Bundle identifier of hop.app; it also names hop's Application Support folder,
 // Keychain items and log subsystem. Tests use "$(HOP_BUNDLE_ID)Tests".
 HOP_BUNDLE_ID = com.pseudobun.hop
-HOP_COPYRIGHT = © hop contributors
+HOP_COPYRIGHT = © Urban Vidovič
 // Apple Developer team for signed builds; empty builds ad-hoc via the justfile.
 DEVELOPMENT_TEAM =
 

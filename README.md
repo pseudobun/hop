@@ -15,7 +15,7 @@ Pure Swift and AppKit, no web views of its own. ~40 MB RAM, 0 % idle CPU.
 [![Swift 6](https://img.shields.io/badge/Swift-6-F05138?logo=swift&logoColor=white)](hop.xcodeproj)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
-[Install](#install) · [Features](#features) · [Config](#config) · [Permissions](#permissions) · [CLI](#cli) · [Development](#development)
+[Install](#install) · [With paw](#with-paw) · [Features](#features) · [Config](#config) · [Permissions](#permissions) · [CLI](#cli) · [Development](#development)
 
 <br>
 
@@ -26,6 +26,100 @@ Pure Swift and AppKit, no web views of its own. ~40 MB RAM, 0 % idle CPU.
 > [!NOTE]
 > hop is in **beta**. It runs as a daily driver, but config keys and commands may still change
 > before 1.0. Read the [changelog](CHANGELOG.md) when you upgrade.
+
+## Install
+
+Requires macOS 26 on Apple Silicon.
+
+### 1. Install with Homebrew
+
+```sh
+brew install --cask pseudobun/tap/hop
+```
+
+This puts the signed, notarized `hop.app` in `/Applications` and the `hop` CLI on your `PATH`.
+Releases are on [GitHub](https://github.com/pseudobun/hop/releases) too (`hop-<version>-macos.zip`).
+
+### 2. Free ⌘Space
+
+System Settings → Keyboard → Keyboard Shortcuts → Spotlight → uncheck *Show Spotlight search*.
+Or keep Spotlight and give hop another `general.hotkey`.
+
+### 3. Start hop and allow its permissions
+
+```sh
+open -a hop
+```
+
+The first launch opens **hop Permissions**: ↵ shows each macOS prompt, **Grant All** asks for all of
+them. Only Accessibility is needed for the core (hyper key, pasting, snippets); the rest unlock
+single features, see [Permissions](#permissions). Updates keep the grants.
+
+### 4. Check it works
+
+```sh
+hop version
+hop permissions      # which grants hop has
+```
+
+Press ⌘Space and type. Your config is at `~/.config/hop/config.json5` (written on first launch,
+commented, nothing personal preset) and applies the moment you save it; ⌘, opens Settings on the
+same file. [`examples/config.json5`](examples/config.json5) and
+[`examples/snippets.json5`](examples/snippets.json5) are the same templates.
+
+### Updates
+
+hop keeps itself current, without windows or prompts:
+
+1. Once a day it looks for a new version and downloads it in the background.
+2. It installs when hop quits, so the next start is the new version.
+3. Until then the empty launcher shows **Update hop to …**; ↵ installs it now and restarts hop
+   (so does `hop update`, or the menu bar bunny).
+
+| Want | Do |
+|---|---|
+| Just look | `hop update --check` (the HUD answers) |
+| What's waiting | `hop update status` (exit 10 when a version is downloaded) |
+| Install right after downloading | `updates.automatic: true` |
+| No checks at all | `updates.check: false` |
+| Homebrew instead | `brew upgrade --cask pseudobun/tap/hop` |
+
+Updates are signed (EdDSA) and keep every permission. Builds from source don't check.
+
+### Uninstall
+
+```sh
+brew uninstall --cask pseudobun/tap/hop          # add --zap to remove the config and data too
+```
+
+### Building from source
+
+```sh
+git clone https://github.com/pseudobun/hop && cd hop
+cp Local.xcconfig.example Local.xcconfig   # optional: your team id and bundle id
+just install   # Release build → /Applications/hop.app, CLI → /opt/homebrew/bin/hop
+```
+
+With an Apple Development identity in the keychain and a team in `Local.xcconfig` the build is signed, so the Accessibility grant survives updates. Without one, `just local-cert` creates a self-signed "hop Local Signing" certificate and `just install` signs with it, which keeps grants across rebuilds too. Otherwise it is ad-hoc signed (grants reset on every rebuild).
+
+`Local.xcconfig` is gitignored. It sets `DEVELOPMENT_TEAM` (your Apple Developer team id, for signed builds) and `HOP_BUNDLE_ID` (default `com.pseudobun.hop`, the same as release builds). The bundle id also names hop's data folder (`~/Library/Application Support/<bundle id>`), its Keychain items and its log subsystem, so keep it once you have data; give a build of your own its own id if it runs next to a release hop. Builds from source don't check for releases. Data of the earlier default id `dev.hop.app` is copied over on the first launch.
+
+## With paw
+
+[paw](https://github.com/pseudobun/paw) is a tiling window manager by the same author. The two
+split the work: hop finds and opens things, paw decides where they go. They talk only through
+paw's CLI, so each runs fine alone, and together:
+
+- **Set Workspace** in hop lists paw's setups (`paw setups --json`); ↵ runs `paw initiate`, which
+  opens that setup's apps and puts every window where its presets say.
+- **Hyper key:** hop's Caps Lock → ⌃⌥⌘⇧ (`hyperKey.enabled`) is the key paw's default bindings
+  use, so you need no Karabiner or Hyperkey for paw.
+- **Updates:** both update the same silent way. When paw has a new version downloaded, hop's
+  launcher shows **Update paw to …** next to its own; ↵ runs `paw update`.
+- **Hotkeys:** Set Workspace is a hop command, so `hotkeys: { "Set Workspace": "hyper+l" }` puts
+  it on a key. Both CLIs are made for scripts and agents.
+
+Install paw with `brew install --cask pseudobun/tap/paw`; hop finds its CLI on its own.
 
 ## Features
 
@@ -56,32 +150,6 @@ Pure Swift and AppKit, no web views of its own. ~40 MB RAM, 0 % idle CPU.
 - Settings on ⌘, (in the launcher, "Settings" in root search, or the menu bar bunny): categories in a sidebar grouped like the config (hop, Keyboard, Tools, AI, Integrations, Advanced) with search, values on the right. Toggles, pickers, steppers and a hotkey recorder write straight into `config.json5`, one key at a time with its comments kept, and apply at once. Bookmarks, KeePassXC databases and `hotkeys` bindings are listed with a button to the file
 - Permissions screen: every macOS permission hop needs, with the system prompts (opens on first launch)
 - `hop` CLI for scripts and agents
-
-## Install
-
-```sh
-brew install --cask pseudobun/tap/hop
-```
-
-The cask installs the signed, notarized `hop.app` and links the `hop` CLI. Releases are on [GitHub](https://github.com/pseudobun/hop/releases) too (`hop-<version>-macos.zip`). hop looks once a day and downloads a new version in the background (Sparkle, without windows); it installs when hop quits. The launcher shows *Update hop* once one is ready (and *Update paw* for [paw](https://github.com/pseudobun/paw)), `hop update` installs it now and restarts hop, `hop update --check` only looks, `updates.automatic: true` installs right after downloading, and `updates.check: false` turns it off. Or `brew upgrade --cask pseudobun/tap/hop`. Builds from source don't check.
-
-Requires macOS 26 on Apple Silicon.
-
-On first launch hop writes a commented config to `~/.config/hop/config.json5`; nothing personal is preset (KeePassXC and bookmarks start empty, notes point at `~/Notes`). The same file is in [`examples/config.json5`](examples/config.json5), snippets in [`examples/snippets.json5`](examples/snippets.json5); `hop config template` prints it.
-
-Free ⌘Space first: System Settings → Keyboard → Keyboard Shortcuts → Spotlight → uncheck "Show Spotlight search". Or set another `general.hotkey`.
-
-### Building from source
-
-```sh
-git clone https://github.com/pseudobun/hop && cd hop
-cp Local.xcconfig.example Local.xcconfig   # optional: your team id and bundle id
-just install   # Release build → /Applications/hop.app, CLI → /opt/homebrew/bin/hop
-```
-
-With an Apple Development identity in the keychain and a team in `Local.xcconfig` the build is signed, so the Accessibility grant survives updates. Without one, `just local-cert` creates a self-signed "hop Local Signing" certificate and `just install` signs with it, which keeps grants across rebuilds too. Otherwise it is ad-hoc signed (grants reset on every rebuild).
-
-`Local.xcconfig` is gitignored. It sets `DEVELOPMENT_TEAM` (your Apple Developer team id, for signed builds) and `HOP_BUNDLE_ID` (default `com.pseudobun.hop`, the same as release builds). The bundle id also names hop's data folder (`~/Library/Application Support/<bundle id>`), its Keychain items and its log subsystem, so keep it once you have data; give a build of your own its own id if it runs next to a release hop. Builds from source don't check for releases. Data of the earlier default id `dev.hop.app` is copied over on the first launch.
 
 ## Config
 
@@ -218,3 +286,12 @@ Commits follow [Conventional Commits](https://www.conventionalcommits.org). CI b
 [release-please](https://github.com/googleapis/release-please) keeps a release PR open from the commits on `main` (`VERSION`, `CHANGELOG.md`). Merging it tags the version, and `.github/workflows/release.yml` builds `hop.app` with `scripts/release-build.sh`, signs it with a Developer ID, notarizes and staples it, publishes the zip on the GitHub release, signs it for Sparkle and adds it to the appcast (branch `appcast`), and updates the cask in [`pseudobun/homebrew-tap`](https://github.com/pseudobun/homebrew-tap). `just release` (re)builds a tag by hand.
 
 The workflow needs these repository secrets: `MACOS_CERT_P12_BASE64`, `MACOS_CERT_PASSWORD`, `MACOS_DEVELOPER_ID_APP_CERT` (the identity name), `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_PRIVATE_KEY` (base64 App Store Connect API key, for notarization), `SPARKLE_PRIVATE_KEY` (the EdDSA key that signs updates; its public half is in `scripts/release-build.sh`) and `HOMEBREW_TAP_TOKEN`.
+
+## Contributing
+
+Issues and pull requests are welcome. Run `just test` before you open one. Commit messages
+follow [Conventional Commits](https://www.conventionalcommits.org).
+
+## License
+
+[MIT](LICENSE) © Urban Vidovič
