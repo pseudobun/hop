@@ -3,6 +3,13 @@
 All notable changes to hop. Versions follow [Semantic Versioning](https://semver.org); entries
 come from [Conventional Commits](https://www.conventionalcommits.org) via release-please.
 
+## [0.1.0-beta.2](https://github.com/pseudobun/hop/compare/v0.1.0-beta.1...v0.1.0-beta.2) (2026-11-10)
+
+
+### Features
+
+* **updates:** install updates with Sparkle, as paw does ([#3](https://github.com/pseudobun/hop/issues/3)) ([1d2b0e2](https://github.com/pseudobun/hop/commit/1d2b0e2f24637a8f835e7d6e3c52d38eca932fe6))
+
 ## [0.1.0-beta.1](https://github.com/pseudobun/hop/releases/tag/v0.1.0-beta.1) (2026-11-10)
 
 First public beta.
