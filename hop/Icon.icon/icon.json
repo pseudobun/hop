@@ -1,8 +1,8 @@
 {
   "fill": {
     "linear-gradient": [
-      "srgb:0.16471,0.16471,0.18039,1.00000",
-      "srgb:0.05098,0.05098,0.05882,1.00000"
+      "srgb:0.05882,0.05882,0.05882,1.00000",
+      "srgb:0.12157,0.12157,0.12157,1.00000"
     ]
   },
   "groups": [
@@ -12,10 +12,10 @@
           "blend-mode": "normal",
           "glass": false,
           "hidden": false,
-          "image-name": "pseudobun.svg",
-          "name": "pseudobun",
+          "image-name": "hop.svg",
+          "name": "hop",
           "position": {
-            "scale": 1.75,
+            "scale": 2.0,
             "translation-in-points": [
               0,
               0
