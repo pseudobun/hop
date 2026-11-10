@@ -18,3 +18,15 @@ struct UpdaterTests {
         #expect(!Updater.isConfigured)
     }
 }
+
+struct PendingUpdateTests {
+    @Test func pawFileLivesInPawsSupportFolder() {
+        let url = PendingUpdate.url(bundleID: "com.pseudobun.paw")
+        #expect(url.path.hasSuffix("Application Support/com.pseudobun.paw/update.json"))
+    }
+
+    @Test func decodesPawsShape() throws {
+        let info = try JSONDecoder().decode(PendingUpdate.Info.self, from: Data(#"{"build":"73","version":"0.1.0-beta.5"}"#.utf8))
+        #expect(info == .init(version: "0.1.0-beta.5", build: "73"))
+    }
+}

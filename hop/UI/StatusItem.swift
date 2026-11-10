@@ -28,7 +28,7 @@ final class StatusItem: NSObject, NSMenuDelegate {
         menu.addItem(withTitle: "Settings…", action: #selector(openSettings), keyEquivalent: ",").target = self
         menu.addItem(withTitle: "Open Config File…", action: #selector(config), keyEquivalent: "").target = self
         if Updater.shared.isAvailable {
-            updateItem = menu.addItem(withTitle: "Check for Updates…", action: #selector(checkForUpdates), keyEquivalent: "")
+            updateItem = menu.addItem(withTitle: Updater.shared.menuTitle, action: #selector(checkForUpdates), keyEquivalent: "")
             updateItem?.target = self
             menu.delegate = self
         }
@@ -42,11 +42,14 @@ final class StatusItem: NSObject, NSMenuDelegate {
     @objc private func clipboardHistory() { onClipboard() }
     @objc private func openSettings() { onSettings() }
     @objc private func config() { onConfig() }
-    @objc private func checkForUpdates() { Updater.shared.checkNow() }
+    @objc private func checkForUpdates() { Updater.shared.installNow() }
 
     private var updateItem: NSMenuItem?
 
-    func menuNeedsUpdate(_ menu: NSMenu) { updateItem?.isEnabled = Updater.shared.state != .checking }
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        updateItem?.title = Updater.shared.menuTitle
+        updateItem?.isEnabled = Updater.shared.state != .checking
+    }
 
     func remove() { NSStatusBar.system.removeStatusItem(item) }
 

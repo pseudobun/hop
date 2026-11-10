@@ -126,7 +126,7 @@ final class RootMode: Mode {
 
     private func emptySections() -> [ResultSection] {
         var sections: [ResultSection] = []
-        var setup: [Item] = []
+        var setup: [Item] = UpdateRows.items()
         if let error = settings.error {
             setup.append(configItem(id: "setup.configError", title: "Config has an error", issues: [error],
                                     icon: .tile("exclamationmark.triangle.fill", Theme.warn)))

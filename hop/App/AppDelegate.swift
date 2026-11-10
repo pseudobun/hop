@@ -490,7 +490,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case .copy(let text):
             NSPasteboard.general.clearContents()
             NSPasteboard.general.setString(text, forType: .string)
-        case .checkForUpdates: Updater.shared.checkNow()
+        case .checkForUpdates: Updater.shared.installNow()
         }
     }
 
