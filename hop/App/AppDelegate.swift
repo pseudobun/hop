@@ -481,6 +481,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             launcher.show()
             if let make = services.permissionsMode { launcher.push(make()) }
         case .restart: _ = HopApp.restart()
+        case .open(let url): if let u = URL(string: url) { NSWorkspace.shared.open(u) }
+        case .copy(let text):
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(text, forType: .string)
         }
     }
 

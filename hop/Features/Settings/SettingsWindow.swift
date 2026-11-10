@@ -381,6 +381,13 @@ final class SettingsController: NSObject, NSWindowDelegate, NSTableViewDataSourc
             contentStack.setCustomSpacing(22, after: banner)
         }
         for section in page.sections {
+            if section.footer {
+                contentStack.addArrangedSubview(AuthorFooter.make(
+                    width: Self.contentWidth - 2 * Self.pad,
+                    style: .init(foreground: Theme.foreground, muted: Theme.mutedForeground, line: Theme.border,
+                                 font: { Theme.sans($0, $1) })))
+                continue
+            }
             if let title = section.title {
                 let label = NSTextField(labelWithAttributedString: Theme.labelString(title))
                 contentStack.addArrangedSubview(label)

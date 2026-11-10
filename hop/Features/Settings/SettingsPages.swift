@@ -40,8 +40,10 @@ struct SettingsInfo {
     let action: SettingsAction
 }
 
-enum SettingsAction {
+enum SettingsAction: Equatable {
     case openConfig, revealConfig, permissions, restart
+    case open(String)
+    case copy(String)
 }
 
 enum SettingsRow {
@@ -52,6 +54,8 @@ enum SettingsRow {
 struct SettingsSection {
     var title: String?
     var rows: [SettingsRow]
+    /// The About page's footer (`AuthorFooter`) instead of a card.
+    var footer = false
 
     init(_ title: String, _ rows: [SettingsRow]) {
         self.title = title
@@ -61,6 +65,12 @@ struct SettingsSection {
     init(_ rows: [SettingsRow]) {
         title = nil
         self.rows = rows
+    }
+
+    static var authorFooter: SettingsSection {
+        var s = SettingsSection([])
+        s.footer = true
+        return s
     }
 }
 
@@ -81,6 +91,7 @@ struct SettingsPage {
     /// Search text: the page, its labels, help and keys.
     var haystack: String {
         var words = [title, subtitle]
+        if sections.contains(where: \.footer) { words += ["pseudobun", "github", "website", "email"] }
         for row in sections.flatMap(\.rows) {
             switch row {
             case .field(let f): words += [f.label, f.help ?? "", f.key]
@@ -129,7 +140,7 @@ enum SettingsCatalog {
             SettingsGroup(title: "Tools", pages: [clipboard, notes, files, shelf, calculator]),
             SettingsGroup(title: "AI", pages: [emoji, translate, ocr]),
             SettingsGroup(title: "Integrations", pages: [wireguard, keepass, calendar, messages, bookmarks]),
-            SettingsGroup(title: "Advanced", pages: [system, configFile]),
+            SettingsGroup(title: "Advanced", pages: [system, configFile, about]),
         ]
     }
 
@@ -436,6 +447,22 @@ enum SettingsCatalog {
                                    button: "Show", action: .permissions)),
                 .info(SettingsInfo(label: "Restart hop", button: "Restart", action: .restart)),
             ]),
+        ])
+    }
+
+    static var about: SettingsPage {
+        let info = Bundle.main.infoDictionary ?? [:]
+        let version = info["CFBundleShortVersionString"] as? String ?? "–"
+        let build = info["CFBundleVersion"] as? String ?? "–"
+        return SettingsPage(id: "about", title: "About", subtitle: "A launcher for macOS, by pseudobun.",
+                            symbol: "hare.fill", color: Palette.neutral, sections: [
+            SettingsSection("hop", [
+                .info(SettingsInfo(label: "Version", help: "\(version) (build \(build))", button: "Copy",
+                                   action: .copy("\(version) (\(build))"))),
+                .info(SettingsInfo(label: "Source code", help: "github.com/pseudobun/hop", button: "Open",
+                                   action: .open("https://github.com/pseudobun/hop"))),
+            ]),
+            .authorFooter,
         ])
     }
 }
