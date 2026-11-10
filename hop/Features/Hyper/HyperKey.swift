@@ -180,6 +180,8 @@ final class HyperKeyController {
     private var tap: HyperEventTap?
     private var notifyPort: IONotificationPortRef?
     private var iterator: io_iterator_t = 0
+    private var wakeObserver: NSObjectProtocol?
+    private var applyTask: Task<Void, Never>?
 
     var statusText: String {
         if let lastError { return lastError }
@@ -214,6 +216,10 @@ final class HyperKeyController {
         tap = nil
         isRunning = false
         if iterator != 0 { IOObjectRelease(iterator); iterator = 0 }
+        if let wakeObserver { NSWorkspace.shared.notificationCenter.removeObserver(wakeObserver) }
+        wakeObserver = nil
+        applyTask?.cancel()
+        applyTask = nil
         if let notifyPort { IONotificationPortDestroy(notifyPort) }
         notifyPort = nil
         HyperKeyMapping.restoreBlocking()
@@ -224,16 +230,33 @@ final class HyperKeyController {
         guard let port = IONotificationPortCreate(kIOMainPortDefault) else { return }
         IONotificationPortSetDispatchQueue(port, .main)
         notifyPort = port
-        let matching = IOServiceMatching("IOHIDKeyboard")
-        let callback: IOServiceMatchingCallback = { _, iterator in
+        // Keyboards are HID event services with usage page 1 (generic desktop), usage 6 (keyboard);
+        // the old IOHIDKeyboard class no longer exists. Waking from sleep brings them back too.
+        let matching = IOServiceMatching("IOHIDEventService") as NSMutableDictionary
+        matching["PrimaryUsagePage"] = 1
+        matching["PrimaryUsage"] = 6
+        let callback: IOServiceMatchingCallback = { info, iterator in
             while case let obj = IOIteratorNext(iterator), obj != 0 { IOObjectRelease(obj) }
-            Task {
-                try? await Task.sleep(for: .milliseconds(500))
-                await HyperKeyMapping.apply()
-            }
+            guard let info else { return }
+            Unmanaged<HyperKeyController>.fromOpaque(info).takeUnretainedValue().scheduleApply()
         }
-        IOServiceAddMatchingNotification(port, kIOFirstMatchNotification, matching, callback, nil, &iterator)
+        IOServiceAddMatchingNotification(port, kIOFirstMatchNotification, matching, callback,
+                                         Unmanaged.passUnretained(self).toOpaque(), &iterator)
         while case let obj = IOIteratorNext(iterator), obj != 0 { IOObjectRelease(obj) } // arm the notification
+        wakeObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.scheduleApply() }
+        }
+    }
+
+    /// Keyboards attach in bursts (a dock, waking up): apply once they have settled.
+    private func scheduleApply() {
+        applyTask?.cancel()
+        applyTask = Task {
+            try? await Task.sleep(for: .milliseconds(500))
+            guard !Task.isCancelled, isRunning else { return }
+            await HyperKeyMapping.apply()
+        }
     }
 
 }
