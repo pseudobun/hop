@@ -6,8 +6,8 @@
 
 **A tiny native macOS launcher.**
 
-Apps, answers, clipboard history, snippets, notes, files and a CLI in one ~3 MB app.<br>
-Pure Swift and AppKit, no web views of its own. ~40 MB RAM, 0 % idle CPU.
+Apps, answers, clipboard history, snippets, notes, files and a CLI in one small app (~3 MB binary).<br>
+Pure Swift and AppKit, no web views of its own. ~45 MB RAM, 0 % idle CPU.
 
 [![CI](https://github.com/pseudobun/hop/actions/workflows/ci.yml/badge.svg)](https://github.com/pseudobun/hop/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/pseudobun/hop?include_prereleases&label=release&color=7c5cff)](https://github.com/pseudobun/hop/releases)
