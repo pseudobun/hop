@@ -181,6 +181,7 @@ final class LauncherController: NSObject, LauncherContext, NSTableViewDataSource
     func isShowing(_ mode: Mode) -> Bool { current === mode }
 
     func show(query initial: String? = nil) {
+        RunningApps.shared.refresh()
         onWillShow?()
         switch LauncherBehavior.reopen(elapsed: Date().timeIntervalSince(lastHidden), inSubMode: modes.count > 1,
                                        keepQueryFor: keepQueryFor(), popToRootSeconds: popToRootSeconds()) {

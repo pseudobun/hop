@@ -1,7 +1,8 @@
 import AppKit
 
 /// Item ids of apps that show in the Dock right now, kept current from NSWorkspace
-/// launch/terminate notifications (no polling).
+/// launch/terminate notifications, plus a refresh each time hop opens: some apps (Find My)
+/// quit without a terminate notification.
 final class RunningApps {
     static let shared = RunningApps()
 
@@ -22,7 +23,7 @@ final class RunningApps {
     /// `id` is an `AppEntry.id`: "app:" + bundle id, or "app:" + path for unbundled apps.
     func contains(_ id: String) -> Bool { ids.contains(id) }
 
-    private func refresh() {
+    func refresh() {
         var next = Set<String>()
         for app in NSWorkspace.shared.runningApplications where app.activationPolicy == .regular {
             if let bundleID = app.bundleIdentifier { next.insert("app:" + bundleID) }
