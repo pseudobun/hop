@@ -1,9 +1,13 @@
 // Build settings for every target and configuration. Values for your own machine
-// (signing team, bundle id) go in Local.xcconfig: gitignored, see Local.xcconfig.example.
+// (signing team) go in Local.xcconfig: gitignored, see Local.xcconfig.example.
 
 // Bundle identifier of hop.app; it also names hop's Application Support folder,
 // Keychain items and log subsystem. Tests use "$(HOP_BUNDLE_ID)Tests".
-HOP_BUNDLE_ID = com.pseudobun.hop
+// Builds from source are "hop Dev" (com.pseudobun.hop.dev): own data, grants and Keychain
+// items, no updates, no login item, so they run in place of a release hop without touching
+// it. scripts/release-build.sh sets the release values (com.pseudobun.hop, "hop").
+HOP_BUNDLE_ID = com.pseudobun.hop.dev
+HOP_DISPLAY_NAME = hop Dev
 HOP_COPYRIGHT = © Urban Vidovič
 // Apple Developer team for signed builds; empty builds ad-hoc via the justfile.
 DEVELOPMENT_TEAM =

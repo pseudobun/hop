@@ -1,13 +1,18 @@
-# hop — build and install locally.
-# Signs with your Apple Development identity when one is in the keychain and
-# Local.xcconfig sets DEVELOPMENT_TEAM (Accessibility grants then survive rebuilds),
-# otherwise ad-hoc. Bundle id and team: Local.xcconfig (see Local.xcconfig.example).
+# hop: build, test and run a dev build next to the release one.
+# Signs with your Apple Development identity when one is in the keychain and Local.xcconfig sets
+# DEVELOPMENT_TEAM (Accessibility grants then survive rebuilds), else with "hop Local Signing"
+# (just local-cert), else ad-hoc.
+#
+# The release hop comes from Homebrew (brew install --cask pseudobun/tap/hop): /Applications/hop.app,
+# com.pseudobun.hop, CLI `hop`. `just dev` builds "hop Dev" (com.pseudobun.hop.dev, own data,
+# grants and Keychain items, no updates, no login item) into ~/Applications, quits the release hop
+# and starts the dev one; `just undev` goes back. `hop-dev` is the dev build's CLI.
 
-app_dir := "/Applications"
-cli_link := "/opt/homebrew/bin/hop"
+dev_app := env("HOME") / "Applications/hop Dev.app"
+dev_cli := "/opt/homebrew/bin/hop-dev"
+release_id := "com.pseudobun.hop"
 
 local_identity := "hop Local Signing"
-bundle_id := `sed -n 's/^[[:space:]]*HOP_BUNDLE_ID[[:space:]]*=[[:space:]]*//p' hop.xcconfig Local.xcconfig 2>/dev/null | tail -1`
 signing := `security find-identity -v -p codesigning 2>/dev/null | grep -q "Apple Development" && grep -qE "^[[:space:]]*DEVELOPMENT_TEAM[[:space:]]*=[[:space:]]*[A-Z0-9]" Local.xcconfig 2>/dev/null && echo signed || { security find-identity -p codesigning 2>/dev/null | grep -q "hop Local Signing" && echo local || echo adhoc; }`
 adhoc_flags := if signing != "signed" { "CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM=" } else { "" }
 # VERSION (release-please keeps it) and the commit count, as in release builds
@@ -18,13 +23,14 @@ default: build
 # Debug build into ./build.noindex (.noindex keeps Spotlight from listing more hops)
 build config="Debug":
     xcodebuild -project hop.xcodeproj -scheme hop -configuration {{config}} -derivedDataPath build.noindex \
-      -destination "platform=macOS,arch=arm64" -quiet {{adhoc_flags}} {{version_flags}} build
+      -destination "platform=macOS,arch=arm64" -quiet {{adhoc_flags}} {{version_flags}} \
+      HOP_BUNDLE_ID=com.pseudobun.hop.dev "HOP_DISPLAY_NAME=hop Dev" build
 
 test:
     scripts/build-local.sh test
 
-# Release build, copied to /Applications, CLI linked into PATH, relaunched
-install: (build "Release")
+# Build "hop Dev", quit the release hop and run the dev one instead
+dev: (build "Release")
     scripts/verify-binary.sh build.noindex/Build/Products/Release/hop.app
     @# No Apple Development identity: re-sign with the local certificate so TCC grants survive rebuilds.
     @# No hardened runtime: its library validation refuses Sparkle signed without a Team ID.
@@ -35,14 +41,27 @@ install: (build "Release")
         echo "signing with {{local_identity}} failed (keychain locked?); ad-hoc instead" >&2; \
         codesign --force --deep --entitlements "$ent" -s - "$app"; fi; \
       rm -f "$ent"; codesign -v "$app"; fi
-    -pkill -x hop
-    @# hop restores the Caps Lock mapping before it exits; `open` fails (-600) while it is still going
-    @for i in $(seq 1 50); do pgrep -x hop >/dev/null || break; sleep 0.1; done
-    rm -rf "{{app_dir}}/hop.app"
-    cp -R build.noindex/Build/Products/Release/hop.app "{{app_dir}}/hop.app"
-    ln -sf "{{app_dir}}/hop.app/Contents/MacOS/hop" "{{cli_link}}"
-    open "{{app_dir}}/hop.app"
-    @echo "installed {{app_dir}}/hop.app ({{signing}}), CLI at {{cli_link}}"
+    @just _quit
+    rm -rf "{{dev_app}}"
+    mkdir -p "$(dirname "{{dev_app}}")"
+    cp -R build.noindex/Build/Products/Release/hop.app "{{dev_app}}"
+    ln -sf "{{dev_app}}/Contents/MacOS/hop" "{{dev_cli}}"
+    open "{{dev_app}}"
+    @echo "running {{dev_app}} ({{signing}}, CLI: hop-dev); just undev goes back to the release hop"
+
+# Quit the dev build and start the release hop again
+undev:
+    @just _quit
+    open -b {{release_id}}
+
+# The old name: builds and runs the dev build, never touches the release hop
+install: dev
+
+# Quits every hop.app (release and dev). hop restores the Caps Lock mapping before it exits;
+# `open` fails (-600) while it is still going. CLI runs (/opt/homebrew/bin/hop …) don't match.
+_quit:
+    -pkill -f '\.app/Contents/MacOS/hop$'
+    @for i in $(seq 1 50); do pgrep -f '\.app/Contents/MacOS/hop$' >/dev/null || break; sleep 0.1; done
 
 # Self-signed code-signing certificate for machines without an Apple Development identity.
 # Grants (Accessibility, Full Disk Access) then follow the certificate, not each build.
@@ -57,11 +76,13 @@ local-cert:
     legacy=$(openssl version | grep -q LibreSSL || echo -legacy)
     openssl pkcs12 -export $legacy -inkey "$d/k.pem" -in "$d/c.pem" -out "$d/c.p12" -passout pass:hop
     security import "$d/c.p12" -k ~/Library/Keychains/login.keychain-db -P hop -T /usr/bin/codesign
-    echo "created {{local_identity}}; run just install, then re-grant permissions once"
+    echo "created {{local_identity}}; run just dev, then grant hop Dev its permissions once"
 
+# Remove the dev build (the release hop stays; brew uninstall --cask pseudobun/tap/hop removes it)
 uninstall:
-    -pkill -x hop
-    rm -rf "{{app_dir}}/hop.app" "{{cli_link}}"
+    @just _quit
+    rm -rf "{{dev_app}}" "{{dev_cli}}"
+    -open -b {{release_id}}
 
 footprint:
     scripts/check-footprint.sh 30
@@ -77,7 +98,7 @@ release tag=("v" + `tr -d '[:space:]' < VERSION`):
 
 # Follow hop's log
 log:
-    log stream --level info --predicate 'subsystem == "{{bundle_id}}"'
+    log stream --level info --predicate 'subsystem BEGINSWITH "com.pseudobun.hop"'
 
 # Regenerate examples/ from the templates hop writes on first launch
 examples: build

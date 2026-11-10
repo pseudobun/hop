@@ -23,7 +23,7 @@ derived=build.noindex/release-derived
 xcodebuild -project hop.xcodeproj -scheme hop -configuration Release -derivedDataPath "$derived" \
   -destination "platform=macOS,arch=arm64" -quiet \
   CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= \
-  HOP_BUNDLE_ID=com.pseudobun.hop "HOP_COPYRIGHT=© Urban Vidovič" \
+  HOP_BUNDLE_ID=com.pseudobun.hop HOP_DISPLAY_NAME=hop "HOP_COPYRIGHT=© Urban Vidovič" \
   HOP_UPDATE_FEED="$feed" HOP_SPARKLE_PUBLIC_KEY="$sparkle_key" \
   MARKETING_VERSION="$version" CURRENT_PROJECT_VERSION="$build" build
 

@@ -7,6 +7,9 @@ nonisolated enum AppPaths {
     /// so each build identity keeps its own data.
     static let bundleID: String = appBundle.bundleIdentifier ?? "dev.hop.app"
 
+    /// A build from source (`just dev`): `com.pseudobun.hop.dev`, own data, no login item, no updates.
+    static var isDev: Bool { bundleID.hasSuffix(".dev") }
+
     static let supportDir: URL = {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         return base.appending(path: bundleID, directoryHint: .isDirectory)

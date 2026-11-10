@@ -354,7 +354,7 @@
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = hop/Support/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = hop;
+				INFOPLIST_KEY_CFBundleDisplayName = "$(HOP_DISPLAY_NAME)";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				INFOPLIST_KEY_LSUIElement = YES;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "$(HOP_COPYRIGHT)";
@@ -388,7 +388,7 @@
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = hop/Support/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = hop;
+				INFOPLIST_KEY_CFBundleDisplayName = "$(HOP_DISPLAY_NAME)";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				INFOPLIST_KEY_LSUIElement = YES;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "$(HOP_COPYRIGHT)";
