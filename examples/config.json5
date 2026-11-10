@@ -21,12 +21,13 @@
     theme: "og",
   },
 
-  // New versions from GitHub releases, for builds from Homebrew or a release zip (builds
-  // from source don't check). hop says when one is out; brew upgrade installs it.
-  // "Check for Updates…" in the menu bar bunny checks now.
+  // New versions from GitHub (Sparkle), for builds from Homebrew or a release zip (builds
+  // from source don't check). "Check for Updates…" in the menu bar bunny checks now.
   updates: {
-    // Look for a new version once a day
+    // Look once a day and offer to install
     check: true,
+    // Install without asking; hop relaunches
+    automatic: false,
   },
 
   // Global hotkeys for any command or app, on top of general.hotkey, notes.hotkey and

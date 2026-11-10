@@ -59,26 +59,18 @@ enum CLI {
         return 0
     }
 
-    /// Looks for a newer release; exit 10 when there is one, so scripts can tell.
+    /// Asks the running hop to check now: Sparkle's window offers a new version, the HUD says the rest.
     static func update() async -> Int32 {
-        guard let repo = Updater.repository else {
-            print("this hop was built from source and doesn't check releases; update it with git pull && just install")
-            return 1
+        guard Updater.isConfigured else {
+            return Output.fail("this hop was built from source and has no updater; update it with git pull && just install")
         }
-        let current = AppPaths.version
-        do {
-            guard let r = try await ReleaseFeed.latest(repository: repo, includePrereleases: ReleaseVersion.isPrerelease(current)),
-                  ReleaseVersion.isNewer(r.version, than: current) else {
-                print("hop \(current) is the newest version")
-                return 0
-            }
-            print("hop \(r.version) is available (you have \(current)): \(r.url.absoluteString)")
-            print("update: \(Updater.brewCommand)")
-            return 10
-        } catch {
-            print("update check failed: \(error.localizedDescription)")
-            return 1
+        guard !NSRunningApplication.runningApplications(withBundleIdentifier: AppPaths.bundleID).isEmpty else {
+            return Output.fail("hop is not running")
         }
+        DistributedNotificationCenter.default().postNotificationName(Updater.checkNotification, object: nil,
+                                                                     userInfo: nil, deliverImmediately: true)
+        print("checking in the running hop (current: \(AppPaths.version))")
+        return 0
     }
 
     static func help() -> Int32 {
@@ -109,7 +101,7 @@ enum CLI {
           bookmarks [query] [--json]          Bookmarks from the config; bookmarks open <name>
           permissions [--json]                Which macOS permissions hop has
           version                             hop's version and build
-          update                              Look for a newer release (exit 10 when there is one)
+          update                              Check for a new version in the running hop (Sparkle offers it)
           snippets [list] [--json]            Snippets from snippets.json5 with their keywords
           snippets expand <name|keyword> [--arg=value…]   Print a snippet with its placeholders filled in
           snippets add <name> [text] [--keyword=;k]       Append a snippet (text or stdin)

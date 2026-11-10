@@ -165,7 +165,8 @@ enum SettingsCatalog {
             ]),
             SettingsSection("Updates", [
                 f("updates.check", "Check for updates", .toggle,
-                  "Once a day, from GitHub releases; brew upgrade --cask pseudobun/tap/hop installs one. Builds from source don't check."),
+                  "Once a day; offers new versions from GitHub. Builds from source don't check."),
+                f("updates.automatic", "Install automatically", .toggle, "Without asking; hop relaunches."),
                 .info(SettingsInfo(label: "Latest release", lines: { _ in
                     [Updater.shared.isAvailable ? Updater.shared.state.text : "Builds from source don't check"]
                 }, button: "Check Now", action: .checkForUpdates)),

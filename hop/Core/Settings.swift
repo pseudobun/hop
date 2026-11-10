@@ -25,10 +25,12 @@ nonisolated struct HopConfig: Decodable, Equatable, Sendable {
         }
     }
 
-    /// New versions from GitHub releases; only release builds (Homebrew, release zip) check.
+    /// Sparkle updates from the appcast on GitHub; only release builds (Homebrew, release zip) check.
     nonisolated struct Updates: Decodable, Equatable, Sendable {
         /// Look for a new version once a day.
         var check = true
+        /// Download and install new versions without asking (hop relaunches by itself).
+        var automatic = false
     }
 
     nonisolated struct HyperKey: Decodable, Equatable, Sendable {
@@ -323,10 +325,11 @@ nonisolated extension HopConfig {
 }
 
 nonisolated extension HopConfig.Updates {
-    private enum Keys: String, CodingKey { case check }
+    private enum Keys: String, CodingKey { case check, automatic }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: Keys.self), d = Self()
         check = try c.value(.check, d.check)
+        automatic = try c.value(.automatic, d.automatic)
     }
 }
 
@@ -703,12 +706,13 @@ final class AppSettings {
         theme: "og",
       },
 
-      // New versions from GitHub releases, for builds from Homebrew or a release zip (builds
-      // from source don't check). hop says when one is out; brew upgrade installs it.
-      // "Check for Updates…" in the menu bar bunny checks now.
+      // New versions from GitHub (Sparkle), for builds from Homebrew or a release zip (builds
+      // from source don't check). "Check for Updates…" in the menu bar bunny checks now.
       updates: {
-        // Look for a new version once a day
+        // Look once a day and offer to install
         check: true,
+        // Install without asking; hop relaunches
+        automatic: false,
       },
 
       // Global hotkeys for any command or app, on top of general.hotkey, notes.hotkey and

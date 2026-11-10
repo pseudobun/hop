@@ -7,7 +7,7 @@
 **A tiny native macOS launcher.**
 
 Apps, answers, clipboard history, snippets, notes, files and a CLI in one ~3 MB app.<br>
-Pure Swift and AppKit, no WebKit. ~40 MB RAM, 0 % idle CPU.
+Pure Swift and AppKit, no web views of its own. ~40 MB RAM, 0 % idle CPU.
 
 [![CI](https://github.com/pseudobun/hop/actions/workflows/ci.yml/badge.svg)](https://github.com/pseudobun/hop/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/pseudobun/hop?include_prereleases&label=release&color=7c5cff)](https://github.com/pseudobun/hop/releases)
@@ -63,7 +63,7 @@ Pure Swift and AppKit, no WebKit. ~40 MB RAM, 0 % idle CPU.
 brew install --cask pseudobun/tap/hop
 ```
 
-The cask installs the signed, notarized `hop.app` and links the `hop` CLI. Releases are on [GitHub](https://github.com/pseudobun/hop/releases) too (`hop-<version>-macos.zip`). hop looks for a new release once a day (`updates.check`) and says when one is out; `brew upgrade --cask pseudobun/tap/hop` installs it, `hop update` checks from the terminal.
+The cask installs the signed, notarized `hop.app` and links the `hop` CLI. Releases are on [GitHub](https://github.com/pseudobun/hop/releases) too (`hop-<version>-macos.zip`). hop checks once a day and offers new versions (Sparkle); menu bar bunny → *Check for Updates…* or `hop update` looks right away, `updates.automatic: true` installs them without asking, and `updates.check: false` turns it off. Or `brew upgrade --cask pseudobun/tap/hop`. Builds from source don't check.
 
 Requires macOS 26 on Apple Silicon.
 
@@ -215,6 +215,6 @@ Commits follow [Conventional Commits](https://www.conventionalcommits.org). CI b
 
 ### Releasing
 
-[release-please](https://github.com/googleapis/release-please) keeps a release PR open from the commits on `main` (`VERSION`, `CHANGELOG.md`). Merging it tags the version, and `.github/workflows/release.yml` builds `hop.app` with `scripts/release-build.sh`, signs it with a Developer ID, notarizes and staples it, publishes the zip on the GitHub release and updates the cask in [`pseudobun/homebrew-tap`](https://github.com/pseudobun/homebrew-tap). `just release` (re)builds a tag by hand.
+[release-please](https://github.com/googleapis/release-please) keeps a release PR open from the commits on `main` (`VERSION`, `CHANGELOG.md`). Merging it tags the version, and `.github/workflows/release.yml` builds `hop.app` with `scripts/release-build.sh`, signs it with a Developer ID, notarizes and staples it, publishes the zip on the GitHub release, signs it for Sparkle and adds it to the appcast (branch `appcast`), and updates the cask in [`pseudobun/homebrew-tap`](https://github.com/pseudobun/homebrew-tap). `just release` (re)builds a tag by hand.
 
-The workflow needs these repository secrets: `MACOS_CERT_P12_BASE64`, `MACOS_CERT_PASSWORD`, `MACOS_DEVELOPER_ID_APP_CERT` (the identity name), `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_PRIVATE_KEY` (base64 App Store Connect API key, for notarization) and `HOMEBREW_TAP_TOKEN`.
+The workflow needs these repository secrets: `MACOS_CERT_P12_BASE64`, `MACOS_CERT_PASSWORD`, `MACOS_DEVELOPER_ID_APP_CERT` (the identity name), `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_PRIVATE_KEY` (base64 App Store Connect API key, for notarization), `SPARKLE_PRIVATE_KEY` (the EdDSA key that signs updates; its public half is in `scripts/release-build.sh`) and `HOMEBREW_TAP_TOKEN`.
