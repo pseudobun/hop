@@ -11,7 +11,7 @@ args=(
   -project hop.xcodeproj
   -scheme hop
   -configuration "$config"
-  -derivedDataPath build
+  -derivedDataPath build.noindex
   -destination "platform=macOS,arch=arm64"
   CODE_SIGN_IDENTITY=-
   CODE_SIGN_STYLE=Manual
@@ -28,5 +28,5 @@ fi
 xcodebuild "${args[@]}" -quiet build
 mkdir -p "$HOME/Applications"
 rm -rf "$HOME/Applications/hop.app"
-cp -R "build/Build/Products/$config/hop.app" "$HOME/Applications/hop.app"
+cp -R "build.noindex/Build/Products/$config/hop.app" "$HOME/Applications/hop.app"
 echo "installed: $HOME/Applications/hop.app"

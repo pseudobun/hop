@@ -3,7 +3,7 @@
 # Usage: scripts/verify-binary.sh [path/to/hop.app]
 set -euo pipefail
 
-app="${1:-build/Build/Products/Release/hop.app}"
+app="${1:-build.noindex/Build/Products/Release/hop.app}"
 bin="$app/Contents/MacOS/hop"
 limit=$((6 * 1024 * 1024))
 

@@ -12,9 +12,9 @@ adhoc_flags := if signing != "signed" { "CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Ma
 
 default: build
 
-# Debug build into ./build
+# Debug build into ./build.noindex (.noindex keeps Spotlight from listing more hops)
 build config="Debug":
-    xcodebuild -project hop.xcodeproj -scheme hop -configuration {{config}} -derivedDataPath build \
+    xcodebuild -project hop.xcodeproj -scheme hop -configuration {{config}} -derivedDataPath build.noindex \
       -destination "platform=macOS,arch=arm64" -quiet {{adhoc_flags}} build
 
 test:
@@ -22,10 +22,10 @@ test:
 
 # Release build, copied to /Applications, CLI linked into PATH, relaunched
 install: (build "Release")
-    scripts/verify-binary.sh build/Build/Products/Release/hop.app
+    scripts/verify-binary.sh build.noindex/Build/Products/Release/hop.app
     @# No Apple Development identity: re-sign with the local certificate so TCC grants survive rebuilds
     @if [ "{{signing}}" = local ]; then \
-      app=build/Build/Products/Release/hop.app; ent=$(mktemp); \
+      app=build.noindex/Build/Products/Release/hop.app; ent=$(mktemp); \
       codesign -d --entitlements :- "$app" > "$ent" 2>/dev/null; \
       if ! codesign --force --deep --options runtime --entitlements "$ent" -s "{{local_identity}}" "$app" 2>/dev/null; then \
         echo "signing with {{local_identity}} failed (keychain locked?); ad-hoc instead" >&2; \
@@ -35,7 +35,7 @@ install: (build "Release")
     @# hop restores the Caps Lock mapping before it exits; `open` fails (-600) while it is still going
     @for i in $(seq 1 50); do pgrep -x hop >/dev/null || break; sleep 0.1; done
     rm -rf "{{app_dir}}/hop.app"
-    cp -R build/Build/Products/Release/hop.app "{{app_dir}}/hop.app"
+    cp -R build.noindex/Build/Products/Release/hop.app "{{app_dir}}/hop.app"
     ln -sf "{{app_dir}}/hop.app/Contents/MacOS/hop" "{{cli_link}}"
     open "{{app_dir}}/hop.app"
     @echo "installed {{app_dir}}/hop.app ({{signing}}), CLI at {{cli_link}}"
@@ -64,5 +64,5 @@ footprint:
 
 # Regenerate examples/ from the templates hop writes on first launch
 examples: build
-    build/Build/Products/Debug/hop.app/Contents/MacOS/hop config template > examples/config.json5
-    build/Build/Products/Debug/hop.app/Contents/MacOS/hop snippets template > examples/snippets.json5
+    build.noindex/Build/Products/Debug/hop.app/Contents/MacOS/hop config template > examples/config.json5
+    build.noindex/Build/Products/Debug/hop.app/Contents/MacOS/hop snippets template > examples/snippets.json5
