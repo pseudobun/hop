@@ -1,7 +1,7 @@
 name: Release
 
-# Builds, signs, notarizes and publishes one version: the GitHub release's zip and the Homebrew
-# cask. release-please calls it after a release PR merges; run it by hand to (re)build a tag.
+# Builds, signs, notarizes and publishes one version: the GitHub release's zip, the Sparkle
+# appcast (branch `appcast`) and the Homebrew cask. release-please calls it after a release PR merges; run it by hand to (re)build a tag.
 on:
   workflow_call:
     inputs:
@@ -102,6 +102,18 @@ jobs:
           echo "SHA256=$SHA256" >> "$GITHUB_ENV"
           printf '%s  %s\n' "$SHA256" "$(basename "$ZIP")" > "$ZIP.sha256"
 
+      - name: Sign the update
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+        run: |
+          SIGN_UPDATE="$(find build.noindex/release-derived/SourcePackages/artifacts -path '*/bin/sign_update' -type f | head -1)"
+          [ -x "$SIGN_UPDATE" ] || { echo "::error::Sparkle's sign_update not found"; exit 1; }
+          KEY="$RUNNER_TEMP/sparkle.key"
+          printf '%s' "$SPARKLE_PRIVATE_KEY" > "$KEY"
+          SIG="$("$SIGN_UPDATE" --ed-key-file "$KEY" "$ZIP")"
+          rm -f "$KEY"
+          echo "SPARKLE_SIG=$SIG" >> "$GITHUB_ENV"
+
       - name: Publish GitHub release
         run: |
           if ! git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null; then
@@ -116,6 +128,26 @@ jobs:
               --notes-file "$RUNNER_TEMP/notes.md" --verify-tag "${flags[@]}"
           fi
           gh release edit "$TAG" --title "hop $VERSION" $([ "$PRERELEASE" = true ] && echo --prerelease)
+
+      - name: Update the appcast
+        run: |
+          URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/$TAG/$(basename "$ZIP")"
+          DIR="$RUNNER_TEMP/appcast"
+          if git ls-remote --exit-code --heads origin appcast >/dev/null; then
+            git fetch -q origin appcast
+            git worktree add -B appcast "$DIR" origin/appcast
+          else
+            git worktree add --orphan -b appcast "$DIR"
+          fi
+          awk -v v="$VERSION" 'index($0, "## [" v "]") == 1 {f=1; next} /^## \[/ {f=0} f' CHANGELOG.md > "$RUNNER_TEMP/appcast-notes.md"
+          scripts/appcast.sh "$DIR/appcast.xml" "$VERSION" "$BUILD" "$URL" "$SPARKLE_SIG" "$RUNNER_TEMP/appcast-notes.md"
+          xmllint --noout "$DIR/appcast.xml"
+          cd "$DIR"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add appcast.xml
+          git diff --cached --quiet || git commit -m "chore: publish hop $VERSION"
+          git push origin appcast
 
       - name: Update the Homebrew tap
         env:

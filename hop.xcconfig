@@ -8,8 +8,9 @@ HOP_COPYRIGHT = © hop contributors
 // Apple Developer team for signed builds; empty builds ad-hoc via the justfile.
 DEVELOPMENT_TEAM =
 
-// GitHub repository whose releases hop checks for a newer version ("owner/name"). Empty turns
-// the check off: release builds set it, builds from source don't ask about releases.
-HOP_UPDATE_REPOSITORY =
+// Sparkle updates: appcast URL and the EdDSA public key that signs them. Empty turns updates
+// off: scripts/release-build.sh sets both, builds from source don't check.
+HOP_UPDATE_FEED =
+HOP_SPARKLE_PUBLIC_KEY =
 
 #include? "Local.xcconfig"

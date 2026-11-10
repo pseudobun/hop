@@ -26,11 +26,12 @@ test:
 # Release build, copied to /Applications, CLI linked into PATH, relaunched
 install: (build "Release")
     scripts/verify-binary.sh build.noindex/Build/Products/Release/hop.app
-    @# No Apple Development identity: re-sign with the local certificate so TCC grants survive rebuilds
+    @# No Apple Development identity: re-sign with the local certificate so TCC grants survive rebuilds.
+    @# No hardened runtime: its library validation refuses Sparkle signed without a Team ID.
     @if [ "{{signing}}" = local ]; then \
       app=build.noindex/Build/Products/Release/hop.app; ent=$(mktemp); \
       codesign -d --entitlements :- "$app" > "$ent" 2>/dev/null; \
-      if ! codesign --force --deep --options runtime --entitlements "$ent" -s "{{local_identity}}" "$app" 2>/dev/null; then \
+      if ! codesign --force --deep --entitlements "$ent" -s "{{local_identity}}" "$app" 2>/dev/null; then \
         echo "signing with {{local_identity}} failed (keychain locked?); ad-hoc instead" >&2; \
         codesign --force --deep --entitlements "$ent" -s - "$app"; fi; \
       rm -f "$ent"; codesign -v "$app"; fi

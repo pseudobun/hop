@@ -10,6 +10,8 @@ cask "hop" do
   depends_on macos: ">= :tahoe"
   depends_on arch: :arm64
 
+  auto_updates true
+
   app "hop.app"
   binary "#{appdir}/hop.app/Contents/MacOS/hop"
 

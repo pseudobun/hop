@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Fails if any Mach-O in the app links WebKit or the main binary exceeds 6 MB.
+# Fails if the main binary exceeds 6 MB or anything but Sparkle links WebKit (Sparkle shows
+# release notes in a web view; hop's own code stays without it).
 # Usage: scripts/verify-binary.sh [path/to/hop.app]
 set -euo pipefail
 
@@ -16,5 +17,5 @@ while IFS= read -r -d '' f; do
     echo "FAIL: $f links WebKit"
     exit 1
   fi
-done < <(find "$app" -type f -print0)
-echo "ok: no WebKit"
+done < <(find "$app" -type f -not -path "*/Frameworks/Sparkle.framework/*" -print0)
+echo "ok: no WebKit outside Sparkle"
