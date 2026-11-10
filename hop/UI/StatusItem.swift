@@ -1,7 +1,7 @@
 import AppKit
 
 /// Menu bar bunny: a way in when the hotkey is taken, plus Settings, Config and Quit.
-final class StatusItem: NSObject {
+final class StatusItem: NSObject, NSMenuDelegate {
     private let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
     private let onOpen: () -> Void
     private let onNotes: () -> Void
@@ -27,6 +27,11 @@ final class StatusItem: NSObject {
         menu.addItem(withTitle: "Clipboard History", action: #selector(clipboardHistory), keyEquivalent: "").target = self
         menu.addItem(withTitle: "Settings…", action: #selector(openSettings), keyEquivalent: ",").target = self
         menu.addItem(withTitle: "Open Config File…", action: #selector(config), keyEquivalent: "").target = self
+        if Updater.shared.isAvailable {
+            updateItem = menu.addItem(withTitle: Updater.shared.menuTitle, action: #selector(checkForUpdates), keyEquivalent: "")
+            updateItem?.target = self
+            menu.delegate = self
+        }
         menu.addItem(.separator())
         menu.addItem(withTitle: "Quit hop", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         item.menu = menu
@@ -37,6 +42,11 @@ final class StatusItem: NSObject {
     @objc private func clipboardHistory() { onClipboard() }
     @objc private func openSettings() { onSettings() }
     @objc private func config() { onConfig() }
+    @objc private func checkForUpdates() { Updater.shared.checkNow() }
+
+    private var updateItem: NSMenuItem?
+
+    func menuNeedsUpdate(_ menu: NSMenu) { updateItem?.title = Updater.shared.menuTitle }
 
     func remove() { NSStatusBar.system.removeStatusItem(item) }
 

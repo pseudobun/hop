@@ -25,6 +25,12 @@ nonisolated struct HopConfig: Decodable, Equatable, Sendable {
         }
     }
 
+    /// New versions from GitHub releases; only release builds (Homebrew, release zip) check.
+    nonisolated struct Updates: Decodable, Equatable, Sendable {
+        /// Look for a new version once a day.
+        var check = true
+    }
+
     nonisolated struct HyperKey: Decodable, Equatable, Sendable {
         var enabled = false
         /// Caps Lock pressed and released alone sends Escape.
@@ -259,6 +265,7 @@ nonisolated struct HopConfig: Decodable, Equatable, Sendable {
     }
 
     var general = General()
+    var updates = Updates()
     var hyperKey = HyperKey()
     var wireguard = WireGuard()
     var keepass = KeePass()
@@ -290,10 +297,11 @@ nonisolated private extension KeyedDecodingContainer {
 }
 
 nonisolated extension HopConfig {
-    private enum Keys: String, CodingKey { case general, hyperKey, wireguard, keepass, system, bookmarks, notes, clipboard, snippets, files, calculator, shelf, messages, calendar, translate, ocr, emoji, hotkeys }
+    private enum Keys: String, CodingKey { case general, updates, hyperKey, wireguard, keepass, system, bookmarks, notes, clipboard, snippets, files, calculator, shelf, messages, calendar, translate, ocr, emoji, hotkeys }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: Keys.self)
         general = try c.value(.general, General())
+        updates = try c.value(.updates, Updates())
         hyperKey = try c.value(.hyperKey, HyperKey())
         wireguard = try c.value(.wireguard, WireGuard())
         keepass = try c.value(.keepass, KeePass())
@@ -311,6 +319,14 @@ nonisolated extension HopConfig {
         ocr = try c.value(.ocr, OCR())
         emoji = try c.value(.emoji, Emoji())
         hotkeys = try c.value(.hotkeys, [:])
+    }
+}
+
+nonisolated extension HopConfig.Updates {
+    private enum Keys: String, CodingKey { case check }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: Keys.self), d = Self()
+        check = try c.value(.check, d.check)
     }
 }
 
@@ -685,6 +701,14 @@ final class AppSettings {
         menuBarIcon: true,
         // "og", "og-light", "modern", "solarpunk" or "cyberpunk"; the Theme command previews them
         theme: "og",
+      },
+
+      // New versions from GitHub releases, for builds from Homebrew or a release zip (builds
+      // from source don't check). hop says when one is out; brew upgrade installs it.
+      // "Check for Updates…" in the menu bar bunny checks now.
+      updates: {
+        // Look for a new version once a day
+        check: true,
       },
 
       // Global hotkeys for any command or app, on top of general.hotkey, notes.hotkey and
