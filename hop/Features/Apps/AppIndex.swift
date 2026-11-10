@@ -41,7 +41,7 @@ nonisolated enum AppScanner {
     static let hiddenHelpers: Set<String> = [
         "FamilyExtensionHost", "PIPAgent", "PeopleMessageService", "ShortcutsActions", "SystemIntents",
         "Rosetta 2 Updater", "WidgetKit Simulator", "Enhanced Logging", "Apple Diagnostics", "Language Chooser",
-        "Erase Assistant", "Setup Assistant", "AVB Configuration", "Medical Imaging Calibrator",
+        "Erase Assistant", "Setup Assistant", "AVB Configuration", "Medical Imaging Calibrator", "SettingsPlaceholder",
     ]
 
     static let settingsExtensionsDir = "/System/Library/ExtensionKit/Extensions"
