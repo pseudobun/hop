@@ -48,6 +48,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         guard !AppPaths.isRunningTests else { return }
+        AppPaths.migrateLegacyData()
         installSignalHandlers()
         Theme.registerFonts()
 
@@ -177,6 +178,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         settings.onChange = { [weak self] old, new in self?.apply(new, previous: old) }
         settings.start()
+        // Before apply: the menu bar bunny offers "Check for Updates…" only with an updater.
+        Updater.shared.start(settings.data.updates)
         apply(settings.data, previous: nil)
 
         activity.onChange = { [weak self] away in self?.setAway(away) }
@@ -446,6 +449,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             for p in bindings.problems { Log.app.error("hotkeys: \(p, privacy: .public)") }
         }
 
+        Updater.shared.apply(config.updates)
+
         let loginEnabled = SMAppService.mainApp.status == .enabled
         if config.general.openAtLogin != loginEnabled {
             do {
@@ -485,6 +490,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case .copy(let text):
             NSPasteboard.general.clearContents()
             NSPasteboard.general.setString(text, forType: .string)
+        case .checkForUpdates: Updater.shared.checkNow()
         }
     }
 

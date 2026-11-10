@@ -1,0 +1,133 @@
+name: Release
+
+# Builds, signs, notarizes and publishes one version: the GitHub release's zip and the Homebrew
+# cask. release-please calls it after a release PR merges; run it by hand to (re)build a tag.
+on:
+  workflow_call:
+    inputs:
+      tag:
+        type: string
+        required: true
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to build, e.g. v0.1.0-beta.1 (created on main if missing)"
+        type: string
+        required: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: macos-26
+    timeout-minutes: 60
+    env:
+      TAG: ${{ inputs.tag }}
+      SIGN_IDENTITY: ${{ secrets.MACOS_DEVELOPER_ID_APP_CERT }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Check out the tag
+        run: |
+          if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then git checkout -q "$TAG"; fi
+          git log --oneline -1
+
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Resolve version
+        run: |
+          VERSION="${TAG#v}"
+          FILE_VERSION="$(tr -d '[:space:]' < VERSION)"
+          if [ "$VERSION" != "$FILE_VERSION" ]; then
+            echo "::error::$TAG does not match VERSION ($FILE_VERSION)"; exit 1
+          fi
+          case "$VERSION" in *-*) PRERELEASE=true ;; *) PRERELEASE=false ;; esac
+          {
+            echo "VERSION=$VERSION"
+            echo "PRERELEASE=$PRERELEASE"
+            echo "BUILD=$(git rev-list --count HEAD)"
+            echo "ZIP=build.noindex/release/hop-$VERSION-macos.zip"
+          } >> "$GITHUB_ENV"
+
+      - name: Test
+        run: scripts/build-local.sh test
+
+      - name: Import Developer ID certificate
+        uses: apple-actions/import-codesign-certs@v6
+        with:
+          p12-file-base64: ${{ secrets.MACOS_CERT_P12_BASE64 }}
+          p12-password: ${{ secrets.MACOS_CERT_PASSWORD }}
+
+      - name: Build and sign hop.app
+        run: |
+          HOP_VERSION="$VERSION" HOP_BUILD="$BUILD" scripts/release-build.sh "$SIGN_IDENTITY"
+          codesign -dv build.noindex/release/hop.app 2>&1 | grep -E "Authority|flags|Identifier"
+
+      - name: Notarize and staple
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
+        run: |
+          KEY="$RUNNER_TEMP/notary.p8"
+          echo "$ASC_PRIVATE_KEY" | base64 --decode > "$KEY"
+          APP=build.noindex/release/hop.app
+          xcrun notarytool submit "$ZIP" \
+            --key "$KEY" --key-id "$ASC_KEY_ID" --issuer "$ASC_ISSUER_ID" \
+            --wait --timeout 40m --output-format json | tee "$RUNNER_TEMP/notary.json"
+          STATUS="$(plutil -extract status raw "$RUNNER_TEMP/notary.json" 2>/dev/null || echo unknown)"
+          if [ "$STATUS" != "Accepted" ]; then
+            ID="$(plutil -extract id raw "$RUNNER_TEMP/notary.json" 2>/dev/null || true)"
+            [ -n "$ID" ] && xcrun notarytool log "$ID" --key "$KEY" --key-id "$ASC_KEY_ID" --issuer "$ASC_ISSUER_ID" || true
+            echo "::error::notarization: $STATUS"; exit 1
+          fi
+          rm -f "$KEY"
+          xcrun stapler staple "$APP"
+          xcrun stapler validate "$APP"
+          spctl --assess --type execute --verbose "$APP"
+          # The zip users download carries the stapled ticket.
+          rm -f "$ZIP"
+          ditto -c -k --sequesterRsrc --keepParent "$APP" "$ZIP"
+          SHA256="$(shasum -a 256 "$ZIP" | awk '{print $1}')"
+          echo "SHA256=$SHA256" >> "$GITHUB_ENV"
+          printf '%s  %s\n' "$SHA256" "$(basename "$ZIP")" > "$ZIP.sha256"
+
+      - name: Publish GitHub release
+        run: |
+          if ! git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null; then
+            git tag "$TAG" && git push origin "$TAG"
+          fi
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$ZIP" "$ZIP.sha256" --clobber
+          else
+            awk -v v="$VERSION" 'index($0, "## [" v "]") == 1 {f=1; next} /^## \[/ {f=0} f' CHANGELOG.md > "$RUNNER_TEMP/notes.md"
+            flags=(); [ "$PRERELEASE" = true ] && flags+=(--prerelease)
+            gh release create "$TAG" "$ZIP" "$ZIP.sha256" --title "hop $VERSION" \
+              --notes-file "$RUNNER_TEMP/notes.md" --verify-tag "${flags[@]}"
+          fi
+          gh release edit "$TAG" --title "hop $VERSION" $([ "$PRERELEASE" = true ] && echo --prerelease)
+
+      - name: Update the Homebrew tap
+        env:
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          TAP="$RUNNER_TEMP/homebrew-tap"
+          git clone "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/pseudobun/homebrew-tap.git" "$TAP"
+          mkdir -p "$TAP/Casks"
+          sed -e "s/@VERSION@/$VERSION/" -e "s/@SHA256@/$SHA256/" packaging/hop.rb.template > "$TAP/Casks/hop.rb"
+          cd "$TAP"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Casks/hop.rb
+          git diff --cached --quiet || git commit -m "hop $VERSION"
+          git push

@@ -7,15 +7,18 @@ app_dir := "/Applications"
 cli_link := "/opt/homebrew/bin/hop"
 
 local_identity := "hop Local Signing"
+bundle_id := `sed -n 's/^[[:space:]]*HOP_BUNDLE_ID[[:space:]]*=[[:space:]]*//p' hop.xcconfig Local.xcconfig 2>/dev/null | tail -1`
 signing := `security find-identity -v -p codesigning 2>/dev/null | grep -q "Apple Development" && grep -qE "^[[:space:]]*DEVELOPMENT_TEAM[[:space:]]*=[[:space:]]*[A-Z0-9]" Local.xcconfig 2>/dev/null && echo signed || { security find-identity -p codesigning 2>/dev/null | grep -q "hop Local Signing" && echo local || echo adhoc; }`
 adhoc_flags := if signing != "signed" { "CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM=" } else { "" }
+# VERSION (release-please keeps it) and the commit count, as in release builds
+version_flags := "MARKETING_VERSION=" + `tr -d '[:space:]' < VERSION` + " CURRENT_PROJECT_VERSION=" + `git rev-list --count HEAD 2>/dev/null || echo 1`
 
 default: build
 
 # Debug build into ./build.noindex (.noindex keeps Spotlight from listing more hops)
 build config="Debug":
     xcodebuild -project hop.xcodeproj -scheme hop -configuration {{config}} -derivedDataPath build.noindex \
-      -destination "platform=macOS,arch=arm64" -quiet {{adhoc_flags}} build
+      -destination "platform=macOS,arch=arm64" -quiet {{adhoc_flags}} {{version_flags}} build
 
 test:
     scripts/build-local.sh test
@@ -61,6 +64,19 @@ uninstall:
 
 footprint:
     scripts/check-footprint.sh 30
+
+# Release build signed with a Developer ID, zipped into build.noindex/release (CI also notarizes it)
+release-zip identity="":
+    scripts/release-build.sh "{{identity}}"
+
+# Build and publish a version by hand (normally release-please does this when its PR merges)
+release tag=("v" + `tr -d '[:space:]' < VERSION`):
+    gh workflow run release.yml -f tag={{tag}}
+    @echo "started; gh run watch to follow it"
+
+# Follow hop's log
+log:
+    log stream --level info --predicate 'subsystem == "{{bundle_id}}"'
 
 # Regenerate examples/ from the templates hop writes on first launch
 examples: build

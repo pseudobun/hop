@@ -21,6 +21,14 @@
     theme: "og",
   },
 
+  // New versions from GitHub releases, for builds from Homebrew or a release zip (builds
+  // from source don't check). hop says when one is out; brew upgrade installs it.
+  // "Check for Updates…" in the menu bar bunny checks now.
+  updates: {
+    // Look for a new version once a day
+    check: true,
+  },
+
   // Global hotkeys for any command or app, on top of general.hotkey, notes.hotkey and
   // clipboard.hotkey. Key: a command title ("Empty Trash"), an app name ("Safari"),
   // a command id or "app:" + bundle id; `hop hotkeys` lists them. Value: e.g. "hyper+t".

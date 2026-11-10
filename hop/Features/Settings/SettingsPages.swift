@@ -41,7 +41,7 @@ struct SettingsInfo {
 }
 
 enum SettingsAction: Equatable {
-    case openConfig, revealConfig, permissions, restart
+    case openConfig, revealConfig, permissions, restart, checkForUpdates
     case open(String)
     case copy(String)
 }
@@ -162,6 +162,13 @@ enum SettingsCatalog {
             SettingsSection("Startup", [
                 f("general.openAtLogin", "Open at login", .toggle),
                 f("general.menuBarIcon", "Menu bar icon", .toggle, "The bunny in the menu bar: Open, Notes, Clipboard, Settings."),
+            ]),
+            SettingsSection("Updates", [
+                f("updates.check", "Check for updates", .toggle,
+                  "Once a day, from GitHub releases; brew upgrade --cask pseudobun/tap/hop installs one. Builds from source don't check."),
+                .info(SettingsInfo(label: "Latest release", lines: { _ in
+                    [Updater.shared.isAvailable ? Updater.shared.state.text : "Builds from source don't check"]
+                }, button: "Check Now", action: .checkForUpdates)),
             ]),
         ])
     }

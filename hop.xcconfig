@@ -3,9 +3,13 @@
 
 // Bundle identifier of hop.app; it also names hop's Application Support folder,
 // Keychain items and log subsystem. Tests use "$(HOP_BUNDLE_ID)Tests".
-HOP_BUNDLE_ID = dev.hop.app
+HOP_BUNDLE_ID = com.pseudobun.hop
 HOP_COPYRIGHT = © hop contributors
 // Apple Developer team for signed builds; empty builds ad-hoc via the justfile.
 DEVELOPMENT_TEAM =
+
+// GitHub repository whose releases hop checks for a newer version ("owner/name"). Empty turns
+// the check off: release builds set it, builds from source don't ask about releases.
+HOP_UPDATE_REPOSITORY =
 
 #include? "Local.xcconfig"
