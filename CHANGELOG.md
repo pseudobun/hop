@@ -3,6 +3,19 @@
 All notable changes to hop. Versions follow [Semantic Versioning](https://semver.org); entries
 come from [Conventional Commits](https://www.conventionalcommits.org) via release-please.
 
+## [0.1.0-beta.5](https://github.com/pseudobun/hop/compare/v0.1.0-beta.4...v0.1.0-beta.5) (2026-11-11)
+
+
+### Features
+
+* **rings:** add radial gesture menus with built-in actions and app rings ([512c332](https://github.com/pseudobun/hop/commit/512c3320bad3310713edeef3db1b1cc5abc82de7))
+
+
+### Bug Fixes
+
+* **rings:** build on the CI toolchain and allow preset keystrokes in gitleaks ([49b5ba0](https://github.com/pseudobun/hop/commit/49b5ba097ed84ca79b72703b68a4bbfa0ddcacff))
+* **security:** authenticate the CLI channel and gate code-running ring actions ([08ec786](https://github.com/pseudobun/hop/commit/08ec78644f5aa811ac343be8611a3fcd42fd2bd7))
+
 ## [0.1.0-beta.4](https://github.com/pseudobun/hop/compare/v0.1.0-beta.3...v0.1.0-beta.4) (2026-11-10)
 
 
