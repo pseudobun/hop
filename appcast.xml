@@ -6,6 +6,26 @@
     <description>hop releases</description>
     <language>en</language>
     <item>
+      <title>hop 0.1.0-beta.6</title>
+      <pubDate>Wed, 11 Nov 2026 21:36:55 +0000</pubDate>
+      <sparkle:version>132</sparkle:version>
+      <sparkle:shortVersionString>0.1.0-beta.6</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
+      <description><![CDATA[<style>body{font:13px -apple-system,sans-serif;margin:12px 14px;color:#222}h3{font-size:13px;margin:12px 0 4px}ul{padding-left:18px;margin:4px 0}li{margin:2px 0}code{font:12px ui-monospace,monospace}a{color:#0a64d0}@media(prefers-color-scheme:dark){body{color:#ddd}a{color:#6ab0ff}}</style><h3>⚠ BREAKING CHANGES</h3>
+<ul>
+<li>remove rings from main (kept on the experimental branch) (<a href="https://github.com/pseudobun/hop/issues/14">#14</a>)</li>
+</ul>
+<h3>Performance</h3>
+<ul>
+<li>cut memory and main-thread work in the launcher, clipboard and background tasks (<a href="https://github.com/pseudobun/hop/issues/15">#15</a>) (<a href="https://github.com/pseudobun/hop/commit/5b6874a481c0164848b1c2f2152d1d0d5cdf6f1c">5b6874a</a>)</li>
+</ul>
+<h3>Refactoring</h3>
+<ul>
+<li>remove rings from main (kept on the experimental branch) (<a href="https://github.com/pseudobun/hop/issues/14">#14</a>) (<a href="https://github.com/pseudobun/hop/commit/b46fab60ea1cf1c134267d6086b1e3742d03c00c">b46fab6</a>)</li>
+</ul><p><a href="https://github.com/pseudobun/hop/releases/tag/v0.1.0-beta.6">Release on GitHub</a></p>]]></description>
+      <enclosure url="https://github.com/pseudobun/hop/releases/download/v0.1.0-beta.6/hop-0.1.0-beta.6-macos.zip" type="application/octet-stream" sparkle:edSignature="8c53i0Nf4Lhb90NgPI2lZUi4Zl9M+JKUFO+vz0tYSDdQudLYZGINYiCSX20H+kYOinS/iaXWO88MhrYI5Oh3Dg==" length="4955328"/>
+    </item>
+    <item>
       <title>hop 0.1.0-beta.5</title>
       <pubDate>Wed, 11 Nov 2026 15:46:04 +0000</pubDate>
       <sparkle:version>128</sparkle:version>
