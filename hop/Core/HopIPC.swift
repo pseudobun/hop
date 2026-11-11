@@ -2,16 +2,15 @@ import Foundation
 import Security
 import os
 
-/// The CLI ↔ running hop channel (`hop ring`, `hop shelf`, `hop update`).
+/// The CLI ↔ running hop channel (`hop shelf`, `hop update`).
 ///
 /// A Unix socket in hop's support folder (0700, socket 0600). The app answers only a peer that runs
 /// as the same user and whose code satisfies hop's own designated requirement, which in practice is
 /// the hop binary itself run as the CLI. Other processes (a script, another app, another user) can't
-/// drive the running hop. The verbs stay narrow: ring actions that run code or synthesize input are
-/// accepted only when a configured ring already has them (`RingController.allowsFromCLI`).
+/// drive the running hop. The verbs stay narrow.
 nonisolated enum HopIPC {
     struct Message: Codable, Sendable {
-        enum Verb: String, Codable, Sendable { case ringOpen, ringRun, shelfAdd, updateInstall, updateCheck }
+        enum Verb: String, Codable, Sendable { case shelfAdd, updateInstall, updateCheck }
         var verb: Verb
         var value: String?
         var paths: [String]?

@@ -96,6 +96,25 @@ struct ConfigDiagnosticsTests {
         #expect(ConfigDiagnostics.editDistance("kitten", "sitting") == 3)
     }
 
+    @Test func retiredRingsSectionStillLoadsQuietly() throws {
+        let text = """
+        {
+          general: { hotkey: "alt+space" },
+          rings: {
+            enabled: true,
+            appTrigger: "mouse3",
+            rings: [{ name: "Main", trigger: "hyper+space", slices: ["dark-mode", { title: "Files", children: ["copy-path"] }] }],
+          },
+        }
+        """
+        #expect(issue(text) == nil)
+        let decoder = JSONDecoder()
+        decoder.allowsJSON5 = true
+        let config = try decoder.decode(HopConfig.self, from: Data(text.utf8))
+        #expect(config.general.hotkey == "alt+space")
+        #expect(ConfigDiagnostics.warnings(in: text).isEmpty)
+    }
+
     @Test func schemaComesFromTheConfigTypes() {
         #expect(ConfigSchema.hop.node(at: ["shelf", "shakeSensitivity"]) == .choice(["low", "medium", "high"]))
         #expect(ConfigSchema.hop.node(at: ["general", "sensitivity"]) == .choice(["low", "medium", "high"]))

@@ -3,34 +3,6 @@ import Testing
 @testable import hop
 
 struct IPCSecurityTests {
-    private func rings(_ json5: String) throws -> [HopConfig.Ring] {
-        let d = JSONDecoder()
-        d.allowsJSON5 = true
-        return try d.decode(HopConfig.self, from: Data(json5.utf8)).rings.rings
-    }
-
-    @Test func cliRunsOnlyConfiguredCodeActions() throws {
-        let configured = try rings("""
-        { rings: { rings: [{ name: "Dev", slices: [
-            { action: "shell:say hi" },
-            { title: "More", children: [{ action: "type:hello\\\\n" }] },
-        ] }] } }
-        """)
-        let allowed = { (text: String) in RingController.allowsFromCLI(RingActionRef.parse(text)!, rings: configured) }
-        #expect(allowed("shell:say hi"))
-        #expect(allowed("type:hello\\n"))
-        #expect(!allowed("shell:touch ~/pwned"))
-        #expect(!allowed("applescript:do shell script \"id\""))
-        #expect(!allowed("type:rm -rf ~/x\\n"))
-        #expect(!allowed("key:cmd+q"))
-        #expect(!allowed("menu:File > Quit"))
-        #expect(!allowed("url:x-apple.systempreferences:"))
-        #expect(!allowed("shortcut:Anything"))
-        #expect(allowed("app:Finder"))
-        #expect(allowed("folder:~/Downloads"))
-        #expect(!RingController.allowsFromCLI(.shell("say hi"), rings: []))
-    }
-
     @Test func hudTextIsOnePlainLine() {
         #expect(HUD.sanitized("a\nb\tc\u{1B}[31m") == "a b c[31m")
         #expect(HUD.sanitized("safe\u{202E}txt.exe") == "safetxt.exe")

@@ -23,14 +23,10 @@ published with credit, unless you'd rather stay anonymous.
   (folder `0700`, socket `0600`). hop answers only a peer that runs as the same user and whose
   code satisfies hop's own designated requirement, i.e. the hop binary itself run as `hop`.
   Other apps and scripts can't drive the running hop.
-- **Ring actions that run code or synthesize input** (`shell:`, `applescript:`, `type:`, `key:`,
-  `menu:`, `shortcut:`, `url:`) run from `hop ring run` only when one of your configured rings
-  already has that exact action. Built-in actions, hop command ids, `app:` and `folder:` always run.
-  Requests are logged (`log show --predicate 'subsystem == "com.pseudobun.hop"' | grep ipc`) and
+- Requests are logged (`log show --predicate 'subsystem == "com.pseudobun.hop"' | grep ipc`) and
   more than 10 per second are refused.
-- **Your config is code.** `shell:` and `applescript:` slices, `keepass.passwordCommand` and
-  `keepass.cli` run as you. Anything that can write `~/.config/hop/` (or the dotfiles repo it is
-  linked from) can run commands through hop with hop's permissions. Review config changes like
-  code changes.
+- **Your config is code.** `keepass.passwordCommand` and `keepass.cli` run as you. Anything that
+  can write `~/.config/hop/` (or the dotfiles repo it is linked from) can run commands through hop
+  with hop's permissions. Review config changes like code changes.
 - hop's state files are written `0600` inside a `0700` folder; secrets (OpenAI key, KeePassXC
   master password) live in the login Keychain.

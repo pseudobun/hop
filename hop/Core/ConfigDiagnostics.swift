@@ -34,8 +34,6 @@ nonisolated indirect enum ConfigSchema: Equatable, Sendable {
         // Empty by default, so there is no element to look at.
         "bookmarks": HopConfig.Bookmark(),
         "keepass.databases": HopConfig.KeePass.Database(),
-        "rings.rings": HopConfig.Ring(),
-        "rings.rings.0.slices": HopConfig.Slice(),
     ])
 
     private static func describing(_ value: Any, path: String, samples: [String: Any]) -> ConfigSchema {
@@ -235,11 +233,16 @@ nonisolated enum ConfigDiagnostics {
         }
     }
 
+    /// Top-level sections hop used to read and no longer does. Old configs keep them without a
+    /// warning; decoding ignores them like any unknown key. `rings` lives on the `experimental` branch.
+    static let retiredKeys: Set<String> = ["rings"]
+
     /// Keys the config does not know, with the closest known key when it looks like a typo.
     /// They are only warnings: decoding ignores them and the rest still applies.
     static func warnings(in text: String, schema: ConfigSchema = .hop) -> [ConfigIssue] {
         var issues: [ConfigIssue] = []
         for (path, at) in ConfigScan(text).keys {
+            if path.count == 1, let key = path.first, retiredKeys.contains(key) { continue }
             guard case .section(let fields) = schema.node(at: Array(path.dropLast())),
                   let key = path.last, fields[key] == nil
             else { continue }
