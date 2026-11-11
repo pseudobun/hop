@@ -76,8 +76,8 @@ enum CLI {
             return Output.fail("hop is not running")
         }
         let check = a.flags.contains("check")
-        DistributedNotificationCenter.default().postNotificationName(check ? Updater.checkNotification : Updater.installNotification,
-                                                                     object: nil, userInfo: nil, deliverImmediately: true)
+        let reply = HopIPC.send(.init(verb: check ? .updateCheck : .updateInstall))
+        guard reply.ok else { return Output.fail(reply.error ?? "hop did not answer") }
         print(check ? "checking in the running hop (current: \(AppPaths.version)); the HUD answers"
                     : "the running hop installs the newest version and restarts, if there is one (current: \(AppPaths.version))")
         return 0
@@ -734,6 +734,7 @@ enum CLI {
             }
             for e in RingCatalog.all { print("\(e.id.padding(toLength: 20, withPad: " ", startingAt: 0)) \(e.title) — \(e.detail)") }
             print("\nAlso: hop command ids, app:<name>, key:<combo>, type:<text>, menu:<A > B>, shortcut:<name>, url:<link>, folder:<path>, shell:<cmd>, applescript:<src>")
+            print("From the CLI, key:, type:, menu:, shortcut:, url:, shell: and applescript: run only when one of your rings has them.")
             return 0
         case "open", "run":
             let value = a.positional.dropFirst().joined(separator: " ")
@@ -742,9 +743,8 @@ enum CLI {
             guard !NSRunningApplication.runningApplications(withBundleIdentifier: AppPaths.bundleID).isEmpty else {
                 return Output.fail("hop is not running")
             }
-            DistributedNotificationCenter.default().postNotificationName(RingController.cliNotification, object: nil,
-                                                                         userInfo: [sub: value], deliverImmediately: true)
-            return 0
+            let reply = HopIPC.send(.init(verb: sub == "open" ? .ringOpen : .ringRun, value: value))
+            return reply.ok ? 0 : Output.fail(reply.error ?? "hop did not answer")
         default:
             return Output.fail("usage: hop ring [list | actions | open <name> | run <action>]")
         }
@@ -764,9 +764,8 @@ enum CLI {
         guard !NSRunningApplication.runningApplications(withBundleIdentifier: id).isEmpty else {
             return Output.fail("hop is not running")
         }
-        DistributedNotificationCenter.default().postNotificationName(ShelfController.addNotification, object: nil,
-                                                                     userInfo: ["paths": paths], deliverImmediately: true)
-        return 0
+        let reply = HopIPC.send(.init(verb: .shelfAdd, paths: paths))
+        return reply.ok ? 0 : Output.fail(reply.error ?? "hop did not answer")
     }
 
     private static func stdinText() -> String? {

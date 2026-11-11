@@ -279,6 +279,7 @@ hop emoji "povit srček"        # the picker's search
 hop bookmarks open kvm
 hop ring actions               # built-in ring actions; hop ring list shows the rings
 hop ring run dark-mode         # run one slice action in the running hop; hop ring open media
+                               # (shell:, applescript:, type:, key:, menu:… only if a ring of yours has it)
 hop permissions --json
 ```
 

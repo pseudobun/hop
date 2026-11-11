@@ -4,8 +4,6 @@ import os
 /// Every open shelf, how they open (a shake or the modifier while dragging, hotkeys,
 /// commands, `hop shelf`) and the recently closed ones you can bring back.
 final class ShelfController {
-    /// `hop shelf <paths>` posts this with the paths in `userInfo["paths"]`.
-    static let addNotification = Notification.Name(AppPaths.bundleID + ".shelf.add")
     private static let recentLimit = 10
 
     private let settings: AppSettings
@@ -16,7 +14,6 @@ final class ShelfController {
     private(set) var recent: [[ShelfItem]] = []
     private let store = JSONStore<[[ShelfItem]]>(url: AppPaths.file("shelves.json"))
     private var dropCheck: Timer?
-    private var cliObserver: NSObjectProtocol?
     /// A shelf opened or closed (root commands depend on it).
     var onChange: (() -> Void)?
 
@@ -25,10 +22,6 @@ final class ShelfController {
         recent = store.load() ?? []
         watcher.onActivate = { [weak self] point in self?.dragActivated(at: point) }
         watcher.onDragEnd = { [weak self] in self?.dragEnded() }
-        cliObserver = DistributedNotificationCenter.default().addObserver(forName: Self.addNotification, object: nil, queue: .main) { [weak self] note in
-            let paths = (note.userInfo?["paths"] as? [String]) ?? []
-            MainActor.assumeIsolated { self?.addFromCLI(paths) }
-        }
         ShelfItem.pruneDrops(olderThan: 7, keeping: Set(recent.flatMap { $0.map(\.value) }))
     }
 
@@ -100,8 +93,9 @@ final class ShelfController {
         return p
     }
 
-    private func addFromCLI(_ paths: [String]) {
-        let items = paths.map { ShelfItem.file($0) }.filter(\.exists)
+    /// `hop shelf <paths>` (`HopIPC`).
+    func addFromCLI(_ paths: [String]) {
+        let items = paths.prefix(500).map { ShelfItem.file($0) }.filter(\.exists)
         guard !items.isEmpty else { return }
         // Onto the newest visible shelf, like dropping onto it; otherwise a new one.
         if let shelf = shelves.last(where: { $0.panel.isVisible }) {

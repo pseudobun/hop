@@ -12,9 +12,6 @@ import Sparkle
 @MainActor
 final class Updater: NSObject {
     static let shared = Updater()
-    /// `hop update` posts these; the running hop answers.
-    static let installNotification = Notification.Name(AppPaths.bundleID + ".update.install")
-    static let checkNotification = Notification.Name(AppPaths.bundleID + ".update.check")
 
     enum State: Equatable {
         case idle, checking
@@ -50,8 +47,6 @@ final class Updater: NSObject {
     private var probing = false
     private var found: String?
 
-    private var observers: [NSObjectProtocol] = []
-
     var isAvailable: Bool { updater != nil }
 
     /// The menu bar bunny's item.
@@ -78,15 +73,6 @@ final class Updater: NSObject {
             updater = nil
             return
         }
-        let center = DistributedNotificationCenter.default()
-        observers = [
-            center.addObserver(forName: Self.installNotification, object: nil, queue: .main) { _ in
-                MainActor.assumeIsolated { Updater.shared.installNow() }
-            },
-            center.addObserver(forName: Self.checkNotification, object: nil, queue: .main) { _ in
-                MainActor.assumeIsolated { Updater.shared.checkOnly() }
-            },
-        ]
     }
 
     func apply(_ config: HopConfig.Updates) {

@@ -46,6 +46,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let rings = RingController()
     private let startupIndicator = StartupIndicator()
     private var signalSources: [DispatchSourceSignal] = []
+    private var ipc: HopIPCServer?
+
+    /// `hop ring`, `hop shelf` and `hop update` reach the running hop here (see `HopIPC`).
+    private func startIPC() {
+        let server = HopIPCServer { [weak self] m in
+            guard let self else { return .fail("hop is quitting") }
+            switch m.verb {
+            case .ringOpen: return rings.handleCLI(open: m.value, run: nil)
+            case .ringRun: return rings.handleCLI(open: nil, run: m.value)
+            case .shelfAdd:
+                shelves.addFromCLI(m.paths ?? [])
+                return .ok
+            case .updateInstall, .updateCheck:
+                guard Updater.shared.isAvailable else { return .fail("this hop has no updater") }
+                if m.verb == .updateInstall { Updater.shared.installNow() } else { Updater.shared.checkOnly() }
+                return .ok
+            }
+        }
+        server.start()
+        ipc = server
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         guard !AppPaths.isRunningTests else { return }
@@ -200,6 +221,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Before apply: the menu bar bunny offers "Check for Updates…" only with an updater.
         Updater.shared.start(settings.data.updates)
         apply(settings.data, previous: nil)
+        startIPC()
 
         activity.onChange = { [weak self] away in self?.setAway(away) }
         activity.start()

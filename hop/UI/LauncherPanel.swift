@@ -78,6 +78,26 @@ final class HUD {
     /// Amber triangle: nothing went wrong, but nothing happened either.
     func warn(_ text: String) { show(text, symbol: "exclamationmark.triangle.fill", tone: .warning) }
 
+    /// One line of plain text: control and bidi-override characters dropped (command output can
+    /// carry them), whitespace collapsed, at most 160 characters.
+    nonisolated static func sanitized(_ text: String) -> String {
+        var scalars = String.UnicodeScalarView()
+        for s in text.unicodeScalars {
+            if CharacterSet.newlines.contains(s) || s == "\t" { scalars.append(" "); continue }
+            if s.properties.generalCategory == .control || isDirectional(s.value) { continue }
+            scalars.append(s)
+        }
+        var out = String(scalars)
+        while out.contains("  ") { out = out.replacingOccurrences(of: "  ", with: " ") }
+        out = out.trimmingCharacters(in: .whitespaces)
+        return out.count > 160 ? String(out.prefix(159)) + "…" : out
+    }
+
+    /// LRM, RLM, the embeddings and overrides, and the isolates.
+    nonisolated private static func isDirectional(_ v: UInt32) -> Bool {
+        v == 0x200E || v == 0x200F || (0x202A...0x202E).contains(v) || (0x2066...0x2069).contains(v)
+    }
+
     /// Without a tone, a checkmark is a success and any other symbol a notice.
     /// `seconds` overrides how long it stays up.
     func show(_ text: String, symbol: String = "checkmark.circle.fill", tone: Tone? = nil, seconds: Double? = nil) {
@@ -96,7 +116,7 @@ final class HUD {
         case .warning: image.contentTintColor = Theme.warn
         case .failure: image.contentTintColor = Theme.destructive
         }
-        label.stringValue = text
+        label.stringValue = Self.sanitized(text)
         let size = stack.fittingSize
         let frame = NSRect(x: 0, y: 0, width: max(size.width + 40, 140), height: 40)
         panel.setContentSize(frame.size)

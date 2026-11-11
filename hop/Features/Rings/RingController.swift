@@ -38,21 +38,40 @@ final class RingController {
     /// The ring last used on each trigger opens first next time.
     private var lastUsed: [RingTrigger: String] = [:]
 
-    static let cliNotification = Notification.Name(AppPaths.bundleID + ".ring")
-    private var cliObserver: NSObjectProtocol?
-
     init() {
         tap = RingEventTap { event in
             DispatchQueue.main.async { MainActor.assumeIsolated { RingController.current?.handle(event) } }
         }
-        cliObserver = DistributedNotificationCenter.default().addObserver(forName: Self.cliNotification, object: nil, queue: .main) { note in
-            let open = note.userInfo?["open"] as? String, run = note.userInfo?["run"] as? String
-            MainActor.assumeIsolated {
-                guard let self = RingController.current else { return }
-                if let open, !self.open(named: open) { HUD.shared.fail("No ring \(open)") }
-                if let run, let ref = RingActionRef.parse(run) { self.run(ref) }
-            }
+    }
+
+    /// `hop ring open|run` from the CLI (`HopIPC`). Rings must be on, and an action that runs code or
+    /// synthesizes input (`shell:`, `applescript:`, `type:`, `key:`, `menu:`, `shortcut:`, `url:`) runs
+    /// only when a configured ring already has it: the config is the trust boundary, not the caller.
+    func handleCLI(open name: String?, run action: String?) -> HopIPC.Reply {
+        guard config.enabled else { return .fail("rings are off (rings.enabled)") }
+        if let name {
+            guard open(named: name) else { return .fail("no ring \(name)") }
         }
+        if let action {
+            guard action.count <= 4096, let ref = RingActionRef.parse(action) else { return .fail("“\(action)” is not an action") }
+            guard Self.allowsFromCLI(ref, rings: config.rings) else {
+                return .fail("\(action) runs from the CLI only when one of your rings has it")
+            }
+            run(ref)
+        }
+        return .ok
+    }
+
+    nonisolated static func allowsFromCLI(_ ref: RingActionRef, rings: [HopConfig.Ring]) -> Bool {
+        switch ref {
+        case .builtin, .command, .app, .folder: return true
+        case .key, .type, .menu, .shortcut, .url, .shell, .appleScript:
+            return actions(in: rings.flatMap(\.slices)).contains(ref)
+        }
+    }
+
+    nonisolated private static func actions(in slices: [HopConfig.Slice]) -> [RingActionRef] {
+        slices.flatMap { s in (RingActionRef.parse(s.action).map { [$0] } ?? []) + actions(in: s.children) }
     }
 
     /// Runs one action as if its slice fired (`hop ring run`).
