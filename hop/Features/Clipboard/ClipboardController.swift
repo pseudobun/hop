@@ -148,9 +148,10 @@ final class ClipboardController: NSObject, NSWindowDelegate, NSTableViewDataSour
         guard panel.isVisible else { return }
         closeActionPanel()
         panel.orderOut(nil)
-        // The preview holds a full-size decoded image (or a long text); don't keep it while hidden.
+        // The preview holds a decoded image (or a long text); don't keep it while hidden.
         imageView.image = nil
         textView.textStorage?.setAttributedString(NSAttributedString())
+        previewed = nil
     }
 
     func windowDidResignKey(_ notification: Notification) { hide() }
@@ -166,23 +167,23 @@ final class ClipboardController: NSObject, NSWindowDelegate, NSTableViewDataSour
         let words = ClipboardItem.queryWords(query)
         let visible = store.items.filter { filter.includes($0) && (words.isEmpty || $0.matches(words: words, searchText: searchText(for: $0))) }
         shownCount = visible.count
-        rows = []
+        var newRows: [Row] = []
         let pinned = filter == .pinned ? [] : visible.filter(\.pinned)
         if !pinned.isEmpty {
-            rows.append(.header("Pinned"))
-            rows += pinned.map(Row.item)
+            newRows.append(.header("Pinned"))
+            newRows += pinned.map(Row.item)
         }
         var lastGroup: String?
         let now = Date()
         for item in visible where filter == .pinned || !item.pinned {
             let group = ClipboardGroups.title(for: item.lastCopied, now: now)
             if group != lastGroup {
-                rows.append(.header(group))
+                newRows.append(.header(group))
                 lastGroup = group
             }
-            rows.append(.item(item))
+            newRows.append(.item(item))
         }
-        table.reloadData()
+        update(to: newRows)
         var target = rows.firstIndex { if case .item = $0 { true } else { false } }
         if let previous, let i = rows.firstIndex(where: { if case .item(let it) = $0 { it.id == previous } else { false } }) { target = i }
         select(target)
@@ -190,6 +191,61 @@ final class ClipboardController: NSObject, NSWindowDelegate, NSTableViewDataSour
         emptyLabel.stringValue = store.items.isEmpty ? "Nothing copied yet" : "No matches"
         let total = store.items.count
         countLabel.attributedStringValue = Theme.labelString(shownCount == total ? "\(total) items" : "\(shownCount) of \(total)")
+    }
+
+    /// Swaps in new rows, reconfiguring the cells on screen in place where a row keeps its
+    /// kind and height (as the launcher does): `reloadData` re-added every visible row view
+    /// and laid it out again, about 10 ms a keystroke.
+    private func update(to newRows: [Row]) {
+        let oldRows = rows
+        rows = newRows
+        guard !oldRows.isEmpty, !newRows.isEmpty else {
+            table.reloadData()
+            return
+        }
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        defer { CATransaction.commit() }
+        if newRows.count < oldRows.count {
+            table.removeRows(at: IndexSet(newRows.count..<oldRows.count), withAnimation: [])
+        }
+        let shared = min(oldRows.count, newRows.count)
+        let resized = IndexSet((0..<shared).filter { Self.height(of: oldRows[$0]) != Self.height(of: newRows[$0]) })
+        if !resized.isEmpty {
+            table.removeRows(at: resized, withAnimation: [])
+            table.insertRows(at: resized, withAnimation: [])
+        }
+        var mismatched = IndexSet()
+        table.enumerateAvailableRowViews { rowView, row in
+            guard row < newRows.count, !configure(rowView.view(atColumn: 0) as? NSView, with: newRows[row]) else { return }
+            mismatched.insert(row)
+        }
+        if !mismatched.isEmpty { table.reloadData(forRowIndexes: mismatched, columnIndexes: [0]) }
+        if newRows.count > oldRows.count {
+            table.insertRows(at: IndexSet(oldRows.count..<newRows.count), withAnimation: [])
+        }
+    }
+
+    private static func height(of row: Row) -> CGFloat {
+        if case .header = row { return 30 }
+        return 38
+    }
+
+    /// False when the view is not the kind this row needs.
+    private func configure(_ view: NSView?, with row: Row) -> Bool {
+        switch row {
+        case .header(let title):
+            guard let v = view as? SectionHeaderView else { return false }
+            v.configure(title)
+        case .item(let item):
+            guard let v = view as? ResultCellView else { return false }
+            v.configure(cellItem(item))
+        }
+        return true
+    }
+
+    private func cellItem(_ item: ClipboardItem) -> Item {
+        Item(id: item.id, title: item.title, icon: icon(for: item), accessory: NoteStore.shortAge(item.lastCopied, now: Date()), actions: [])
     }
 
     private func searchText(for item: ClipboardItem) -> NSString {
@@ -492,11 +548,18 @@ final class ClipboardController: NSObject, NSWindowDelegate, NSTableViewDataSour
 
     // MARK: - Preview
 
+    /// The entry the preview shows, so typing that keeps the same entry selected does not
+    /// load its image and build its information rows again on every keystroke.
+    private var previewed: ClipboardItem?
+
     private func updatePreview() {
         guard let item = selectedItem else {
             previewBox.isHidden = true
+            previewed = nil
             return
         }
+        guard item != previewed || previewBox.isHidden else { return }
+        previewed = item
         previewBox.isHidden = false
         textScroll.isHidden = true
         imageView.isHidden = true
@@ -505,7 +568,7 @@ final class ClipboardController: NSObject, NSWindowDelegate, NSTableViewDataSour
 
         switch item.kind {
         case .image:
-            imageView.image = store.imageURL(item).flatMap { NSImage(contentsOf: $0) }
+            imageView.image = store.imageURL(item).flatMap(previewImage)
             imageView.isHidden = false
             if let w = item.imageWidth, let h = item.imageHeight { info.append(("Dimensions", "\(w) × \(h)")) }
             info.append(("Size", ByteCountFormatter.string(fromByteCount: Int64(item.bytes), countStyle: .file)))
@@ -573,6 +636,25 @@ final class ClipboardController: NSObject, NSWindowDelegate, NSTableViewDataSour
         showInfo(info, sourceBundleID: item.sourceBundleID)
     }
 
+    /// The image at most as large as the preview can show it: a 5K screenshot decoded in
+    /// full is 59 MB and a noticeable wait when it is selected.
+    private func previewImage(_ url: URL) -> NSImage? {
+        let scale = panel.backingScaleFactor
+        let side = max(previewBox.bounds.width, previewBox.bounds.height, 400) * scale
+        guard let src = CGImageSourceCreateWithURL(url as CFURL, nil),
+              let cg = CGImageSourceCreateThumbnailAtIndex(src, 0, [
+                  kCGImageSourceCreateThumbnailFromImageAlways: true, kCGImageSourceThumbnailMaxPixelSize: side,
+                  kCGImageSourceCreateThumbnailWithTransform: true,
+              ] as CFDictionary) else { return nil }
+        // Same size in points as the full image (pixels at its DPI), only fewer pixels.
+        let props = CGImageSourceCopyPropertiesAtIndex(src, 0, nil) as? [CFString: Any] ?? [:]
+        let w = props[kCGImagePropertyPixelWidth] as? CGFloat ?? CGFloat(cg.width)
+        let h = props[kCGImagePropertyPixelHeight] as? CGFloat ?? CGFloat(cg.height)
+        let dpi = props[kCGImagePropertyDPIWidth] as? CGFloat ?? 72
+        let k = 72 / (dpi > 0 ? dpi : 72)
+        return NSImage(cgImage: cg, size: NSSize(width: w * k, height: h * k))
+    }
+
     private func showText(_ text: NSAttributedString) {
         textView.textStorage?.setAttributedString(text)
         textView.scrollToBeginningOfDocument(nil)
@@ -616,10 +698,11 @@ final class ClipboardController: NSObject, NSWindowDelegate, NSTableViewDataSour
         }
     }
 
+    /// A 16 pt bitmap, not the full multi-size workspace icon.
     private func sourceIcon(_ bundleID: String) -> NSImage? {
         if let cached = sourceIcons[bundleID] { return cached }
         guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) else { return nil }
-        let icon = NSWorkspace.shared.icon(forFile: url.path)
+        let icon = IconCache.bitmap(NSWorkspace.shared.icon(forFile: url.path), size: 16)
         sourceIcons[bundleID] = icon
         return icon
     }
@@ -636,10 +719,7 @@ final class ClipboardController: NSObject, NSWindowDelegate, NSTableViewDataSour
 
     func numberOfRows(in tableView: NSTableView) -> Int { rows.count }
 
-    func tableView(_ tableView: NSTableView, heightOfRow row: Int) -> CGFloat {
-        if case .header = rows[row] { return 30 }
-        return 38
-    }
+    func tableView(_ tableView: NSTableView, heightOfRow row: Int) -> CGFloat { Self.height(of: rows[row]) }
 
     func tableView(_ tableView: NSTableView, shouldSelectRow row: Int) -> Bool {
         if case .item = rows[row] { return true }
@@ -647,7 +727,7 @@ final class ClipboardController: NSObject, NSWindowDelegate, NSTableViewDataSour
     }
 
     func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? {
-        let v = ResultRowView()
+        let v = ResultRowView.reused(by: tableView)
         v.tint = Palette.clipboard
         return v
     }
@@ -662,8 +742,7 @@ final class ClipboardController: NSObject, NSWindowDelegate, NSTableViewDataSour
         case .item(let item):
             let v = tableView.makeView(withIdentifier: ResultCellView.identifier, owner: nil) as? ResultCellView
                 ?? ResultCellView(frame: .zero)
-            v.configure(Item(id: item.id, title: item.title, icon: icon(for: item),
-                             accessory: NoteStore.shortAge(item.lastCopied, now: Date()), actions: []))
+            v.configure(cellItem(item))
             return v
         }
     }

@@ -257,7 +257,9 @@ final class KeePassMode: NSObject, Mode {
     private func entrySections(_ query: String) -> [ResultSection] {
         let showDatabase = session == nil && manager.databases.count > 1
         var list = unlockedEntries.filter { folder.isEmpty || $0.entry.group == folder || $0.entry.group.hasPrefix(folder + "/") }
-        list.forEach { $0.session.touch() }
+        // Once per database, not once per entry: each touch replaces the auto-lock task.
+        var touched = Set<ObjectIdentifier>()
+        for pair in list where touched.insert(ObjectIdentifier(pair.session)).inserted { pair.session.touch() }
         if !query.isEmpty {
             let cands = list.map { pair in
                 let e = pair.entry
@@ -267,9 +269,14 @@ final class KeePassMode: NSObject, Mode {
             }
             list = RootRanker.rank(cands, query: SearchQuery(query), sensitivity: sensitivity).map { list[$0] }
         }
-        let pinnedIn: (KeePassSession) -> Set<String> = { [pins] in pins.ids(for: $0.account) }
-        let favorites = list.filter { pinnedIn($0.session).contains($0.entry.id) }
-        let others = list.filter { !pinnedIn($0.session).contains($0.entry.id) }
+        var pinSets: [ObjectIdentifier: Set<String>] = [:]
+        let isPinned = { [pins] (pair: (entry: KeePassEntry, session: KeePassSession)) -> Bool in
+            let key = ObjectIdentifier(pair.session)
+            if pinSets[key] == nil { pinSets[key] = pins.ids(for: pair.session.account) }
+            return pinSets[key]!.contains(pair.entry.id)
+        }
+        let favorites = list.filter(isPinned)
+        let others = list.filter { !isPinned($0) }
         var sections: [ResultSection] = []
         if !favorites.isEmpty {
             sections.append(ResultSection(title: "Favorites", items: favorites.map { item($0.entry, $0.session, pinned: true, showDatabase) }))

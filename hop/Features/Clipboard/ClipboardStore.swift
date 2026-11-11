@@ -10,6 +10,8 @@ final class ClipboardStore {
     private(set) var items: [ClipboardItem] = []
     var onChange: (() -> Void)?
     private var saveTask: Task<Void, Never>?
+    /// Encodes and writes `index.json` off the main thread, one save after another.
+    private let saveQueue = DispatchQueue(label: "hop.clipboard.save", qos: .utility)
 
     private var indexURL: URL { dir.appending(path: "index.json") }
 
@@ -41,23 +43,32 @@ final class ClipboardStore {
         saveTask = Task {
             try? await Task.sleep(for: .seconds(1))
             guard !Task.isCancelled else { return }
-            saveNow()
+            save(wait: false)
         }
     }
 
-    func saveNow() {
+    /// Writes the history now and returns once it is on disk (on quit).
+    func saveNow() { save(wait: true) }
+
+    /// A history of 2 000 entries is megabytes of JSON: encoding it on the main thread
+    /// stalled hop about a second after every copy. The items are a value snapshot.
+    private func save(wait: Bool) {
         saveTask?.cancel()
         saveTask = nil
-        do {
-            try ensureDir()
-            let encoder = JSONEncoder()
-            encoder.dateEncodingStrategy = .iso8601
-            let data = try encoder.encode(items)
-            try data.write(to: indexURL, options: .atomic)
-            try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: indexURL.path)
-        } catch {
-            Log.app.error("clipboard: save failed: \(error.localizedDescription, privacy: .public)")
+        let snapshot = items, dir = dir, url = indexURL
+        let work = {
+            do {
+                try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+                let encoder = JSONEncoder()
+                encoder.dateEncodingStrategy = .iso8601
+                let data = try encoder.encode(snapshot)
+                try data.write(to: url, options: .atomic)
+                try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
+            } catch {
+                Log.app.error("clipboard: save failed: \(error.localizedDescription, privacy: .public)")
+            }
         }
+        if wait { saveQueue.sync(execute: work) } else { saveQueue.async(execute: work) }
     }
 
     private func ensureDir() throws {
@@ -69,6 +80,10 @@ final class ClipboardStore {
     /// Adds a capture, or moves an identical earlier one to the top.
     func add(_ item: ClipboardItem, image: Data? = nil, rtf: Data? = nil) {
         if let i = items.firstIndex(where: { $0.hash == item.hash }) {
+            // An image written ahead (`addImage`) is not needed: the entry has its own.
+            if image == nil, let file = item.imageFile, file != items[i].imageFile {
+                try? FileManager.default.removeItem(at: dir.appending(path: file))
+            }
             var existing = items.remove(at: i)
             existing.lastCopied = item.lastCopied
             existing.timesCopied += 1
@@ -152,6 +167,39 @@ final class ClipboardStore {
     private func changed() {
         onChange?()
         saveSoon()
+    }
+
+    /// Adds a copied image. Converting a screenshot's TIFF to PNG, hashing it and writing
+    /// the file take 50–300 ms for a 5K screen, so they run off the main thread.
+    func addImage(_ raw: Data, sourceBundleID: String?, sourceName: String?) {
+        let dir = dir
+        Task {
+            guard let image = await Self.prepareImage(raw, dir: dir) else { return }
+            var item = ClipboardItem(kind: .image, imageWidth: image.width, imageHeight: image.height, bytes: image.bytes,
+                                     sourceBundleID: sourceBundleID, sourceName: sourceName, hash: image.hash)
+            item.id = image.id
+            item.imageFile = image.file
+            add(item)
+        }
+    }
+
+    nonisolated struct PreparedImage: Sendable {
+        var id: String, file: String, hash: String, width: Int, height: Int, bytes: Int
+    }
+
+    @concurrent nonisolated static func prepareImage(_ raw: Data, dir: URL) async -> PreparedImage? {
+        guard let (png, w, h) = ClipboardMonitor.png(raw) else { return nil }
+        let id = UUID().uuidString, file = "\(id).png"
+        let url = dir.appending(path: file)
+        do {
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+            try png.write(to: url, options: .atomic)
+            try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
+        } catch {
+            Log.app.error("clipboard: payload write failed: \(error.localizedDescription, privacy: .public)")
+            return nil
+        }
+        return PreparedImage(id: id, file: file, hash: fingerprint(.image, [png]), width: w, height: h, bytes: png.count)
     }
 
     // MARK: Payloads
@@ -338,12 +386,8 @@ final class ClipboardMonitor {
         let imageTypes: [NSPasteboard.PasteboardType] = [.png, .tiff]
         if cfg.images, trimmed.isEmpty || ClipboardClassifier.isLink(trimmed),
            let raw = imageTypes.lazy.compactMap({ pb.data(forType: $0) }).first,
-           raw.count <= cfg.maxImageMB * 1_048_576,
-           let (png, w, h) = Self.png(raw) {
-            let item = ClipboardItem(kind: .image, imageWidth: w, imageHeight: h, bytes: png.count,
-                                     sourceBundleID: source.0, sourceName: source.1,
-                                     hash: ClipboardStore.fingerprint(.image, [png]))
-            store.add(item, image: png)
+           raw.count <= cfg.maxImageMB * 1_048_576 {
+            store.addImage(raw, sourceBundleID: source.0, sourceName: source.1)
             return
         }
 
@@ -359,6 +403,14 @@ final class ClipboardMonitor {
 
     /// PNG bytes and pixel size of pasteboard image data (screenshots arrive as TIFF).
     nonisolated static func png(_ data: Data) -> (Data, Int, Int)? {
+        // A PNG is kept as it is: read its size from the header instead of decoding it.
+        if data.starts(with: [0x89, 0x50, 0x4E, 0x47]),
+           let source = CGImageSourceCreateWithData(data as CFData, nil),
+           let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+           let w = props[kCGImagePropertyPixelWidth] as? Int, let h = props[kCGImagePropertyPixelHeight] as? Int,
+           w > 0, h > 0 {
+            return (data, w, h)
+        }
         guard let rep = NSBitmapImageRep(data: data) else { return nil }
         let w = rep.pixelsWide, h = rep.pixelsHigh
         guard w > 0, h > 0 else { return nil }

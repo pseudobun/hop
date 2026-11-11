@@ -112,4 +112,21 @@ struct IconCacheTests {
         cache.purge()
         #expect(cache.image(for: icon) !== first)
     }
+
+    @Test func appIconsAreFlattenedToTheirDrawnSize() throws {
+        let cache = IconCache(watchMemoryPressure: false)
+        let img = try #require(cache.image(for: .file("/System/Applications/Calculator.app"), size: 22))
+        var rect = NSRect(x: 0, y: 0, width: 1000, height: 1000)
+        let cg = try #require(img.cgImage(forProposedRect: &rect, context: nil, hints: nil))
+        let px = Int((22 * (NSScreen.main?.backingScaleFactor ?? 2)).rounded())
+        #expect(cg.width == px && cg.height == px)
+        #expect(img.size == NSSize(width: 22, height: 22))
+    }
+
+    @Test func sizesAreCachedApart() throws {
+        let cache = IconCache(watchMemoryPressure: false)
+        let small = try #require(cache.image(for: .tile("gear", .systemGray), size: 20))
+        let large = try #require(cache.image(for: .tile("gear", .systemGray), size: 36))
+        #expect(small.size.width == 20 && large.size.width == 36)
+    }
 }

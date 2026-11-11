@@ -184,6 +184,13 @@ struct ProcessesTests {
 
     @Test func paneNames() {
         #expect(AppScanner.prettifyPaneName("KeyboardSettings") == "Keyboard")
+        // Only changes that can change the app list rescan it.
+        #expect(AppScanner.affectsIndex("/Applications/"))
+        #expect(AppScanner.affectsIndex("/Applications/Utilities/"))
+        #expect(AppScanner.affectsIndex("/Applications/Foo.app/"))
+        #expect(AppScanner.affectsIndex("/Applications/Foo.app/Contents/"))
+        #expect(!AppScanner.affectsIndex("/Applications/Foo.app/Contents/Frameworks/Bar.framework/"))
+        #expect(!AppScanner.affectsIndex("/Applications/Foo.app/Contents/Resources/"))
         #expect(AppScanner.prettifyPaneName("ControlCenterSettings") == "Control Center")
         #expect(AppScanner.prettifyPaneName("Date & Time") == "Date & Time")
         #expect(AppScanner.prettifyPaneName("Bluetooth") == "Bluetooth")

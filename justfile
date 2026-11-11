@@ -29,6 +29,10 @@ build config="Debug":
 test:
     scripts/build-local.sh test
 
+# Benchmark an optimised Debug build (scripts/bench.sh): just bench · just bench 200 (soak, footprint)
+bench *args:
+    scripts/bench.sh {{args}}
+
 # Build "hop Dev", quit the release hop and run the dev one instead
 dev: (build "Release")
     scripts/verify-binary.sh build.noindex/Build/Products/Release/hop.app

@@ -26,7 +26,17 @@ final class KeePassSession {
         keepass.allDatabases.first { $0.expandedPath == path } ?? .init(path: path)
     }
     var account: String { path }
-    var cliPath: String? { KeePassCLI.locate(override: keepass.cli) }
+    /// Looked up at most every 10 s: the search asks on every keystroke, and each lookup is a
+    /// LaunchServices call plus a few `stat`s.
+    var cliPath: String? {
+        let override = keepass.cli
+        if let c = cachedCLI, c.override == override, Date().timeIntervalSince(c.at) < 10 { return c.path }
+        let path = KeePassCLI.locate(override: override)
+        cachedCLI = (override, path, Date())
+        return path
+    }
+
+    private var cachedCLI: (override: String, path: String?, at: Date)?
 
     /// Unlock with an explicit password (nil when the database has none).
     func unlock(password: String?) async throws {

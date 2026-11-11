@@ -80,7 +80,7 @@ final class ActionPanelView: NSView, NSTableViewDataSource, NSTableViewDelegate 
 
     func numberOfRows(in tableView: NSTableView) -> Int { actions.count }
 
-    func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? { ResultRowView() }
+    func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? { ResultRowView.reused(by: tableView) }
 
     func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
         let a = actions[row]

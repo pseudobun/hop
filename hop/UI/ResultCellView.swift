@@ -4,6 +4,15 @@ import AppKit
 final class ResultRowView: NSTableRowView {
     static let identifier = NSUserInterfaceItemIdentifier("ResultRow")
 
+    /// A row view the table can hand out again: making a new one per row on every reload
+    /// was most of the cost of typing in the clipboard history and notes.
+    static func reused(by table: NSTableView) -> ResultRowView {
+        if let v = table.makeView(withIdentifier: identifier, owner: nil) as? ResultRowView { return v }
+        let v = ResultRowView()
+        v.identifier = identifier
+        return v
+    }
+
     var tint: NSColor? {
         didSet { if tint != oldValue && isSelected { needsDisplay = true } }
     }

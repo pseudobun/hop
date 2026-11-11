@@ -48,6 +48,16 @@ nonisolated enum AppScanner {
     static let excludedSettings: Set<String> = ["HomePrivacySettingsExtension.appex", "HeadphoneSettingsExtension.appex"]
     static let renamedSettings = ["PowerPreferences": "Battery"]
 
+    /// Whether a change in this directory (an FSEvents path) can change the app list: a
+    /// watched folder or a subfolder such as Utilities (apps added, removed, renamed), or an
+    /// app's `Contents` (its Info.plist). An app updating its frameworks or resources
+    /// inside the bundle cannot, and used to rescan every app's Info.plist.
+    nonisolated static func affectsIndex(_ path: String) -> Bool {
+        guard let app = path.range(of: ".app/") else { return true }
+        let inside = path[app.upperBound...]
+        return inside.isEmpty || inside == "Contents" || inside == "Contents/"
+    }
+
     /// Directories FSEvents should watch to keep the index fresh.
     static var watchedPaths: [String] {
         let home = FileManager.default.homeDirectoryForCurrentUser.path
@@ -203,14 +213,18 @@ final class AppIndex {
     private func startWatching() {
         var context = FSEventStreamContext(version: 0, info: Unmanaged.passUnretained(self).toOpaque(),
                                            retain: nil, release: nil, copyDescription: nil)
-        let callback: FSEventStreamCallback = { _, info, _, _, _, _ in
+        let callback: FSEventStreamCallback = { _, info, count, paths, flags, _ in
             guard let info else { return }
+            let changed = (Unmanaged<CFArray>.fromOpaque(paths).takeUnretainedValue() as? [String]) ?? []
+            let mustScan = (0..<count).contains { flags[$0] & FSEventStreamEventFlags(kFSEventStreamEventFlagMustScanSubDirs | kFSEventStreamEventFlagRootChanged) != 0 }
+            guard mustScan || changed.isEmpty || changed.contains(where: AppScanner.affectsIndex) else { return }
             let index = Unmanaged<AppIndex>.fromOpaque(info).takeUnretainedValue()
             MainActor.assumeIsolated { index.rescan() }
         }
         let paths = AppScanner.watchedPaths.filter { FileManager.default.fileExists(atPath: $0) } as CFArray
         guard let s = FSEventStreamCreate(nil, callback, &context, paths, FSEventStreamEventId(kFSEventStreamEventIdSinceNow),
-                                          2.0, FSEventStreamCreateFlags(kFSEventStreamCreateFlagNoDefer | kFSEventStreamCreateFlagIgnoreSelf))
+                                          2.0, FSEventStreamCreateFlags(kFSEventStreamCreateFlagNoDefer | kFSEventStreamCreateFlagIgnoreSelf
+                                              | kFSEventStreamCreateFlagUseCFTypes))
         else { return }
         FSEventStreamSetDispatchQueue(s, .main)
         FSEventStreamStart(s)

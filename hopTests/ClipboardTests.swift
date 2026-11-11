@@ -129,6 +129,47 @@ struct ClipboardStoreTests {
         #expect(items.count == 1 && items[0].kind == .link && items[0].timesCopied == 1 && !items[0].pinned)
     }
 
+    @Test func savesInTheBackgroundAndFlushesOnSaveNow() throws {
+        let dir = temp()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let store = ClipboardStore(dir: dir)
+        for i in 0..<50 { store.add(text("entry \(i)")) }
+        store.saveNow()
+        let reloaded = ClipboardStore(dir: dir)
+        reloaded.load()
+        #expect(reloaded.items.count == 50 && reloaded.items[0].text == "entry 49")
+    }
+
+    @Test func preparesImagesOffTheMainThreadAndDedupes() async throws {
+        let dir = temp()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 4, pixelsHigh: 3, bitsPerSample: 8, samplesPerPixel: 4,
+                                   hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
+        let tiff = try #require(rep.tiffRepresentation)
+        let first = try #require(await ClipboardStore.prepareImage(tiff, dir: dir))
+        #expect(first.width == 4 && first.height == 3)
+        #expect(FileManager.default.fileExists(atPath: dir.appending(path: first.file).path))
+        let store = ClipboardStore(dir: dir)
+        var item = ClipboardItem(kind: .image, imageWidth: 4, imageHeight: 3, hash: first.hash)
+        item.imageFile = first.file
+        store.add(item)
+        // The same picture again: the entry moves up and the second file is removed.
+        let second = try #require(await ClipboardStore.prepareImage(tiff, dir: dir))
+        var again = ClipboardItem(kind: .image, imageWidth: 4, imageHeight: 3, hash: second.hash)
+        again.imageFile = second.file
+        store.add(again)
+        #expect(store.items.count == 1 && store.items[0].timesCopied == 2 && store.items[0].imageFile == first.file)
+        #expect(!FileManager.default.fileExists(atPath: dir.appending(path: second.file).path))
+    }
+
+    @Test func readsPNGSizeWithoutConverting() throws {
+        let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 5, pixelsHigh: 7, bitsPerSample: 8, samplesPerPixel: 4,
+                                   hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
+        let png = try #require(rep.representation(using: .png, properties: [:]))
+        let (out, w, h) = try #require(ClipboardMonitor.png(png))
+        #expect(out == png && w == 5 && h == 7)
+    }
+
     @Test func convertsTIFFToPNG() throws {
         let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 3, pixelsHigh: 2, bitsPerSample: 8, samplesPerPixel: 4,
                                    hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
