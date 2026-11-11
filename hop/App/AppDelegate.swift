@@ -251,10 +251,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     ("clipboard show + hide", { [unowned self] in
                         clipboard.show(); clipboard.panel.displayIfNeeded(); clipboard.hide()
                     }),
-                    ("clipboard type \"the\"", { [unowned self] in
-                        clipboard.show()
+                    ("clipboard type \"the\" (4 keys)", { [unowned self] in
+                        if !clipboard.isVisible { clipboard.show() }
                         for q in ["t", "th", "the", ""] { clipboard.debugSearch(q); clipboard.panel.displayIfNeeded() }
-                        clipboard.hide()
                     }),
                     ("notes show + hide", { [unowned self] in
                         notes.show(); notes.panel.displayIfNeeded(); notes.hide()
