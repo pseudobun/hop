@@ -54,6 +54,7 @@ enum Registry {
         items += OpenAICommands.items(services)
         items += CalculatorCommands.items(services)
         items += EmojiCommands.items(services)
+        items += RingCommands.items(services)
         items += [
             Item(id: "hop.settings", title: "Settings", subtitle: "hop's preferences",
                  aliases: ["preferences", "config", "configure", "options", "hop settings"],

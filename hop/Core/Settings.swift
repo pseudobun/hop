@@ -284,6 +284,7 @@ nonisolated struct HopConfig: Decodable, Equatable, Sendable {
     var translate = Translate()
     var ocr = OCR()
     var emoji = Emoji()
+    var rings = Rings()
     /// Global hotkeys for any command or app: { "Empty Trash": "hyper+t", "Safari": "hyper+s" }.
     var hotkeys: [String: String] = [:]
 
@@ -299,7 +300,7 @@ nonisolated private extension KeyedDecodingContainer {
 }
 
 nonisolated extension HopConfig {
-    private enum Keys: String, CodingKey { case general, updates, hyperKey, wireguard, keepass, system, bookmarks, notes, clipboard, snippets, files, calculator, shelf, messages, calendar, translate, ocr, emoji, hotkeys }
+    private enum Keys: String, CodingKey { case general, updates, hyperKey, wireguard, keepass, system, bookmarks, notes, clipboard, snippets, files, calculator, shelf, messages, calendar, translate, ocr, emoji, rings, hotkeys }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: Keys.self)
         general = try c.value(.general, General())
@@ -320,6 +321,7 @@ nonisolated extension HopConfig {
         translate = try c.value(.translate, Translate())
         ocr = try c.value(.ocr, OCR())
         emoji = try c.value(.emoji, Emoji())
+        rings = try c.value(.rings, Rings())
         hotkeys = try c.value(.hotkeys, [:])
     }
 }
@@ -730,6 +732,49 @@ final class AppSettings {
         enabled: false,
         // Caps Lock tapped on its own sends Escape
         quickPressEscape: false,
+      },
+
+      // Rings: radial menus at the pointer. Hold the trigger, move toward a slice, let go.
+      // Flick on past a group to reach its slices; scroll while holding for the next ring on the
+      // same trigger; 1–8 run a slice; Escape or letting go in the middle cancels.
+      // Triggers: a hotkey ("hyper+space", "alt+`"), "fn", "mouse3" (middle button) to "mouse5",
+      // "tap3" or "tap4" (a trackpad tap; that ring stays open until you click).
+      // `hop ring actions` lists the built-in actions.
+      rings: {
+        enabled: true,
+        // "release" runs the slice you let go on; "click" runs the one you click
+        fireOn: "release",
+        // Letting go this close to the middle cancels: "small", "standard", "large" or "extraLarge"
+        deadZone: "standard",
+        // Ring size in percent, 60 to 200
+        size: 100,
+        digits: true,
+        sounds: false,
+        haptics: true,
+        // Count flicks for "Ring Statistics" (stays on this Mac)
+        statistics: true,
+        // One trigger for app rings: the ring of the app in front opens (Safari, Chrome, Finder,
+        // Xcode, VS Code, Cursor, Slack, Linear, Zoom, Obsidian, Things, Ghostty, Terminal, iTerm2)
+        appTrigger: "",
+        // Play, pause, skip, volume
+        mediaTrigger: "",
+        builtInAppRings: true,
+        // Each slice is an action string or { title, icon, action } or { title, icon, children: [...] }.
+        // Actions: a built-in ("dark-mode", "copy-path", "convert"…), any hop command id or title
+        // ("clipboard.history", "Empty Trash"), "app:Safari", "key:cmd+shift+t", "type:/model opus\\n",
+        // "menu:File > New Tab", "shortcut:Name", "url:https://…", "folder:~/Downloads", "shell:…",
+        // "applescript:…". A ring with app: "<bundle id>" replaces hop's app ring for that app.
+        rings: [
+          // {
+          //   name: "Main",
+          //   trigger: "hyper+space",
+          //   slices: [
+          //     "dark-mode", "keep-awake", "mute", "mission-control", "clipboard.history",
+          //     "screenshot-tools", "lock-screen",
+          //     { title: "Files", icon: "folder", children: ["copy-path", "convert", "airdrop", "folder:~/Downloads"] },
+          //   ],
+          // },
+        ],
       },
 
       wireguard: {

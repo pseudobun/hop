@@ -27,6 +27,8 @@ enum CLI {
         "snippets": snippets,
         "files": files,
         "shelf": shelf,
+        "ring": ring,
+        "rings": ring,
         "codes": codes,
         "events": events,
         "tr": translate,
@@ -101,6 +103,10 @@ enum CLI {
           notes path                          Print the notes folder
           files <query> [--content] [--json] [--limit=N]   Files by name (or by text with --content), via Spotlight
           shelf <path…>                       Put files on a shelf in the running hop (paths or stdin, one per line)
+          ring [list] [--json]                Rings from the config and hop's ready app rings, with their triggers
+          ring actions [--json]               Every built-in ring action (use them as slice strings)
+          ring open <name|app|media>          Open a ring at the pointer in the running hop
+          ring run <action>                   Run one slice action in the running hop: "dark-mode", "key:cmd+t", "app:Safari"…
           codes [--latest] [--minutes=N] [--json]   One-time codes from Messages (needs Full Disk Access)
           events [--days=N] [--birthdays] [--json]  Calendar events from today on (default today only)
           tr <text> [--to=CODE] [--json]      Translate between translate.languages with OpenAI (text or stdin)
@@ -697,6 +703,50 @@ enum CLI {
                 }
             }
             return 0
+        }
+    }
+
+    /// `hop ring`: list rings and actions, or open a ring / run an action in the running hop.
+    static func ring(_ a: Args) async -> Int32 {
+        let sub = a.positional.first ?? "list"
+        let config = AppSettings().data.rings
+        switch sub {
+        case "list":
+            let own = config.rings.map { r -> [String: Any] in
+                ["name": r.name, "trigger": r.app.isEmpty ? r.trigger : config.appTrigger, "app": r.app,
+                 "slices": r.slices.map { $0.children.isEmpty ? $0.action : "group: " + $0.title }]
+            }
+            let ready = RingPresets.apps.map { r -> [String: Any] in
+                ["name": r.name, "trigger": config.appTrigger, "app": r.app, "builtIn": true, "slices": r.slices.map { $0.children.isEmpty ? $0.action : "group: " + $0.title }]
+            } + [["name": "Media", "trigger": config.mediaTrigger, "builtIn": true, "slices": RingPresets.media.slices.map(\.action)]]
+            if a.flags.contains("json") { Output.json(["enabled": config.enabled, "rings": own, "builtIn": ready]); return 0 }
+            for r in own + ready {
+                let trigger = (r["trigger"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? "(no trigger)"
+                let app = (r["app"] as? String).flatMap { $0.isEmpty ? nil : " [\($0)]" } ?? ""
+                print("\(r["name"] as? String ?? "")\(app)  \(trigger)\((r["builtIn"] as? Bool) == true ? "  (hop)" : "")")
+            }
+            return 0
+        case "actions":
+            if a.flags.contains("json") {
+                Output.json(RingCatalog.all.map { ["id": $0.id, "title": $0.title, "group": $0.group.rawValue, "detail": $0.detail,
+                                                   "switch": $0.isSwitch, "fan": $0.isFan] })
+                return 0
+            }
+            for e in RingCatalog.all { print("\(e.id.padding(toLength: 20, withPad: " ", startingAt: 0)) \(e.title) — \(e.detail)") }
+            print("\nAlso: hop command ids, app:<name>, key:<combo>, type:<text>, menu:<A > B>, shortcut:<name>, url:<link>, folder:<path>, shell:<cmd>, applescript:<src>")
+            return 0
+        case "open", "run":
+            let value = a.positional.dropFirst().joined(separator: " ")
+            guard !value.isEmpty else { return Output.fail("usage: hop ring \(sub) <\(sub == "open" ? "name" : "action")>") }
+            if sub == "run", RingActionRef.parse(value) == nil { return Output.fail("“\(value)” is not an action") }
+            guard !NSRunningApplication.runningApplications(withBundleIdentifier: AppPaths.bundleID).isEmpty else {
+                return Output.fail("hop is not running")
+            }
+            DistributedNotificationCenter.default().postNotificationName(RingController.cliNotification, object: nil,
+                                                                         userInfo: [sub: value], deliverImmediately: true)
+            return 0
+        default:
+            return Output.fail("usage: hop ring [list | actions | open <name> | run <action>]")
         }
     }
 

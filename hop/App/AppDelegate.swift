@@ -43,11 +43,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var debugBackdrop: NSWindow?
     #endif
     private let hyper = HyperKeyController()
+    private let rings = RingController()
     private let startupIndicator = StartupIndicator()
     private var signalSources: [DispatchSourceSignal] = []
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         guard !AppPaths.isRunningTests else { return }
+        #if DEBUG
+        // -DebugRing Finder -DebugRingPath /tmp/r.png [-DebugRingAim 2] [-DebugRingGroup YES]: render a ring and quit.
+        if let name = UserDefaults.standard.string(forKey: "DebugRing"), let path = UserDefaults.standard.string(forKey: "DebugRingPath") {
+            let d = UserDefaults.standard
+            Theme.variant = HopConfig.General.ThemeName(rawValue: d.string(forKey: "DebugRingTheme") ?? "") ?? .og
+            let ring = name == "Media" ? RingPresets.media : RingPresets.apps.first { $0.name == name } ?? RingPresets.media
+            RingController().debugRender(ring, aimed: d.object(forKey: "DebugRingAim") == nil ? nil : d.integer(forKey: "DebugRingAim"),
+                                         group: d.bool(forKey: "DebugRingGroup"), to: path)
+            exit(0)
+        }
+        #endif
         AppPaths.migrateLegacyData()
         installSignalHandlers()
         Theme.registerFonts()
@@ -110,9 +122,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             Registry.commands(services)
         }
         root.hyperError = { [weak self] in self?.hyper.lastError }
-        root.hotkeyProblems = { [weak self] in self?.bindings.problems ?? [] }
         root.upcoming = { [weak self] in self?.calendar.upcomingItems() ?? [] }
         bindings.run = { [weak self] key in self?.runBinding(key) }
+        RingRunner.runHopBinding = { [weak self] key in self?.runBinding(key) }
+        RingRunner.hopCommand = { [weak self] key in
+            guard let self else { return nil }
+            let commands = Registry.commands(services)
+            return commands.first { $0.id == key } ?? commands.first { $0.title.caseInsensitiveCompare(key) == .orderedSame }
+        }
+        RingCommands.controller = rings
+        root.hotkeyProblems = { [weak self] in (self?.bindings.problems ?? []) + (self?.rings.problems ?? []) }
         let makeFiles: () -> Mode = { FileSearchMode(settings: settings, frecency: frecency) }
         root.prefixModes = [(prefix: "kp ", make: makeKeePass), (prefix: "f ", make: makeFiles)]
         root.pathMode = makeFiles
@@ -429,6 +448,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
+        if previous?.rings != config.rings {
+            rings.apply(config.rings)
+            for p in rings.problems { Log.app.error("rings: \(p, privacy: .public)") }
+        }
+
         if previous?.hotkeys != config.hotkeys || previous?.general.hotkey != config.general.hotkey
             || previous?.notes.hotkey != config.notes.hotkey || previous?.notes.enabled != config.notes.enabled
             || previous?.clipboard.hotkey != config.clipboard.hotkey || previous?.clipboard.enabled != config.clipboard.enabled
@@ -611,6 +635,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         clipboardStore?.saveNow()
         shelves?.saveNow()
         hyper.stop()
+        rings.stop()
+        RingStats.shared.saveNow()
         expander.stop()
         messageWatcher.stop()
     }

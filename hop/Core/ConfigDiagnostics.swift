@@ -34,6 +34,8 @@ nonisolated indirect enum ConfigSchema: Equatable, Sendable {
         // Empty by default, so there is no element to look at.
         "bookmarks": HopConfig.Bookmark(),
         "keepass.databases": HopConfig.KeePass.Database(),
+        "rings.rings": HopConfig.Ring(),
+        "rings.rings.0.slices": HopConfig.Slice(),
     ])
 
     private static func describing(_ value: Any, path: String, samples: [String: Any]) -> ConfigSchema {
