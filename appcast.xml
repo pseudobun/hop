@@ -6,6 +6,23 @@
     <description>hop releases</description>
     <language>en</language>
     <item>
+      <title>hop 0.1.0-beta.5</title>
+      <pubDate>Wed, 11 Nov 2026 15:46:04 +0000</pubDate>
+      <sparkle:version>128</sparkle:version>
+      <sparkle:shortVersionString>0.1.0-beta.5</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
+      <description><![CDATA[<style>body{font:13px -apple-system,sans-serif;margin:12px 14px;color:#222}h3{font-size:13px;margin:12px 0 4px}ul{padding-left:18px;margin:4px 0}li{margin:2px 0}code{font:12px ui-monospace,monospace}a{color:#0a64d0}@media(prefers-color-scheme:dark){body{color:#ddd}a{color:#6ab0ff}}</style><h3>Features</h3>
+<ul>
+<li><b>rings:</b> add radial gesture menus with built-in actions and app rings (<a href="https://github.com/pseudobun/hop/commit/512c3320bad3310713edeef3db1b1cc5abc82de7">512c332</a>)</li>
+</ul>
+<h3>Bug Fixes</h3>
+<ul>
+<li><b>rings:</b> build on the CI toolchain and allow preset keystrokes in gitleaks (<a href="https://github.com/pseudobun/hop/commit/49b5ba097ed84ca79b72703b68a4bbfa0ddcacff">49b5ba0</a>)</li>
+<li><b>security:</b> authenticate the CLI channel and gate code-running ring actions (<a href="https://github.com/pseudobun/hop/commit/08ec78644f5aa811ac343be8611a3fcd42fd2bd7">08ec786</a>)</li>
+</ul><p><a href="https://github.com/pseudobun/hop/releases/tag/v0.1.0-beta.5">Release on GitHub</a></p>]]></description>
+      <enclosure url="https://github.com/pseudobun/hop/releases/download/v0.1.0-beta.5/hop-0.1.0-beta.5-macos.zip" type="application/octet-stream" sparkle:edSignature="EbSslATwCsbtKYiZHAqx+4IwYviv0S2rY1TslerM8+j1bGCHlpA5kqlwUdm3ZwRPixo7bNLYDiafgZIKCSVXAg==" length="5098083"/>
+    </item>
+    <item>
       <title>hop 0.1.0-beta.4</title>
       <pubDate>Tue, 10 Nov 2026 22:09:41 +0000</pubDate>
       <sparkle:version>121</sparkle:version>
