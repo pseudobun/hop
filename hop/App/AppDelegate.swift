@@ -248,6 +248,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     ("SpotlightHotkey.ownsCommandSpace", { _ = SpotlightHotkey.ownsCommandSpace }),
                     ("root sections, empty query", { _ = root.sections(for: "") }),
                     ("root sections, \"saf\"", { _ = root.sections(for: "saf") }),
+                    ("clipboard show + hide", { [unowned self] in
+                        clipboard.show(); clipboard.panel.displayIfNeeded(); clipboard.hide()
+                    }),
+                    ("clipboard type \"the\"", { [unowned self] in
+                        clipboard.show()
+                        for q in ["t", "th", "the", ""] { clipboard.debugSearch(q); clipboard.panel.displayIfNeeded() }
+                        clipboard.hide()
+                    }),
+                    ("notes show + hide", { [unowned self] in
+                        notes.show(); notes.panel.displayIfNeeded(); notes.hide()
+                    }),
+                    ("settings show + close", { [unowned self] in
+                        settingsWindow.show(); settingsWindow.window.displayIfNeeded(); settingsWindow.window.close()
+                    }),
+                    ("emoji: open, type \"heart\"", { [unowned self] in
+                        launcher.show()
+                        launcher.push(EmojiCommands.mode(services))
+                        for q in ["h", "he", "hea", "hear", "heart"] { launcher.setQuery(q); launcher.panel.displayIfNeeded() }
+                        launcher.popToRoot()
+                        launcher.hide()
+                    }),
                 ])
             }
         }
