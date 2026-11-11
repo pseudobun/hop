@@ -538,11 +538,7 @@ final class LauncherController: NSObject, LauncherContext, NSTableViewDataSource
     }
 
     func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? {
-        let v = tableView.makeView(withIdentifier: ResultRowView.identifier, owner: nil) as? ResultRowView ?? {
-            let v = ResultRowView()
-            v.identifier = ResultRowView.identifier
-            return v
-        }()
+        let v = ResultRowView.reused(by: tableView)
         v.tint = current.tint
         return v
     }
@@ -738,7 +734,8 @@ final class LauncherController: NSObject, LauncherContext, NSTableViewDataSource
 /// The bunny logo centred and faint; outside Auto Layout so it can never size the window.
 /// Rendered once into the layer's contents, so showing the panel never re-renders the SVG.
 final class WatermarkView: NSView {
-    private let image: NSImage? = Bundle.main.url(forResource: "bunny", withExtension: "svg").flatMap(NSImage.init(contentsOf:))
+    /// The pixel size the layer's image was drawn at.
+    private var renderedSide = 0
 
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
 
@@ -749,17 +746,26 @@ final class WatermarkView: NSView {
         if let s = superview { frame = s.bounds }
     }
 
+    /// Draws only the bunny's square, once per size, straight into a bitmap. A panel-sized
+    /// image drawn through an NSImage handler kept two bitmaps (the panel and the SVG's
+    /// snapshot, about 16 MB) for a mark at 5 % opacity.
     override func updateLayer() {
-        guard let image, let layer, bounds.width > 0 else { return }
-        let b = bounds
-        let side = b.height * 0.82
-        let rect = NSRect(x: b.midX - side / 2, y: b.midY - side / 2, width: side, height: side)
-        let rendered = NSImage(size: b.size, flipped: false) { _ in
-            image.draw(in: rect, from: .zero, operation: .sourceOver, fraction: 0.05)
-            return true
-        }
+        guard let layer, bounds.width > 0 else { return }
         let scale = window?.backingScaleFactor ?? 2
+        let px = Int((bounds.height * 0.82 * scale).rounded())
         layer.contentsScale = scale
-        layer.contents = rendered.layerContents(forContentsScale: scale)
+        layer.contentsGravity = .center
+        guard px > 0, px != renderedSide else { return }
+        guard let url = Bundle.main.url(forResource: "bunny", withExtension: "svg"), let image = NSImage(contentsOf: url),
+              let ctx = CGContext(data: nil, width: px, height: px, bitsPerComponent: 8, bytesPerRow: 0,
+                                  space: CGColorSpace(name: CGColorSpace.sRGB)!,
+                                  bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue)
+        else { return }
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(cgContext: ctx, flipped: false)
+        image.draw(in: NSRect(x: 0, y: 0, width: px, height: px), from: .zero, operation: .sourceOver, fraction: 0.05)
+        NSGraphicsContext.restoreGraphicsState()
+        layer.contents = ctx.makeImage()
+        renderedSide = px
     }
 }

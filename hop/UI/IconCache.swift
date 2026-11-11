@@ -1,8 +1,9 @@
 import AppKit
 
 /// Cache of file and symbol icons; only visible rows ask for icons. File icons are
-/// flattened to small bitmaps (~8 KB each), so a few hundred apps stay cheap. Emptied
-/// when macOS reports memory pressure; rows re-render what they need on the next show.
+/// flattened to bitmaps of the size they are drawn at (44 px for a row: ~8 KB each), so a
+/// few hundred apps stay cheap. Emptied when macOS reports memory pressure; rows re-render
+/// what they need on the next show. Keys carry the size: Settings draws tiles at 20 and 36.
 final class IconCache {
     static let shared = IconCache()
 
@@ -25,13 +26,13 @@ final class IconCache {
         guard let icon else { return nil }
         switch icon {
         case .file(let path):
-            let key = "file:\(path)" as NSString
+            let key = "file:\(path)@\(size)" as NSString
             if let hit = cache.object(forKey: key) { return hit }
             let img = Self.bitmap(NSWorkspace.shared.icon(forFile: path), size: size)
             cache.setObject(img, forKey: key)
             return img
         case .imageFile(let path):
-            let key = "image:\(path)" as NSString
+            let key = "image:\(path)@\(size)" as NSString
             if let hit = cache.object(forKey: key) { return hit }
             guard let file = NSImage(contentsOfFile: path), file.size.width > 0, file.size.height > 0 else { return nil }
             let fitted = NSImage(size: NSSize(width: size, height: size), flipped: false) { rect in
@@ -44,7 +45,7 @@ final class IconCache {
             cache.setObject(img, forKey: key)
             return img
         case .symbol(let name, _):
-            let key = "sym:\(name)" as NSString
+            let key = "sym:\(name)@\(size)" as NSString
             if let hit = cache.object(forKey: key) { return hit }
             let config = NSImage.SymbolConfiguration(pointSize: size * 0.72, weight: .regular)
             let img = NSImage(systemSymbolName: name, accessibilityDescription: nil)?.withSymbolConfiguration(config)
@@ -53,13 +54,13 @@ final class IconCache {
         case .image(let img):
             return img
         case .tile(let name, let color):
-            let key = "tile:\(name):\(color.description)" as NSString
+            let key = "tile:\(name):\(color.description)@\(size)" as NSString
             if let hit = cache.object(forKey: key) { return hit }
             let img = Self.tile(name, color, size: size)
             cache.setObject(img, forKey: key)
             return img
         case .emoji(let e):
-            let key = "emoji:\(e)" as NSString
+            let key = "emoji:\(e)@\(size)" as NSString
             if let hit = cache.object(forKey: key) { return hit }
             let img = NSImage(size: NSSize(width: size, height: size), flipped: false) { rect in
                 let font = NSFont.systemFont(ofSize: size * 0.8)
@@ -95,13 +96,24 @@ final class IconCache {
 
     /// Renders the best representation once; drawing a workspace icon directly goes
     /// through IconServices (and a placeholder pass in NSImageView) every time.
-    private static func bitmap(_ icon: NSImage, size: CGFloat) -> NSImage {
+    ///
+    /// Drawn into a bitmap of exactly that many pixels: `cgImage(forProposedRect:)` hands back
+    /// the nearest representation, 128 × 128 (64 KB) for a 44 px row, 8× the memory.
+    static func bitmap(_ icon: NSImage, size: CGFloat) -> NSImage {
         let scale = NSScreen.main?.backingScaleFactor ?? 2
-        var rect = NSRect(x: 0, y: 0, width: size * scale, height: size * scale)
-        guard let cg = icon.cgImage(forProposedRect: &rect, context: nil, hints: nil) else {
+        let px = Int((size * scale).rounded())
+        var rect = NSRect(x: 0, y: 0, width: px, height: px)
+        guard let source = icon.cgImage(forProposedRect: &rect, context: nil, hints: nil),
+              let ctx = CGContext(data: nil, width: px, height: px, bitsPerComponent: 8, bytesPerRow: 0,
+                                  space: CGColorSpace(name: CGColorSpace.sRGB)!,
+                                  bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue)
+        else {
             icon.size = NSSize(width: size, height: size)
             return icon
         }
+        ctx.interpolationQuality = .high
+        ctx.draw(source, in: CGRect(x: 0, y: 0, width: px, height: px))
+        guard let cg = ctx.makeImage() else { return NSImage(cgImage: source, size: NSSize(width: size, height: size)) }
         return NSImage(cgImage: cg, size: NSSize(width: size, height: size))
     }
 

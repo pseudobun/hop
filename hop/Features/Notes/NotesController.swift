@@ -1204,7 +1204,7 @@ final class NotesController: NSObject, NSWindowDelegate, NSTableViewDataSource, 
     func tableView(_ tableView: NSTableView, heightOfRow row: Int) -> CGFloat { 50 }
 
     func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? {
-        let v = ResultRowView()
+        let v = ResultRowView.reused(by: tableView)
         v.tint = Palette.notes
         v.isHovered = row == table.hoveredRow
         return v

@@ -92,6 +92,11 @@ final class DragWatcher {
     private var activated = false
     private var ignored = false
     private var shake = ShakeDetector()
+    /// When the drag pasteboard was last asked (event time).
+    private var lastPoll: TimeInterval = 0
+    /// Selecting text or moving a window sends 60–120 drag events a second and none of
+    /// them is a drag of content; asking the pasteboard server at most this often is enough.
+    nonisolated static let pollInterval: TimeInterval = 0.05
 
     var isRunning: Bool { !monitors.isEmpty }
 
@@ -116,11 +121,14 @@ final class DragWatcher {
         isDragging = false
         activated = false
         ignored = false
+        lastPoll = 0
         shake.reset()
     }
 
     private func dragged(_ event: NSEvent) {
         if !isDragging {
+            guard event.timestamp - lastPoll >= Self.pollInterval else { return }
+            lastPoll = event.timestamp
             guard dragPasteboard.changeCount != startCount else { return }
             isDragging = true
             let front = NSWorkspace.shared.frontmostApplication?.bundleIdentifier

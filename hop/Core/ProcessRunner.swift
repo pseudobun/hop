@@ -23,7 +23,9 @@ nonisolated enum ProcessRunner {
         var err = Data()
     }
 
-    static func run(_ executable: String, _ arguments: [String] = [], stdin: Data? = nil,
+    /// `@concurrent`: a plain nonisolated async function runs on its caller's actor here (approachable
+    /// concurrency), so setting up and spawning the process (`posix_spawn`) ran on the main thread.
+    @concurrent static func run(_ executable: String, _ arguments: [String] = [], stdin: Data? = nil,
                     environment: [String: String]? = nil, timeout: Duration? = nil) async throws -> ProcessResult {
         let state = State()
         let p = state.process
