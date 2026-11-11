@@ -66,8 +66,11 @@ enum RingRunner {
         switch ref {
         case .builtin(let id):
             let e = RingCatalog.entry(id)!
-            return RingNode(title: e.title, symbol: e.symbol, kind: .run(statsKey: e.id) { ctx in await runBuiltin(e.id, ctx) },
-                            readState: e.isSwitch ? { await state(of: e.id) } : nil)
+            let entryID = e.id
+            let run: (RingContext) async -> RingOutcome = { ctx in await runBuiltin(entryID, ctx) }
+            var read: (() async -> Bool?)?
+            if e.isSwitch { read = { await state(of: entryID) } }
+            return RingNode(title: e.title, symbol: e.symbol, kind: .run(statsKey: entryID, run), readState: read)
         case .command(let key):
             let item = hopCommand?(key)
             var symbol = "command"
