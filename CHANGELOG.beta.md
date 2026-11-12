@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.0-beta.15](https://github.com/pseudobun/hop/compare/v0.1.0-beta.14...v0.1.0-beta.15) (2026-11-12)
+
+
+### Bug Fixes
+
+* **cask:** name the conflicting cask with its tap ([#47](https://github.com/pseudobun/hop/issues/47)) ([51a5ac0](https://github.com/pseudobun/hop/commit/51a5ac0910e9b51bd32a3fb0d7cc583e058eb3bd))
+
 ## [0.1.0-beta.14](https://github.com/pseudobun/hop/compare/v0.1.0-beta.13...v0.1.0-beta.14) (2026-11-12)
 
 
