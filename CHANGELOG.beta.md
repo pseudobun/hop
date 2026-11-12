@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.0-beta.9](https://github.com/pseudobun/hop/compare/v0.1.0-beta.8...v0.1.0-beta.9) (2026-11-12)
+
+
+### Features
+
+* split hop into core and plugins, with installable plugins and SDKs ([#25](https://github.com/pseudobun/hop/issues/25)) ([d29d658](https://github.com/pseudobun/hop/commit/d29d658fd5f095b0721ecdcdfc3e9def4595d385))
+
 ## [0.1.0-beta.8](https://github.com/pseudobun/hop/compare/v0.1.0-beta.7...v0.1.0-beta.8) (2026-11-12)
 
 
