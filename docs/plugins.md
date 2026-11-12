@@ -10,10 +10,13 @@ calculator and the rest. There are two kinds.
 | Runs | inside hop | as its own program, started on demand |
 | UI | any AppKit, own windows | lists and grids hop draws |
 | Settings | a page the plugin describes | a page from `plugin.json5` |
-| Review | pull request | none (Community) or hop's index (Verified) |
+| CLI | `hop <name> …` in Swift | `hop <name> …` answered by the program |
+| Review | pull request (Verified) | none (Community) |
 
 Core is what is left: the launcher, root search, apps, fallbacks, themes, hotkeys, Settings,
-permissions, updates, the CLI and IPC.
+permissions, updates, IPC, and the `hop` commands that are about hop itself (`apps`, `open`,
+`config`, `hotkeys`, `permissions`, `plugin`, `version`, `update`). Every other `hop` command
+belongs to a plugin.
 
 The Plugins page in Settings (or **Open Plugins** in the launcher) lists every plugin with its
 switch, its settings and an **Install from GitHub** field.
@@ -39,6 +42,37 @@ plugins: {
 
 Changes in the file or in Settings apply at once. A preference of type `secret` never touches the
 config: Settings saves it in the login Keychain, and hop hands it to the plugin at start.
+
+`plugins.install` makes the config the list of installed plugins, so a dotfiles repo (or an agent)
+can declare them:
+
+```json5
+plugins: {
+  install: ["you/hop-github", "someone/hop-thing@v1.2.0", "~/src/x/dev.me.x.hopplugin.zip"],
+},
+```
+
+hop installs what the list names and removes installed plugins it no longer names, at launch and
+whenever the list changes (`hop plugin sync` does the same from a shell, `--yes` to apply). Without
+the key, installed plugins are left alone. Installing from Settings or `hop plugin install` adds
+the entry; removing deletes it. Anything that can write the config can therefore install code,
+like `keepass.passwordCommand` already runs it: review config changes like code.
+
+### For scripts and agents
+
+Everything Settings does has a command, and every command only edits `config.json5` (comments
+kept), so the file stays the one source of truth:
+
+```sh
+hop plugin list --json                  # id, name, tier, on/off, source, its commands, pending sync
+hop plugin enable keepass               # or disable
+hop plugin settings keepass --json      # every key: type, default, current value, hidden or not
+hop plugin set notes folder "~/Vault"   # one key (installed plugins: their preference ids)
+hop plugin set dev.you.github token -   # a secret, read from stdin into the Keychain
+hop config show                         # the whole effective config as JSON
+hop config get plugins.disabled
+hop config set general.hotkey '"alt+space"'   # refused, and nothing written, if the config would not read
+```
 
 ## Built-in plugins
 
@@ -100,10 +134,21 @@ Every hook has a default, so a plugin implements only what it uses:
 | `upcomingItems()` | the root's Upcoming section |
 | `pathMode()` | what `~/…` opens |
 | `appActions(entry)` | extra actions on an app row |
+| `static cli` | `hop <name> …` commands (they run in the CLI process, without the app) |
 | `launcherWillShow()`, `setAway(_:)`, `themeDidChange(saved:)`, `stop()` | lifecycle |
 
 `PluginHost` gives a plugin the services, settings, launcher and other plugins
 (`host.plugin(ClipboardPlugin.self)`).
+
+CLI commands sit next to the plugin (`NotesCommandLine.swift`):
+
+```swift
+extension WeatherPlugin {
+    static var cli: [CLICommand] {
+        [CLICommand(names: ["weather"], usage: ["weather [city] [--json]   Today's forecast"], run: CLI.weather)]
+    }
+}
+```
 
 ## Installed plugins
 
@@ -150,6 +195,12 @@ Symbolic links are refused. `hop plugin install ./x.hopplugin.zip` installs a lo
   ],
   // Shown before install. hop does not enforce it.
   permissions: { network: ["api.github.com"], clipboard: "write", files: [], exec: [] },
+  // `hop gh …` sends `cli` to the program and prints what it answers.
+  cli: { name: "gh", usage: ["gh prs [--json]   Your open pull requests"] },
+  // Every root-search query goes to `answer`; what comes back shows above the results.
+  answers: true,
+  // Extra actions on application rows; they arrive as `action` with command "app".
+  appActions: [{ id: "open-repo", title: "Open Repository", symbol: "arrow.triangle.branch" }],
 }
 ```
 
@@ -169,7 +220,10 @@ stdout.
 | `initialize` | `protocolVersion`, `hopVersion`, `pluginID`, `preferences`, `dataDir`, `appearance` | anything |
 | `run` | `command`, `query?` (text after its prefix), `background?` | a Response |
 | `query` | `command`, `text` (views with `filtering: "plugin"`) | a Response |
-| `action` | `command`, `id`, `payload` (a `callback` action) | a Response |
+| `action` | `command`, `id`, `payload` (a `callback` action; `command` is "root", "answer" or "app" for those items) | a Response |
+| `submit` | `command`, `text` (↵ in a view with `submit: true`) | a Response |
+| `answer` | `text` (a root query, with `answers: true`) | `{title?, items}` or null |
+| `cli` | `args` (words after the name), `stdin?` | `{stdout?, stderr?, exitCode?}` |
 | `shutdown` | (notification) | exit |
 
 | plugin → hop (notifications) | Params |
@@ -177,6 +231,7 @@ stdout.
 | `render` | a Response with `view`, and `command` to pick the open view |
 | `hud` | `text`, `style?` |
 | `loading` | `loading: true/false` |
+| `rootItems` | `items` (extra root commands), `upcoming` (the root's Upcoming section) |
 
 An error reply (`{"error": {"code": -32000, "message": "…"}}`) shows as a red HUD. Requests time
 out after 15 seconds.
@@ -185,15 +240,19 @@ A **Response** has any of: `view` (show or replace), `push` (open on top), `pop:
 (`{text, style: info|success|warn|fail}`), `dismiss: true` (hide the launcher).
 
 A **View** is `{type: "list"|"grid", title?, placeholder?, filtering: "hop"|"plugin", columns?,
-sections: [{title?, items}], items? (shorthand for one section), emptyText?, loading?}`. With
+sections: [{title?, items}], items? (shorthand for one section), emptyText?, loading?, submit?,
+secureInput?}`. `submit: true` makes ↵ with nothing selected send the typed text (`submit`), for
+prompts like Translate's; `secureInput` hides it (a password). With
 `filtering: "hop"` hop ranks the items as you type, like everywhere else; with `"plugin"` it sends
 `query` once typing pauses.
 
-An **Item** is `{id, title, subtitle?, icon?, accessory?, keywords?, actions}`. An icon is
+An **Item** is `{id, title, subtitle?, icon?, accessory?, keywords?, chip?, actions}`; a chip is
+`{text, tone: neutral|good|warn|bad|info}`. An icon is
 `{symbol, color?}` (SF Symbol on a tile), `{emoji}` or `{file}`. `actions[0]` runs on ↵, the rest
 are in ⌘K.
 
-An **Action** is `{title, type, shortcut?, destructive?}` plus what its type needs:
+An **Action** is `{title, type, shortcut?, destructive?, confirm?}` plus what its type needs;
+`confirm: {message, title?, button?}` shows a confirm screen first:
 
 | type | needs | hop |
 |---|---|---|
@@ -222,6 +281,17 @@ hop plugin install dev.hop.hello-rust.hopplugin.zip --yes
 
 Any other language works: read lines, write lines.
 
+### What an installed plugin can and cannot do
+
+It has what built-in plugins use in the launcher: commands, prefixes, lists and grids, pushed
+views, prompts (`submit`, `secureInput`), confirm screens, inline answers, root and Upcoming
+items, app-row actions, background jobs, HUDs, settings of every type (secrets in the Keychain),
+`hotkeys` bindings by command title, and `hop` CLI commands.
+
+It cannot draw its own windows or views (Notes, Clipboard and Shelf are AppKit panels), tap the
+keyboard (Hyper key, snippet expansion), add a strip under the search field (the WireGuard bar),
+complete with Tab, or run inside hop. Those need a built-in plugin: open a pull request.
+
 ### Installing
 
 From Settings → Plugins → Install from GitHub, or:
@@ -238,11 +308,9 @@ dialog. A running hop picks up the change at once.
 
 ## Trust
 
-- **Built-in**: reviewed in pull requests here, runs inside hop.
-- **Verified**: installed from GitHub and listed in hop's plugin index
-  (`pseudobun/hop-plugins`, `index.json`) with that archive's SHA-256.
-- **Community**: any other GitHub link. hop shows where it comes from and what it says it uses,
-  and asks before installing.
+- **Verified**: the built-in plugins, reviewed in pull requests here, run inside hop.
+- **Community**: installed from a GitHub link. hop shows where it comes from and what it says it
+  uses, and asks before installing (except from `plugins.install`, where the config is the yes).
 
 An installed plugin runs as you, with your access to files and the network, like any program you
 download. hop spawns it as its own *responsible process*, so it does **not** inherit hop's

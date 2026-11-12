@@ -30,8 +30,8 @@ published with credit, unless you'd rather stay anonymous.
   with hop's permissions. Review config changes like code changes.
 - **Installed plugins are programs.** A plugin installed from GitHub (`hop plugin install`, or
   Settings → Plugins) runs as you, with your access to files and the network. hop shows its source
-  and what it declares, and asks first; Verified plugins are pinned by archive hash in hop's
-  index. hop spawns each plugin as its own responsible process, so it does not inherit hop's
+  and what it declares, and asks first. `plugins.install` in the config installs plugins
+  without asking: the config is code. hop spawns each plugin as its own responsible process, so it does not inherit hop's
   Accessibility, Full Disk Access or other grants, but hop does not sandbox it otherwise.
   Secrets a plugin asks for live in the login Keychain and reach only that plugin.
 - hop's state files are written `0600` inside a `0700` folder; secrets (OpenAI key, KeePassXC

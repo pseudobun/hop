@@ -289,7 +289,14 @@ hop clip copy 3                # put entry 3 back on the clipboard
 hop files justfile --limit=5   # Spotlight, names (or --content)
 hop snippets expand ";mt" --who=Alex    # a snippet with its placeholders filled in
 hop hotkeys                    # hop's hotkeys, the hotkeys section, every bindable command
-hop config path | check | show
+hop config path | check | show # show: every key with its default filled in, as JSON
+hop config get notes.folder
+hop config set clipboard.keepDays 30   # one value, comments kept; refused if the config would not read
+hop plugin list --json         # plugins, on or off, with their source
+hop plugin disable paw         # or enable; writes the config
+hop plugin settings keepass --json     # keys, types, defaults and current values
+hop plugin set notes folder "~/Vault"
+hop plugin install owner/repo --yes    # adds it to plugins.install; hop plugin sync applies that list
 hop convert 100 usd to eur     # units or currency
 hop codes --latest             # newest one-time code from Messages (Full Disk Access)
 hop events --days=3 --json     # Calendar; from the running hop when this terminal has no access
@@ -301,7 +308,8 @@ hop bookmarks open kvm
 hop permissions --json
 ```
 
-Destructive commands only describe what they would do unless `--yes` is passed.
+Destructive commands only describe what they would do unless `--yes` is passed. Each plugin
+brings its own commands (`hop help` lists them by plugin); installed plugins can add theirs.
 
 ## Development
 
