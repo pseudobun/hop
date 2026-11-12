@@ -330,9 +330,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         Updater.shared.apply(config.updates)
 
-        // A dev build never starts at login; the release hop does.
+        // A dev build never starts at login (it would race the release hop for its hotkeys), and
+        // drops a login item an older dev build registered; the release hop follows the config.
         let loginEnabled = SMAppService.mainApp.status == .enabled
-        if !AppPaths.isDev, config.general.openAtLogin != loginEnabled {
+        if AppPaths.isDev {
+            if loginEnabled {
+                do { try SMAppService.mainApp.unregister() } catch {
+                    Log.app.error("Login item: \(error.localizedDescription, privacy: .public)")
+                }
+            }
+        } else if config.general.openAtLogin != loginEnabled {
             do {
                 if config.general.openAtLogin { try SMAppService.mainApp.register() } else { try SMAppService.mainApp.unregister() }
             } catch {
