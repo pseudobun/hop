@@ -514,6 +514,13 @@ final class SettingsController: NSObject, NSWindowDelegate, NSTableViewDataSourc
             if let version = info.version { meta.append(version) }
             if let author = info.author { meta.append(author) }
             let text = textColumn(info.name, "\(info.summary)\n\(meta.joined(separator: " · "))", width: Self.textWidth + 40)
+            if info.tier == .builtin, let name = text.arrangedSubviews.first {
+                text.removeArrangedSubview(name)
+                let title = NSStackView(views: [name, verifiedBadge()])
+                title.spacing = 5
+                title.alignment = .centerY
+                text.insertArrangedSubview(title, at: 0)
+            }
             let left = NSStackView(views: [icon, text])
             left.spacing = 12
             left.alignment = .centerY
@@ -531,6 +538,18 @@ final class SettingsController: NSObject, NSWindowDelegate, NSTableViewDataSourc
             right.alignment = .centerY
             return rowStack([left, right])
         }
+    }
+
+    /// The green check beside a verified (built-in) plugin's name.
+    private func verifiedBadge() -> NSView {
+        let config = NSImage.SymbolConfiguration(pointSize: 12, weight: .semibold)
+        let image = NSImage(systemSymbolName: "checkmark.seal.fill", accessibilityDescription: "Verified")?
+            .withSymbolConfiguration(config) ?? NSImage()
+        let view = NSImageView(image: image)
+        view.contentTintColor = Theme.good
+        view.toolTip = "Verified: built into hop from its repository, reviewed in pull requests"
+        view.setContentHuggingPriority(.required, for: .horizontal)
+        return view
     }
 
     private func pluginSwitchRow(_ info: PluginInfo, config: HopConfig) -> NSView {

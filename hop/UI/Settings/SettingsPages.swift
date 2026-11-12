@@ -193,18 +193,15 @@ enum SettingsCatalog {
 
     private static func choices(_ values: [String]) -> SettingsField.Kind { .choices(values) }
 
-    /// hop's own pages, then the Plugins list and each plugin's page by category, then Advanced.
+    /// hop's own pages, then one Plugins group: the list, then each plugin's page (in category
+    /// order, so related plugins sit together), then Advanced.
     static func groups(plugins: [SettingsPage]) -> [SettingsGroup] {
-        var groups = [
+        let pluginPages = PluginCategory.allCases.flatMap { category in plugins.filter { $0.plugin?.category == category } }
+        return [
             SettingsGroup(title: "hop", pages: [general, appearance, hotkeys]),
-            SettingsGroup(title: "Plugins", pages: [pluginsPage]),
+            SettingsGroup(title: "Plugins", pages: [pluginsPage] + pluginPages),
+            SettingsGroup(title: "Advanced", pages: [configFile, about]),
         ]
-        for category in PluginCategory.allCases {
-            let pages = plugins.filter { $0.plugin?.category == category }
-            if !pages.isEmpty { groups.append(SettingsGroup(title: category.rawValue, pages: pages)) }
-        }
-        groups.append(SettingsGroup(title: "Advanced", pages: [configFile, about]))
-        return groups
     }
 
     /// The built-in plugins' pages, without running hop (tests, the config check).
