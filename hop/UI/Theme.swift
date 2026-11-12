@@ -3,12 +3,26 @@ import CoreText
 
 /// hop's design system, translated to AppKit: dense and quiet; colours are tokens only.
 /// Every theme sets a palette, fonts and label recipe; the set mirrors olympus-dashboard's
-/// (OG, OG Light, Solarpunk, Cyberpunk) plus Modern.
+/// (OG, OG Light, Solarpunk, Cyberpunk) plus Modern, and users add their own (CustomThemes).
 enum Theme {
     typealias Name = HopConfig.General.ThemeName
 
     /// Set once at launch from `general.theme`; views read it while they are built.
     nonisolated(unsafe) static var variant: Name = .og
+    /// Themes from `~/.config/hop/themes/`, by file name, in the order the picker lists them.
+    private(set) static var custom: [(name: Name, spec: Spec)] = []
+    /// Bumped whenever the custom themes are loaded again, so views built in an edited theme
+    /// can tell they are stale even though its name did not change.
+    private(set) static var revision = 0
+    /// Every theme the picker offers: built-in ones first, then the user's.
+    static var all: [Name] { Name.builtIn + custom.map(\.name) }
+    static func exists(_ name: Name) -> Bool { name.isBuiltIn || custom.contains { $0.name == name } }
+
+    static func setCustom(_ themes: [(name: Name, spec: Spec)]) {
+        custom = themes
+        revision += 1
+        fonts.removeAll()
+    }
     static var isModern: Bool { variant == .modern }
     static var isLight: Bool { spec(variant).light }
 
@@ -61,6 +75,8 @@ enum Theme {
         case cuts([(weight: CGFloat, postScript: String)])
         case system
         case systemMono
+        /// A user's font: an installed family ("Inter") or PostScript name ("Inter-Medium").
+        case named(String)
     }
 
     struct Spec {
@@ -74,15 +90,24 @@ enum Theme {
         let tracking: CGFloat
         /// Weight of the one title on a screen.
         let titleWeight: CGFloat
+        /// A custom theme's file and the built-in theme it starts from; nil for built-in ones.
+        var file: URL? = nil
+        var base: Name? = nil
     }
 
+    /// The theme's spec; a name that is neither built in nor a custom theme falls back to OG.
     static func spec(_ name: Name) -> Spec {
+        builtIn(name) ?? custom.first { $0.name == name }?.spec ?? og
+    }
+
+    static func builtIn(_ name: Name) -> Spec? {
         switch name {
         case .og: og
         case .ogLight: ogLight
         case .modern: modern
         case .solarpunk: solarpunk
         case .cyberpunk: cyberpunk
+        default: nil
         }
     }
 
@@ -231,6 +256,13 @@ enum Theme {
         fonts.removeAll() // drop fallbacks resolved before registration
     }
 
+    /// Font files a user keeps beside their themes; one already registered is skipped quietly.
+    static func registerFonts(_ urls: [URL]) {
+        guard !urls.isEmpty else { return }
+        for url in urls { CTFontManagerRegisterFontsForURL(url as CFURL, .process, nil) }
+        fonts.removeAll()
+    }
+
     private static func cached(_ key: FontKey, _ make: () -> NSFont) -> NSFont {
         if let font = fonts[key] { return font }
         let font = make()
@@ -277,7 +309,33 @@ enum Theme {
             return cached(FontKey(postScript: cut.postScript, size: size, weight: cut.weight)) {
                 named(cut.postScript, NSFontDescriptor(name: cut.postScript, size: size), size) ?? fallback()
             }
+        case .named(let name):
+            return cached(FontKey(postScript: "user:" + name, size: size, weight: weight)) {
+                userFont(name, size, weight) ?? fallback()
+            }
         }
+    }
+
+    /// A family at the nearest weight, else a PostScript name (its wght axis set when it has one);
+    /// nil when neither is installed.
+    private static func userFont(_ name: String, _ size: CGFloat, _ weight: CGFloat) -> NSFont? {
+        let family = NSFontDescriptor(fontAttributes: [
+            .family: name,
+            .traits: [NSFontDescriptor.TraitKey.weight: systemWeight(weight).rawValue],
+        ])
+        if let font = NSFont(descriptor: family, size: size),
+           font.familyName?.caseInsensitiveCompare(name) == .orderedSame {
+            return font
+        }
+        guard let plain = NSFont(name: name, size: size), plain.fontName.caseInsensitiveCompare(name) == .orderedSame
+        else { return nil }
+        let axes = (CTFontCopyVariationAxes(plain as CTFont) as? [[String: Any]]) ?? []
+        let hasWeightAxis = axes.contains { ($0[kCTFontVariationAxisIdentifierKey as String] as? Int) == wghtAxis }
+        guard hasWeightAxis else { return plain }
+        let d = plain.fontDescriptor.addingAttributes([
+            NSFontDescriptor.AttributeName(rawValue: kCTFontVariationAttribute as String): [wghtAxis: weight],
+        ])
+        return NSFont(descriptor: d, size: size) ?? plain
     }
 
     /// Anything read as language. 400 regular, 500 medium, 600 semibold.

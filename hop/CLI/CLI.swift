@@ -16,6 +16,7 @@ enum CLI {
         "downloads": downloads,
         "trash": trash,
         "config": config,
+        "themes": themes,
         "hyper": hyper,
         "wg": wireguard,
         "kp": keepass,
@@ -120,6 +121,8 @@ enum CLI {
           clip show <n|query> [--json]        Print entry n (1 = newest) or the best match; images print their PNG path
           clip copy <n|query>                 Put an entry back on the clipboard
           config path | check | show | template   Inspect ~/.config/hop/config.json5; template prints the full default
+          themes [list] | path | check | template [base]   Built-in and custom themes (~/.config/hop/themes/*.json5);
+                                              template prints a commented theme file to start from
           hyper status | map | unmap          Caps Lock → F20 key mapping (unmap after a crash)
           wg list | up <name> [--keep] | down <name> | down-all   WireGuard tunnels (WireGuard.app; up stops the others unless --keep)
           kp dbs | search [query] | get <entry> [--field F] [--db NAME]   KeePassXC (unlocks per call)
@@ -283,6 +286,11 @@ enum CLI {
         case "check":
             if let error = settings.error { return Output.fail(error.message) }
             for warning in settings.warnings { print("warning: \(warning.message)") }
+            let loaded = CustomThemes.load(from: CustomThemes.folder(beside: settings.url))
+            let theme = settings.data.general.theme
+            if !theme.isBuiltIn, !loaded.themes.contains(where: { $0.name == theme }) {
+                print("warning: general.theme: no theme \"\(theme.rawValue)\" (built-in or in themes/), using \"og\"")
+            }
             print("ok")
             return 0
         case "show":
@@ -306,6 +314,42 @@ enum CLI {
             return 0
         default:
             return Output.fail("usage: hop config path | check | show | template")
+        }
+    }
+
+    static func themes(_ a: Args) async -> Int32 {
+        let settings = AppSettings()
+        let folder = CustomThemes.folder(beside: settings.url)
+        switch a.positional.first ?? "list" {
+        case "list":
+            let loaded = CustomThemes.load(from: folder)
+            let current = settings.data.general.theme
+            let builtIn = Theme.Name.builtIn.map { ($0, Theme.spec($0)) }
+            Output.json((builtIn + loaded.themes.map { ($0.name, $0.spec) }).map { name, spec in
+                var row: [String: Any] = ["id": name.rawValue, "name": spec.label, "description": spec.description,
+                                          "light": spec.light, "custom": !name.isBuiltIn, "current": name == current]
+                if let file = spec.file { row["file"] = file.path }
+                if let base = spec.base { row["base"] = base.rawValue }
+                return row
+            })
+            return 0
+        case "path":
+            print(folder.path)
+            return 0
+        case "check":
+            let loaded = CustomThemes.load(from: folder)
+            for issue in loaded.issues { print("warning: \(issue)") }
+            print(loaded.themes.isEmpty ? "ok (no custom themes in \(folder.path))" : "ok (\(loaded.themes.count) custom)")
+            return 0
+        case "template":
+            let base = Theme.Name(rawValue: a.positional.dropFirst().first ?? "og")
+            guard let spec = Theme.builtIn(base) else {
+                return Output.fail("no built-in theme \"\(base.rawValue)\": \(Theme.Name.builtIn.map(\.rawValue).joined(separator: ", "))")
+            }
+            print(CustomThemes.template(name: "My Theme", from: spec, base: base), terminator: "")
+            return 0
+        default:
+            return Output.fail("usage: hop themes [list] | path | check | template [base]")
         }
     }
 

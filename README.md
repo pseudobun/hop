@@ -229,6 +229,22 @@ Snippets live in `~/.config/hop/snippets.json5` (created on first launch, reload
 
 A keyword expands as soon as it is typed (`snippets.expand`, Accessibility); a keyword that starts with a letter only expands as a whole word unless `snippets.expandWithinWords`. Snippets with `{argument}` ask for the values in hop first. Not in password fields, nor in `snippets.disabledApps`. "Save as Snippet" (⌘S) in the clipboard history adds an entry.
 
+### Themes
+
+hop ships OG, OG Light, Modern, Solarpunk and Cyberpunk; you can add your own. A theme is a JSON5 file in `~/.config/hop/themes/`, and its file name is its id: `nord.json5` is `theme: "nord"`. Every key is optional, anything left out comes from `base`:
+
+```json5
+{
+  name: "Nord",
+  base: "og",            // any built-in theme
+  light: false,
+  colors: { background: "#2e3440", card: "#3b4252", foreground: "#eceff4", primary: "#88c0d0" },
+  fonts: { sans: "Inter", mono: "JetBrains Mono" },  // installed family or PostScript name, "system", "system-mono"
+}
+```
+
+The Theme command lists your themes next to the built-in ones (with a live preview), and can start a new one from the current theme (**New Theme**), import theme files and their fonts (**Import Theme…**, `.json5`, `.ttf`, `.otf`), or open the folder. Font files anywhere in the folder are loaded for hop only. Saving a theme file applies it at once. [`examples/theme.json5`](examples/theme.json5) lists every key; `hop themes template [base]` prints one, `hop themes` lists them all and `hop themes check` reports problems.
+
 ## Permissions
 
 Run **hop Permissions** (it opens by itself on first launch); ↵ shows each macOS prompt, **Grant All** asks for all of them.
@@ -268,6 +284,7 @@ hop files justfile --limit=5   # Spotlight, names (or --content)
 hop snippets expand ";mt" --who=Alex    # a snippet with its placeholders filled in
 hop hotkeys                    # hop's hotkeys, the hotkeys section, every bindable command
 hop config path | check | show
+hop themes [list] | path | check | template [base]
 hop convert 100 usd to eur     # units or currency
 hop codes --latest             # newest one-time code from Messages (Full Disk Access)
 hop events --days=3 --json     # Calendar; from the running hop when this terminal has no access

@@ -22,7 +22,7 @@ struct ConfigEditTests {
     }
 
     @Test func everyThemeDecodes() throws {
-        for name in HopConfig.General.ThemeName.allCases {
+        for name in HopConfig.General.ThemeName.builtIn {
             let d = JSONDecoder()
             d.allowsJSON5 = true
             let c = try d.decode(HopConfig.self, from: Data("{ general: { theme: \"\(name.rawValue)\" } }".utf8))
@@ -44,5 +44,15 @@ struct ConfigEditTests {
             #expect(Theme.label.fontName.lowercased().contains(fonts.1))
             #expect(Theme.title.fontName.lowercased().contains(fonts.2))
         }
+    }
+
+    @Test func unknownThemeDecodesAndFallsBackToOG() throws {
+        let d = JSONDecoder()
+        d.allowsJSON5 = true
+        let c = try d.decode(HopConfig.self, from: Data("{ general: { theme: \"nord\" } }".utf8))
+        #expect(c.general.theme.rawValue == "nord")
+        #expect(!Theme.exists(c.general.theme))
+        #expect(Theme.spec(c.general.theme).label == "OG")
+        #expect(ConfigDiagnostics.warnings(in: "{ general: { theme: \"nord\" } }").isEmpty)
     }
 }
