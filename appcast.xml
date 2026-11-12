@@ -7,7 +7,7 @@
     <language>en</language>
     <item>
       <title>hop 0.1.0-beta.15</title>
-      <pubDate>Thu, 12 Nov 2026 18:21:34 +0000</pubDate>
+      <pubDate>Thu, 12 Nov 2026 18:28:02 +0000</pubDate>
       <sparkle:version>156</sparkle:version>
       <sparkle:shortVersionString>0.1.0-beta.15</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
@@ -15,7 +15,7 @@
 <ul>
 <li><b>cask:</b> name the conflicting cask with its tap (<a href="https://github.com/pseudobun/hop/issues/47">#47</a>) (<a href="https://github.com/pseudobun/hop/commit/51a5ac0910e9b51bd32a3fb0d7cc583e058eb3bd">51a5ac0</a>)</li>
 </ul><p><a href="https://github.com/pseudobun/hop/releases/tag/v0.1.0-beta.15">Release on GitHub</a></p>]]></description>
-      <enclosure url="https://github.com/pseudobun/hop/releases/download/v0.1.0-beta.15/hop-0.1.0-beta.15-macos.zip" type="application/octet-stream" sparkle:edSignature="FFYDiCkcpvUhj1DhjpA2Wl31GHyxgxsh1KFKma7xjuTNSLirK3q5+IzC2Ufe2GHBdh9gpwJiErN8eYMyQL3KBw==" length="5208751"/>
+      <enclosure url="https://github.com/pseudobun/hop/releases/download/v0.1.0-beta.15/hop-0.1.0-beta.15-macos.zip" type="application/octet-stream" sparkle:edSignature="EQdmGjLCjAvAg1z+qB1rt42UrcLx7MojTpEy2RC2TFBHPx+75PB/6Mi3mxWIT/VY8IKeWi5UIdT7WfH4ltcyBw==" length="5208750"/>
     </item>
     <item>
       <title>hop 0.1.0-beta.14</title>
