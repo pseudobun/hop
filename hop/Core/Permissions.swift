@@ -128,6 +128,8 @@ nonisolated enum Permission: CaseIterable {
             if !granted { NSWorkspace.shared.open(settingsURL) }
         case .loginItem:
             ConfigEditor.setBool("openAtLogin", true)
+            // The config is shared with the release hop; only that one starts at login.
+            if AppPaths.isDev { return }
             do { try SMAppService.mainApp.register() } catch { SMAppService.openSystemSettingsLoginItems() }
             if SMAppService.mainApp.status == .requiresApproval { SMAppService.openSystemSettingsLoginItems() }
         case .spotlightShortcut:
@@ -150,7 +152,7 @@ nonisolated enum Permission: CaseIterable {
     static func missing(for config: HopConfig) -> [Permission] {
         var needed: [Permission] = [.finderAutomation, .downloads, .loginItem]
         if BuiltinPlugins.needsAccessibility(config) { needed.insert(.accessibility, at: 0) }
-        if !config.general.openAtLogin { needed.removeAll { $0 == .loginItem } }
+        if !config.general.openAtLogin || AppPaths.isDev { needed.removeAll { $0 == .loginItem } }
         if SpotlightHotkey.relevant(for: config) { needed.append(.spotlightShortcut) }
         return needed.filter { $0.status() != .granted }
     }
