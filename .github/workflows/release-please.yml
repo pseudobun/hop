@@ -26,6 +26,7 @@ jobs:
       created: ${{ steps.rp.outputs.release_created }}
       tag: ${{ steps.rp.outputs.tag_name }}
       version: ${{ steps.rp.outputs.version }}
+      pr: ${{ steps.rp.outputs.pr }}
     steps:
       - id: rp
         uses: googleapis/release-please-action@5c625bfb5d1ff62eadeeb3772007f7f66fdcf071 # v4.4.1
@@ -43,6 +44,25 @@ jobs:
     with:
       tag: ${{ needs.release-please.outputs.tag }}
     secrets: inherit
+
+  # Without RELEASE_TOKEN the release PR is github-actions[bot]'s, and GitHub runs no jobs for
+  # pull_request events that GITHUB_TOKEN caused. A workflow_dispatch is allowed: run CI on the
+  # release branch so its checks land on the PR's head commit.
+  release-pr-ci:
+    needs: release-please
+    if: needs.release-please.outputs.pr != ''
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      HAS_PAT: ${{ secrets.RELEASE_TOKEN != '' }}
+      BRANCH: ${{ fromJSON(needs.release-please.outputs.pr).headBranchName }}
+    steps:
+      - name: Run CI on the release branch
+        run: |
+          if [ "$HAS_PAT" = true ]; then echo "RELEASE_TOKEN set: the pull_request run covers it"; exit 0; fi
+          gh workflow run ci.yml --repo "$GITHUB_REPOSITORY" --ref "$BRANCH"
 
   # A stable release: beta takes main, and its next beta builds on this version.
   sync-beta:
