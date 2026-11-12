@@ -6,6 +6,18 @@
     <description>hop releases</description>
     <language>en</language>
     <item>
+      <title>hop 0.1.0-beta.13</title>
+      <pubDate>Thu, 12 Nov 2026 13:21:51 +0000</pubDate>
+      <sparkle:version>149</sparkle:version>
+      <sparkle:shortVersionString>0.1.0-beta.13</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
+      <description><![CDATA[<style>body{font:13px -apple-system,sans-serif;margin:12px 14px;color:#222}h3{font-size:13px;margin:12px 0 4px}ul{padding-left:18px;margin:4px 0}li{margin:2px 0}code{font:12px ui-monospace,monospace}a{color:#0a64d0}@media(prefers-color-scheme:dark){body{color:#ddd}a{color:#6ab0ff}}</style><h3>Bug Fixes</h3>
+<ul>
+<li><b>login:</b> keep dev builds out of login items (<a href="https://github.com/pseudobun/hop/issues/39">#39</a>) (<a href="https://github.com/pseudobun/hop/commit/e9bc46394d47f364d22e27879eea07a0b18466c3">e9bc463</a>)</li>
+</ul><p><a href="https://github.com/pseudobun/hop/releases/tag/v0.1.0-beta.13">Release on GitHub</a></p>]]></description>
+      <enclosure url="https://github.com/pseudobun/hop/releases/download/v0.1.0-beta.13/hop-0.1.0-beta.13-macos.zip" type="application/octet-stream" sparkle:edSignature="cSDIJMecDRDR/2EUEr5AGHOXJ6zPh9xW8tZlYrceB8YrU9Bke/5Zkho5qULtVz4z/bOCyZ4iqAmr69i+LeizAg==" length="5203441"/>
+    </item>
+    <item>
       <title>hop 0.1.0-beta.11</title>
       <pubDate>Thu, 12 Nov 2026 11:10:45 +0000</pubDate>
       <sparkle:version>144</sparkle:version>
