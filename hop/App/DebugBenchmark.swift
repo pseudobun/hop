@@ -25,15 +25,28 @@ enum DebugBenchmark {
             }
         }
         measure("clear to empty query") { launcher.setQuery("s"); launcher.setQuery("") }
+        launcher.setQuery("s")
+        measure("move ↓↓↓↓↓ ↑↑↑↑↑ (10 keys)") {
+            for step in [1, 1, 1, 1, 1, -1, -1, -1, -1, -1] { launcher.debugMove(step); launcher.panel.displayIfNeeded() }
+        }
+        launcher.setQuery("")
 
         // `-DebugBenchmarkSnapshots <dir>`: what the panel shows after typing, to check that
         // reconfiguring cells in place leaves nothing stale.
         if let dir = UserDefaults.standard.string(forKey: "DebugBenchmarkSnapshots") {
+            try? await Task.sleep(for: .milliseconds(300)) // the show's fade-in, held up by the timings
             for query in ["terminal", "sys set", "saf", "12*3+4", ""] {
                 for q in query.indices.map({ String(query[...$0]) }) { launcher.setQuery(q) }
                 if query.isEmpty { launcher.setQuery("") }
                 await DebugSnapshot.capture(launcher.panel, to: "\(dir)/\(query.isEmpty ? "empty" : query).png")
             }
+            // The gliding highlight lands on the third result after two ↓.
+            launcher.setQuery("s")
+            try? await Task.sleep(for: .seconds(1)) // results that arrive later reselect the first row
+            launcher.debugMove(1); launcher.debugMove(1)
+            try? await Task.sleep(for: .milliseconds(400))
+            await DebugSnapshot.capture(launcher.panel, to: "\(dir)/s-down2.png")
+            launcher.setQuery("")
         }
         launcher.hide()
 

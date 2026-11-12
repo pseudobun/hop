@@ -17,6 +17,11 @@ final class ResultRowView: NSTableRowView {
         didSet { if tint != oldValue && isSelected { needsDisplay = true } }
     }
 
+    /// False where a `SelectionGlide` draws the selection under the rows instead.
+    var drawsSelection = true {
+        didSet { if drawsSelection != oldValue && isSelected { needsDisplay = true } }
+    }
+
     /// Mouse over the row (lists that track hover): a lighter wash than the selection.
     var isHovered = false {
         didSet { if isHovered != oldValue { needsDisplay = true } }
@@ -30,7 +35,7 @@ final class ResultRowView: NSTableRowView {
     }
 
     override func drawSelection(in dirtyRect: NSRect) {
-        guard isSelected else { return }
+        guard isSelected, drawsSelection else { return }
         let rect = bounds.insetBy(dx: 8, dy: 1)
         let tone = tint ?? Theme.info
         tone.withAlphaComponent(0.14).setFill()
