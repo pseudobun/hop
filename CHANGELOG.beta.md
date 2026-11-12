@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.0-beta.13](https://github.com/pseudobun/hop/compare/v0.1.0-beta.12...v0.1.0-beta.13) (2026-11-12)
+
+
+### Bug Fixes
+
+* **login:** keep dev builds out of login items ([#39](https://github.com/pseudobun/hop/issues/39)) ([e9bc463](https://github.com/pseudobun/hop/commit/e9bc46394d47f364d22e27879eea07a0b18466c3))
+
 ## [0.1.0-beta.12](https://github.com/pseudobun/hop/compare/v0.1.0-beta.11...v0.1.0-beta.12) (2026-11-12)
 
 
