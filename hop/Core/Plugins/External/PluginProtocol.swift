@@ -46,6 +46,10 @@ nonisolated enum PluginProtocol {
         var emptyText: String?
         /// A spinner until the next `render`.
         var loading: Bool?
+        /// ↵ with no row selected sends the typed text (`submit`): text input, a prompt.
+        var submit: Bool?
+        /// The search field hides what is typed (a password).
+        var secureInput: Bool?
     }
 
     struct Section: Codable, Equatable, Sendable {
@@ -60,8 +64,22 @@ nonisolated enum PluginProtocol {
         var icon: Icon?
         var accessory: String?
         var keywords: [String]?
+        /// A tinted status chip: `{text, tone: neutral|good|warn|bad|info}`.
+        var chip: ChipSpec?
         /// `actions[0]` runs on ↵.
         var actions: [Action] = []
+    }
+
+    struct ChipSpec: Codable, Equatable, Sendable {
+        var text: String
+        var tone: String?
+    }
+
+    /// Ask before an action runs: a screen with `message` and a confirm row.
+    struct Confirm: Codable, Equatable, Sendable {
+        var title: String?
+        var message: String
+        var button: String?
     }
 
     struct Icon: Codable, Equatable, Sendable {
@@ -100,6 +118,7 @@ nonisolated enum PluginProtocol {
         /// "cmd+c", "cmd+shift+return".
         var shortcut: String?
         var destructive: Bool?
+        var confirm: Confirm?
     }
 
     // MARK: JSON-RPC
@@ -135,6 +154,39 @@ nonisolated enum PluginProtocol {
         var text: String
     }
 
+    struct Submit: Codable, Equatable, Sendable {
+        var command: String
+        var text: String
+    }
+
+    struct Answer: Codable, Equatable, Sendable {
+        var text: String
+    }
+
+    /// `hop <name> …`: the words after the name, and stdin when it is not a terminal.
+    struct CLICall: Codable, Equatable, Sendable {
+        var args: [String]
+        var stdin: String?
+    }
+
+    struct CLIResult: Codable, Equatable, Sendable {
+        var stdout: String?
+        var stderr: String?
+        var exitCode: Int?
+    }
+
+    /// `answer`'s reply: items for a root-search section.
+    struct AnswerResult: Codable, Equatable, Sendable {
+        var title: String?
+        var items: [Item] = []
+    }
+
+    /// The `rootItems` notification: commands added to root search, and Upcoming items.
+    struct RootItems: Codable, Equatable, Sendable {
+        var items: [Item]?
+        var upcoming: [Item]?
+    }
+
     struct ActionCall: Codable, Equatable, Sendable {
         var command: String
         var id: String
@@ -154,7 +206,7 @@ nonisolated enum PluginProtocol {
 }
 
 nonisolated extension PluginProtocol.View {
-    private enum Keys: String, CodingKey { case type, title, placeholder, filtering, columns, sections, items, emptyText, loading }
+    private enum Keys: String, CodingKey { case type, title, placeholder, filtering, columns, sections, items, emptyText, loading, submit, secureInput }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: Keys.self)
         type = try c.value(.type, .list)
@@ -169,6 +221,8 @@ nonisolated extension PluginProtocol.View {
         }
         emptyText = try c.decodeIfPresent(String.self, forKey: .emptyText)
         loading = try c.decodeIfPresent(Bool.self, forKey: .loading)
+        submit = try c.decodeIfPresent(Bool.self, forKey: .submit)
+        secureInput = try c.decodeIfPresent(Bool.self, forKey: .secureInput)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -181,6 +235,8 @@ nonisolated extension PluginProtocol.View {
         try c.encode(sections, forKey: .sections)
         try c.encodeIfPresent(emptyText, forKey: .emptyText)
         try c.encodeIfPresent(loading, forKey: .loading)
+        try c.encodeIfPresent(submit, forKey: .submit)
+        try c.encodeIfPresent(secureInput, forKey: .secureInput)
     }
 }
 
@@ -194,7 +250,7 @@ nonisolated extension PluginProtocol.Section {
 }
 
 nonisolated extension PluginProtocol.Item {
-    private enum Keys: String, CodingKey { case id, title, subtitle, icon, accessory, keywords, actions }
+    private enum Keys: String, CodingKey { case id, title, subtitle, icon, accessory, keywords, chip, actions }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: Keys.self)
         id = try c.decode(String.self, forKey: .id)
@@ -203,6 +259,16 @@ nonisolated extension PluginProtocol.Item {
         icon = try c.decodeIfPresent(PluginProtocol.Icon.self, forKey: .icon)
         accessory = try c.decodeIfPresent(String.self, forKey: .accessory)
         keywords = try c.decodeIfPresent([String].self, forKey: .keywords)
+        chip = try c.decodeIfPresent(PluginProtocol.ChipSpec.self, forKey: .chip)
         actions = try c.value(.actions, [])
+    }
+}
+
+nonisolated extension PluginProtocol.AnswerResult {
+    private enum Keys: String, CodingKey { case title, items }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: Keys.self)
+        title = try c.decodeIfPresent(String.self, forKey: .title)
+        items = try c.value(.items, [])
     }
 }

@@ -124,6 +124,8 @@ final class LauncherController: NSObject, LauncherContext, NSTableViewDataSource
     }
 
     func reload() { refresh(keepSelection: true) }
+    /// Re-runs the query and selects the first row: for results that arrive after the query.
+    func reloadFromTop() { refresh() }
 
     func refreshChrome() {
         // Keep the typed query unless the field switches between plain and secure.

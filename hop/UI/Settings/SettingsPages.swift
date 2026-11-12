@@ -160,7 +160,7 @@ nonisolated enum SettingsValue {
         guard let first = path.first else { return nil }
         // A plugin's section, or an installed plugin's settings (`plugins.<id>.<key>`).
         if let section = config.sections.section(first) { return read(path.dropFirst(), in: section.reflected) }
-        if first == "plugins", path.count >= 3, path[1] != "disabled" {
+        if first == "plugins", path.count >= 3, path[1] != "disabled", path[1] != "install" {
             var value = config.plugins.settings[path[1]]
             for key in path.dropFirst(2) { value = value?[key] }
             return value?.plain

@@ -10,8 +10,6 @@ nonisolated struct PluginInstallRecord: Codable, Equatable, Sendable {
     /// SHA-256 of the downloaded archive, hex.
     var sha256: String
     var installedAt: Date
-    /// Listed in hop's plugin index with this archive's hash.
-    var verified = false
 }
 
 /// A plugin installed from GitHub: its program runs as its own process (`PluginProcess`) and
@@ -23,12 +21,21 @@ final class ExternalPlugin: HopPlugin {
     let info: PluginInfo
     let settings: [SettingsSection]
 
+    /// The program, made in `init`; `start` connects it to the launcher.
     private(set) var process: PluginProcess!
     private weak var host: PluginHost?
     /// Open views, newest last, so a `render` reaches the one it belongs to.
     private var modes: [WeakMode] = []
     private var timers: [Timer] = []
     private var lastSettings: JSONValue?
+    /// Sent with `rootItems`: extra root commands and Upcoming items.
+    private var rootItems: [PluginProtocol.Item] = []
+    private var upcoming: [PluginProtocol.Item] = []
+    /// The last root answer, for the query it answers.
+    private var answer: (query: String, section: ResultSection?)?
+    private var answerTask: Task<Void, Never>?
+    /// Stands in for a command when root items, answers and app actions call back.
+    private func pseudo(_ id: String) -> PluginManifest.Command { PluginManifest.Command(id: id, title: manifest.name) }
 
     private struct WeakMode { weak var mode: ExternalMode? }
 
@@ -38,11 +45,21 @@ final class ExternalPlugin: HopPlugin {
         self.record = record
         let color = manifest.color.flatMap(NSColor.init(hex:)) ?? Theme.info
         info = PluginInfo(id: manifest.id, name: manifest.name, summary: manifest.summary, symbol: manifest.symbol,
-                          color: color, category: .installed, tier: record?.verified == true ? .verified : .community,
+                          color: color, category: .installed, tier: .community,
                           version: manifest.version, author: manifest.author,
                           source: record.flatMap { $0.repository.hasPrefix("local") ? nil : "https://github.com/\($0.repository)" },
                           keywords: manifest.commands.map(\.title))
         settings = Self.settingsSections(manifest)
+        let id = manifest.id
+        let dataDir = AppPaths.file("PluginData").appending(path: id)
+        process = PluginProcess(executable: directory.appending(path: manifest.entry), directory: directory, name: id) { [weak self] in
+            try? FileManager.default.createDirectory(at: dataDir, withIntermediateDirectories: true)
+            return PluginProtocol.Initialize(hopVersion: AppPaths.version, pluginID: id,
+                                             preferences: self.map { $0.preferences($0.host?.settings.data ?? HopConfig()) } ?? [:],
+                                             dataDir: dataDir.path, appearance: Theme.isLight ? "light" : "dark")
+        }
+        process.keepAlive = { [weak self] in self?.openModes.isEmpty == false }
+        process.onNotification = { [weak self] method, params in self?.received(method, params) }
     }
 
     // MARK: Settings
@@ -99,16 +116,6 @@ final class ExternalPlugin: HopPlugin {
 
     func start(_ host: PluginHost) {
         self.host = host
-        let id = manifest.id, settings = host.settings
-        let dataDir = AppPaths.file("PluginData").appending(path: id)
-        process = PluginProcess(executable: directory.appending(path: manifest.entry), directory: directory, name: id) { [weak self] in
-            try? FileManager.default.createDirectory(at: dataDir, withIntermediateDirectories: true)
-            return PluginProtocol.Initialize(hopVersion: AppPaths.version, pluginID: id,
-                                             preferences: self?.preferences(settings.data) ?? [:], dataDir: dataDir.path,
-                                             appearance: Theme.isLight ? "light" : "dark")
-        }
-        process.keepAlive = { [weak self] in self?.openModes.isEmpty == false }
-        process.onNotification = { [weak self] method, params in self?.received(method, params) }
     }
 
     func apply(_ config: HopConfig, previous: HopConfig?, enabled: Bool) {
@@ -146,7 +153,9 @@ final class ExternalPlugin: HopPlugin {
     // MARK: Root
 
     func commands() -> [Item] {
-        manifest.commands.filter { $0.kind != .background }.map { command in
+        let root = pseudo("root")
+        let extra = rootItems.map { item($0, command: root, mode: nil) }
+        return extra + manifest.commands.filter { $0.kind != .background }.map { command in
             Item(id: "plugin.\(manifest.id).\(command.id)", title: command.title, subtitle: command.subtitle,
                  aliases: command.keywords, icon: .tile(command.symbol ?? manifest.symbol, info.color),
                  accessory: manifest.name,
@@ -155,6 +164,47 @@ final class ExternalPlugin: HopPlugin {
                      return await self.run(command)
                  }], pushesMode: command.kind == .view)
         }
+    }
+
+    func upcomingItems() -> [Item] {
+        let root = pseudo("root")
+        return upcoming.map { item($0, command: root, mode: nil) }
+    }
+
+    func appActions(_ entry: AppEntry) -> [Action] {
+        manifest.appActions.map { a in
+            let payload: JSONValue = .object(["name": .string(entry.name), "path": .string(entry.path),
+                                              "bundleID": entry.bundleID.map(JSONValue.string) ?? .null])
+            return action(PluginProtocol.Action(title: a.title, type: .callback, id: a.id, payload: payload),
+                          command: pseudo("app"), mode: nil, symbol: a.symbol)
+        }
+    }
+
+    /// Answers arrive after the query: hop shows the last one for this exact text and reloads
+    /// the launcher when a new one comes.
+    func answer(for query: String, isAmbiguous: Bool) -> ResultSection? {
+        guard manifest.answers else { return nil }
+        if let answer, answer.query == query { return answer.section }
+        answerTask?.cancel()
+        answerTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(120))
+            guard let self, !Task.isCancelled else { return }
+            do {
+                let value = try await process.request("answer", PluginProtocol.Answer(text: query), timeout: 5)
+                guard !Task.isCancelled else { return }
+                let result = value == .null ? nil
+                    : try JSONDecoder().decode(PluginProtocol.AnswerResult.self, from: JSONEncoder().encode(value))
+                let root = pseudo("answer")
+                let section = result.flatMap { r in
+                    r.items.isEmpty ? nil : ResultSection(title: r.title ?? manifest.name, items: r.items.map { item($0, command: root, mode: nil) })
+                }
+                answer = (query, section)
+                if host?.launcher.query == query { host?.reloadLauncherFromTop() }
+            } catch {
+                answer = (query, nil)
+            }
+        }
+        return nil
     }
 
     func prefixModes() -> [PrefixMode] {
@@ -214,6 +264,13 @@ final class ExternalPlugin: HopPlugin {
             guard let params, let data = try? JSONEncoder().encode(params),
                   let hud = try? JSONDecoder().decode(PluginProtocol.HUDMessage.self, from: data) else { return }
             Self.show(hud)
+        case "rootItems":
+            guard let params, let data = try? JSONEncoder().encode(params),
+                  let items = try? JSONDecoder().decode(PluginProtocol.RootItems.self, from: data) else { return }
+            if let list = items.items { rootItems = list }
+            if let list = items.upcoming { upcoming = list }
+            host?.rebuildRoot()
+            host?.reloadLauncherFromTop()
         case "loading":
             openModes.last?.setLoading(params?["loading"]?.bool ?? params?.bool ?? false)
         default:
@@ -265,24 +322,36 @@ final class ExternalPlugin: HopPlugin {
         return nil
     }
 
-    func item(_ item: PluginProtocol.Item, command: PluginManifest.Command, mode: ExternalMode) -> Item {
-        Item(id: "plugin.\(manifest.id).\(item.id)", title: item.title, subtitle: item.subtitle, aliases: item.keywords ?? [],
-             icon: icon(item.icon), accessory: item.accessory,
-             actions: item.actions.map { action($0, command: command, mode: mode) }, tracksFrecency: false,
-             pushesMode: item.actions.first?.type == .push)
+    func item(_ item: PluginProtocol.Item, command: PluginManifest.Command, mode: ExternalMode?) -> Item {
+        var out = Item(id: "plugin.\(manifest.id).\(item.id)", title: item.title, subtitle: item.subtitle, aliases: item.keywords ?? [],
+                       icon: icon(item.icon), accessory: item.accessory,
+                       actions: item.actions.map { action($0, command: command, mode: mode) }, tracksFrecency: mode == nil,
+                       pushesMode: item.actions.first?.type == .push)
+        if let chip = item.chip {
+            let tone: Chip.Tone = switch chip.tone {
+            case "good": .good
+            case "warn": .warn
+            case "bad": .bad
+            case "info": .info
+            default: .neutral
+            }
+            out.chip = Chip(text: chip.text, tone: tone)
+        }
+        return out
     }
 
-    private func action(_ a: PluginProtocol.Action, command: PluginManifest.Command, mode: ExternalMode) -> Action {
+    private func action(_ a: PluginProtocol.Action, command: PluginManifest.Command, mode: ExternalMode?, symbol override: String? = nil) -> Action {
         let shortcut = a.shortcut.flatMap(KeyCombo.parse)
         let style: Action.Style = a.destructive == true ? .destructive : .normal
         weak var host = self.host
-        let symbol: String? = switch a.type {
+        let typeSymbol: String? = switch a.type {
         case .push: "chevron.right"
         case .callback: "bolt"
         case .reveal: "folder"
         default: nil
         }
-        return Action(title: a.title, symbol: symbol, shortcut: shortcut, style: style) { [weak self, weak mode] in
+        let symbol = override ?? typeSymbol
+        let perform: () async -> ActionResult = { [weak self, weak mode] in
             guard let self else { return .stay }
             switch a.type {
             case .copy:
@@ -315,6 +384,13 @@ final class ExternalPlugin: HopPlugin {
                 }
             }
         }
+        guard let confirm = a.confirm else { return Action(title: a.title, symbol: symbol, shortcut: shortcut, style: style, perform: perform) }
+        let tint = info.color
+        return Action(title: a.title, symbol: symbol, shortcut: shortcut, style: style) {
+            .push(ConfirmMode(title: confirm.title ?? a.title, message: confirm.message, confirmTitle: confirm.button ?? a.title,
+                              symbol: a.destructive == true ? "exclamationmark.triangle.fill" : "questionmark.circle.fill",
+                              tint: tint, confirm: perform))
+        }
     }
 }
 
@@ -338,6 +414,38 @@ final class ExternalMode: Mode {
     var tint: NSColor? { plugin.info.color }
     var placeholder: String { view?.placeholder ?? "Search \(command.title)…" }
     var layout: ResultLayout { view?.type == .grid ? .grid(columns: view?.columns ?? 8) : .list }
+    var isSecureInput: Bool { view?.secureInput == true }
+
+    /// ↵ with nothing selected: the plugin gets the text.
+    func submit(_ query: String) -> ActionResult? {
+        guard view?.submit == true else { return nil }
+        context?.setLoading(true)
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                let response = try await plugin.request("submit", PluginProtocol.Submit(command: command.id, text: query))
+                context?.setLoading(false)
+                follow(plugin.result(of: response, command: command, from: self))
+            } catch {
+                context?.setLoading(false)
+                HUD.shared.fail("\(plugin.manifest.name): \(error)")
+            }
+        }
+        return .stay
+    }
+
+    /// Does in the launcher what an answer that arrived later asks for.
+    private func follow(_ result: ActionResult) {
+        switch result {
+        case .push(let mode): context?.push(mode)
+        case .pop: context?.pop()
+        case .dismiss, .dismissWithHUD:
+            context?.dismiss()
+            result.showHUD()
+        case .reload: context?.reload()
+        default: result.showHUD()
+        }
+    }
 
     func didEnter(_ context: LauncherContext) {
         self.context = context
@@ -350,13 +458,7 @@ final class ExternalMode: Mode {
             do {
                 let response = try await plugin.request("run", PluginProtocol.Run(command: command.id, query: query.isEmpty ? nil : query))
                 self.context?.setLoading(false)
-                let result = plugin.result(of: response, command: command, from: self)
-                switch result {
-                case .push(let mode): self.context?.push(mode)
-                case .pop: self.context?.pop()
-                case .dismiss, .dismissWithHUD: self.context?.dismiss(); result.showHUD()
-                default: result.showHUD()
-                }
+                follow(plugin.result(of: response, command: command, from: self))
             } catch {
                 self.context?.setLoading(false)
                 failure = "\(error)"

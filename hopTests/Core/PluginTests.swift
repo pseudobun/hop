@@ -99,3 +99,66 @@ struct PluginRegistryTests {
         #expect(KeyCombo.parse("cmd") == nil)
     }
 }
+
+/// `hop` commands come from core and the plugins; names never clash.
+struct PluginCLITests {
+    @Test func everyCommandNameIsUniqueAndDocumented() {
+        let commands = CLI.core + BuiltinPlugins.types.flatMap { $0.cli }
+        let names = commands.flatMap(\.names)
+        #expect(Set(names).count == names.count, "duplicate: \(names)")
+        for command in commands where !command.names.contains("help") {
+            #expect(!command.usage.isEmpty, "\(command.names[0]) has no help line")
+            for line in command.usage where !line.hasPrefix(" ") {
+                #expect(command.names.contains { line.hasPrefix($0 + " ") || line == $0 }, "\(line)")
+            }
+        }
+    }
+
+    @Test func featureCommandsLiveInTheirPlugins() {
+        func owner(_ name: String) -> String? {
+            BuiltinPlugins.types.first { $0.cli.contains { $0.names.contains(name) } }?.info.id
+        }
+        #expect(owner("notes") == "notes")
+        #expect(owner("kp") == "keepass")
+        #expect(owner("wg") == "wireguard")
+        #expect(owner("clip") == "clipboard")
+        #expect(owner("calc") == "calculator")
+        #expect(owner("tr") == "translate" && owner("translate") == "translate")
+        #expect(owner("uninstall") == "system")
+        #expect(owner("apps") == nil && CLI.core.contains { $0.names.contains("apps") })
+    }
+
+    @Test func configPathsAndLiterals() {
+        #expect(ConfigJSON.path("notes.folder") == ["notes", "folder"])
+        #expect(ConfigJSON.path(#"plugins."dev.you.x".name"#) == ["plugins", "dev.you.x", "name"])
+        #expect(ConfigJSON.path("a..b") == nil && ConfigJSON.path(#"a."b"#) == nil)
+        #expect(ConfigJSON.literal("true") == "true" && ConfigJSON.literal("5") == "5")
+        #expect(ConfigJSON.literal(#"["a", "b"]"#) == #"["a", "b"]"#)
+        #expect(ConfigJSON.literal("~/Notes") == #""~/Notes""#)
+        #expect(ConfigJSON.display(["plugins", "dev.you.x", "name"]) == #"plugins."dev.you.x".name"#)
+    }
+
+    @Test func effectiveConfigHasEverySection() throws {
+        let json = ConfigJSON.effective(HopConfig())
+        for type in BuiltinPlugins.configTypes { #expect(json[type.key] != nil, "\(type.key)") }
+        #expect((json["notes"] as? [String: Any])?["folder"] as? String == "~/Notes")
+        #expect(json["sections"] == nil)
+        #expect(JSONSerialization.isValidJSONObject(json))
+        #expect(ConfigJSON.value(at: ["notes", "folder"], in: HopConfig()) as? String == "~/Notes")
+    }
+
+    @Test func setRefusesAValueThatBreaksTheConfig() throws {
+        let dir = FileManager.default.temporaryDirectory.appending(path: "hop-cfg-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let url = dir.appending(path: "config.json5")
+        try "{\n  // mine\n}\n".write(to: url, atomically: true, encoding: .utf8)
+        let settings = AppSettings(url: url)
+        #expect(ConfigJSON.write(["notes", "folder"], "~/Vault", in: settings) == 0)
+        #expect(settings.data.notes.folder == "~/Vault")
+        let before = try String(contentsOf: url, encoding: .utf8)
+        #expect(ConfigJSON.write(["notes", "enabled"], "\"yes\"", in: settings) == 1)
+        #expect(try String(contentsOf: url, encoding: .utf8) == before)
+        #expect(before.contains("// mine"))
+    }
+}

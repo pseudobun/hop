@@ -47,6 +47,8 @@ nonisolated struct HopConfig: Decodable, Equatable, Sendable {
     nonisolated struct Plugins: Equatable, Sendable {
         /// Ids of plugins turned off that have no `enabled` key of their own.
         var disabled: [String] = []
+        /// GitHub links (`owner/repo[@tag]`) hop keeps installed; nil leaves installed plugins alone.
+        var install: [String]?
         /// Settings of installed plugins, by plugin id.
         var settings: [String: JSONValue] = [:]
     }
@@ -510,6 +512,8 @@ nonisolated extension HopConfig.Plugins: Decodable {
         for key in c.allKeys {
             if key.stringValue == "disabled" {
                 disabled = try c.decode([String].self, forKey: key)
+            } else if key.stringValue == "install" {
+                install = try c.decode([String].self, forKey: key)
             } else {
                 settings[key.stringValue] = try c.decode(JSONValue.self, forKey: key)
             }

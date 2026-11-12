@@ -2,17 +2,14 @@ import AppKit
 
 /// Who stands behind a plugin.
 enum PluginTier: String, Sendable {
-    /// Compiled into hop from this repository.
+    /// Verified: compiled into hop from this repository, reviewed in pull requests.
     case builtin
-    /// Installed from GitHub and listed in hop's plugin index (pinned hash).
-    case verified
-    /// Installed from any GitHub link.
+    /// Installed from a GitHub link; not reviewed by hop.
     case community
 
     var label: String {
         switch self {
-        case .builtin: "Built-in"
-        case .verified: "Verified"
+        case .builtin: "Verified"
         case .community: "Community"
         }
     }
@@ -86,6 +83,8 @@ protocol PluginHost: AnyObject {
     func rebuildRoot()
     /// Re-run the launcher's query if it is on screen.
     func reloadLauncher()
+    /// Like `reloadLauncher`, with the first row selected (results that came in late).
+    func reloadLauncherFromTop()
     /// Shows the launcher with `mode` pushed.
     func present(_ mode: Mode)
     func openSettings(_ page: String?)
@@ -160,11 +159,14 @@ extension HopPlugin {
 protocol BuiltinPlugin: HopPlugin {
     static var info: PluginInfo { get }
     static var settings: [SettingsSection] { get }
+    /// `hop <name> …` commands; they run in the CLI process, without the app.
+    static var cli: [CLICommand] { get }
     init()
 }
 
 extension BuiltinPlugin {
     static var settings: [SettingsSection] { [] }
+    static var cli: [CLICommand] { [] }
     var info: PluginInfo { Self.info }
     var settings: [SettingsSection] { Self.settings }
 }
@@ -195,4 +197,13 @@ extension PluginInfo {
         return SettingsPage(id: id, title: name, subtitle: summary, symbol: symbol, color: color,
                             gate: enabledPath, sections: all, plugin: self)
     }
+}
+
+/// A `hop <name> …` command.
+struct CLICommand {
+    /// The first is the main name; the rest are aliases ("tr", "translate").
+    let names: [String]
+    /// Lines for `hop help`, starting with the command.
+    let usage: [String]
+    let run: (CLI.Args) async -> Int32
 }

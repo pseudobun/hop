@@ -52,8 +52,8 @@ nonisolated enum JSONValue: Codable, Equatable, Hashable, Sendable {
         case .bool(let b): b
         case .number(let n): n.rounded() == n && abs(n) < 1e15 ? Int(n) : n
         case .string(let s): s
-        case .array(let a): a.map { $0.plain as Any }
-        case .object(let o): o.mapValues { $0.plain as Any }
+        case .array(let a): a.map { $0.plain ?? NSNull() }
+        case .object(let o): o.mapValues { $0.plain ?? NSNull() }
         }
     }
 

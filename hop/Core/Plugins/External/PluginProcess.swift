@@ -206,7 +206,8 @@ final class PluginProcess {
 
     private func write<P: Encodable & Sendable>(_ message: PluginProtocol.Request<P>) {
         let encoder = JSONEncoder()
-        encoder.outputFormatting = .withoutEscapingSlashes
+        // Sorted keys: stable lines, `id` first, easy to read in any language.
+        encoder.outputFormatting = [.withoutEscapingSlashes, .sortedKeys]
         guard var data = try? encoder.encode(message), let input else { return }
         data.append(0x0A)
         do { try input.write(contentsOf: data) } catch { log.error("\(self.name, privacy: .public): write failed") }

@@ -45,8 +45,6 @@ nonisolated enum PluginInstaller {
     }
 
     static var pluginsDir: URL { AppPaths.file("Plugins") }
-    /// hop's list of reviewed plugins: { "<id>": { "repository": "owner/repo", "sha256": ["…"] } }.
-    static let indexURL = URL(string: "https://raw.githubusercontent.com/pseudobun/hop-plugins/main/index.json")!
 
     // MARK: Links
 
@@ -104,10 +102,7 @@ nonisolated enum PluginInstaller {
         guard (fileResponse as? HTTPURLResponse)?.statusCode == 200 else { throw Failure.github("could not download \(asset.name)") }
         let archive = try Data(contentsOf: file)
         try? FileManager.default.removeItem(at: file)
-        let staged = try stage(archive: archive, source: source, tag: release.tag_name)
-        var record = staged.record
-        record.verified = await isListed(id: staged.manifest.id, repository: source.repository, sha256: record.sha256, session: session)
-        return Staged(manifest: staged.manifest, record: record, folder: staged.folder, temporary: staged.temporary)
+        return try stage(archive: archive, source: source, tag: release.tag_name)
     }
 
     /// A `.hopplugin.zip` on disk: for plugin authors trying a build before releasing it.
@@ -188,16 +183,6 @@ nonisolated enum PluginInstaller {
         throw Failure.archive("no plugin.json5 at its root")
     }
 
-    /// Whether hop's index lists this plugin from this repository with this archive.
-    static func isListed(id: String, repository: String, sha256: String, session: URLSession) async -> Bool {
-        guard let (data, response) = try? await session.data(from: indexURL),
-              (response as? HTTPURLResponse)?.statusCode == 200,
-              let index = try? JSONDecoder().decode(JSONValue.self, from: data),
-              let entry = index[id] else { return false }
-        return entry["repository"]?.string?.lowercased() == repository.lowercased()
-            && (entry["sha256"]?.strings ?? []).contains(sha256)
-    }
-
     /// "0.1.0" < "0.2.0"; a pre-release part ("-beta.5") is ignored.
     static func isOlder(_ version: String, than required: String) -> Bool {
         func parts(_ v: String) -> [Int] {
@@ -273,5 +258,102 @@ enum InstalledPlugins {
 
     static func load() -> [any HopPlugin] {
         entries().map { ExternalPlugin(manifest: $0.manifest, directory: $0.directory, record: $0.record) }
+    }
+
+    /// `hop <name> …` for every installed plugin that declares `cli`.
+    static func cliCommands() -> [CLICommand] {
+        entries().compactMap { entry in
+            guard let cli = entry.manifest.cli else { return nil }
+            return CLICommand(names: [cli.name], usage: cli.usage) { args in await runCLI(entry, args.raw) }
+        }
+    }
+
+    /// Starts the plugin's program in this process, sends `cli` and prints what it answers.
+    static func runCLI(_ entry: Entry, _ args: [String]) async -> Int32 {
+        let settings = AppSettings()
+        let m = entry.manifest
+        guard !settings.data.plugins.disabled.contains(m.id) else {
+            return CLI.Output.fail("\(m.name) is off (hop plugin enable \(m.id))")
+        }
+        let plugin = ExternalPlugin(manifest: m, directory: entry.directory, record: entry.record)
+        let dataDir = AppPaths.file("PluginData").appending(path: m.id)
+        let preferences = plugin.preferences(settings.data)
+        let process = PluginProcess(executable: entry.directory.appending(path: m.entry), directory: entry.directory, name: m.id) {
+            try? FileManager.default.createDirectory(at: dataDir, withIntermediateDirectories: true)
+            return PluginProtocol.Initialize(hopVersion: AppPaths.version, pluginID: m.id, preferences: preferences,
+                                             dataDir: dataDir.path, appearance: "dark")
+        }
+        // HUDs have no launcher here: they go to stderr.
+        process.onNotification = { method, params in
+            if method == "hud", let text = params?["text"]?.string { FileHandle.standardError.write(Data("\(text)\n".utf8)) }
+        }
+        defer { process.stop() }
+        do {
+            let value = try await process.request("cli", PluginProtocol.CLICall(args: args, stdin: CLI.stdinText()), timeout: 300)
+            let result = (try? JSONDecoder().decode(PluginProtocol.CLIResult.self, from: JSONEncoder().encode(value))) ?? PluginProtocol.CLIResult()
+            if let out = result.stdout { FileHandle.standardOutput.write(Data(out.utf8)) }
+            if let err = result.stderr { FileHandle.standardError.write(Data(err.utf8)) }
+            return Int32(clamping: result.exitCode ?? 0)
+        } catch {
+            return CLI.Output.fail("\(m.name): \(error)")
+        }
+    }
+}
+
+/// `plugins.install` in the config is the list of installed plugins: hop installs what it lists
+/// and removes what it no longer lists. Without the key, installed plugins are left alone.
+enum PluginSync {
+    struct Plan: Equatable {
+        /// Links to install.
+        var install: [String] = []
+        /// Ids to remove.
+        var remove: [String] = []
+        var isEmpty: Bool { install.isEmpty && remove.isEmpty }
+    }
+
+    /// Whether an installed plugin is the one `link` names.
+    static func matches(_ link: String, _ entry: InstalledPlugins.Entry) -> Bool {
+        guard let record = entry.record else { return false }
+        if let archive = PluginInstaller.localArchive(link) {
+            return record.repository == "local file \(archive.lastPathComponent)"
+        }
+        guard let source = try? PluginInstaller.parse(link) else { return false }
+        return record.repository.lowercased() == source.repository.lowercased() && (source.tag == nil || record.tag == source.tag)
+    }
+
+    static func plan(_ config: HopConfig, entries: [InstalledPlugins.Entry]) -> Plan {
+        guard let links = config.plugins.install else { return Plan() }
+        return Plan(install: links.filter { link in !entries.contains { matches(link, $0) } },
+                    remove: entries.filter { entry in !links.contains { matches($0, entry) } }.map(\.manifest.id))
+    }
+
+    /// The link to keep in the config for an installed plugin.
+    static func link(for record: PluginInstallRecord, typed: String) -> String {
+        if let archive = PluginInstaller.localArchive(typed) { return archive.path }
+        if let source = try? PluginInstaller.parse(typed) { return source.tag.map { "\(source.repository)@\($0)" } ?? source.repository }
+        return record.repository
+    }
+
+    /// Adds `link` to `plugins.install` (creating it with every installed plugin, so none is lost).
+    @discardableResult
+    static func recordInstall(_ link: String, settings: AppSettings) -> Bool {
+        var links = settings.data.plugins.install ?? InstalledPlugins.entries().compactMap { entry in
+            entry.record.map { $0.repository.hasPrefix("local") ? nil : $0.repository } ?? nil
+        }
+        let entries = InstalledPlugins.entries()
+        // Another link for the same plugin (an older tag) goes.
+        if let installed = entries.first(where: { matches(link, $0) }) {
+            links.removeAll { matches($0, installed) }
+        }
+        if !links.contains(link) { links.append(link) }
+        return settings.update(["plugins", "install"], to: ConfigEdit.literal(links))
+    }
+
+    @discardableResult
+    static func recordRemoval(_ id: String, settings: AppSettings) -> Bool {
+        guard var links = settings.data.plugins.install,
+              let entry = InstalledPlugins.entries().first(where: { $0.manifest.id == id }) else { return true }
+        links.removeAll { matches($0, entry) }
+        return settings.update(["plugins", "install"], to: ConfigEdit.literal(links))
     }
 }

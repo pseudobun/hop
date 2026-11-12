@@ -33,6 +33,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let startupIndicator = StartupIndicator()
     private var signalSources: [DispatchSourceSignal] = []
     private var ipc: HopIPCServer?
+    private var syncingPlugins = false
 
     // Shortcuts to plugins hop itself drives (menu bar, IPC, debug flags).
     private var notes: NotesController? { services.notes }
@@ -52,6 +53,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             case .pluginsChanged:
                 reloadInstalledPlugins()
                 return .ok
+            case .commands:
+                var reply = HopIPC.Reply.ok
+                reply.commands = Registry.commands(services).map { [$0.id, $0.title] }
+                return reply
             case .updateInstall, .updateCheck:
                 guard Updater.shared.isAvailable else { return .fail("this hop has no updater") }
                 if m.verb == .updateInstall { Updater.shared.installNow() } else { Updater.shared.checkOnly() }
@@ -300,6 +305,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         plugins.apply(config, previous: previous)
+        if previous?.plugins.install != config.plugins.install { syncPlugins() }
 
         let reserved = [(owner: "the hop hotkey", hotkey: config.general.hotkey)] + plugins.reservedHotkeys(config)
         let signature = reserved.map { "\($0.owner)=\($0.hotkey)" }
@@ -442,6 +448,10 @@ extension AppDelegate: PluginHost {
         if launcherController?.isVisible == true { launcher.reload() }
     }
 
+    func reloadLauncherFromTop() {
+        if launcherController?.isVisible == true { launcher.reloadFromTop() }
+    }
+
     func present(_ mode: Mode) {
         launcher.show()
         launcher.push(mode)
@@ -488,6 +498,7 @@ extension AppDelegate {
                     return
                 }
                 let directory = try PluginInstaller.commit(staged)
+                PluginSync.recordInstall(PluginSync.link(for: staged.record, typed: link), settings: settings)
                 plugins.remove(id: staged.manifest.id)
                 plugins.add(ExternalPlugin(manifest: staged.manifest, directory: directory, record: staged.record), host: self)
                 rebuildRoot()
@@ -502,11 +513,11 @@ extension AppDelegate {
     private func confirmInstall(_ staged: PluginInstaller.Staged) -> Bool {
         let m = staged.manifest, r = staged.record
         let alert = NSAlert()
-        alert.alertStyle = r.verified ? .informational : .warning
+        alert.alertStyle = .warning
         alert.messageText = "Install \(m.name) \(m.version)?"
         let origin = r.repository.hasPrefix("local") ? r.repository : "github.com/\(r.repository) (\(r.tag))"
         var lines = ["From \(origin)" + (m.author.map { " by \($0)" } ?? "") + ".",
-                     r.verified ? "Listed in hop's plugin index." : "Not reviewed by hop."]
+                     "A community plugin: not reviewed by hop."]
         let uses = m.permissions.lines
         lines.append("")
         lines.append(uses.isEmpty ? "It declares no network, clipboard, file or program use." : "It says it uses:\n" + uses.joined(separator: "\n"))
@@ -528,6 +539,7 @@ extension AppDelegate {
         alert.addButton(withTitle: "Cancel")
         NSApp.activate()
         guard alert.runModal() == .alertFirstButtonReturn else { return }
+        PluginSync.recordRemoval(id, settings: settings)
         plugins.remove(id: id)
         do {
             try PluginInstaller.remove(id: id)
@@ -537,6 +549,45 @@ extension AppDelegate {
         }
         rebuildRoot()
         settingsWindow.show(page: "plugins")
+    }
+
+    /// Installs what `plugins.install` lists and removes what it no longer lists. The config is
+    /// the consent here, like any other code it names.
+    func syncPlugins() {
+        guard !syncingPlugins else { return }
+        let plan = PluginSync.plan(settings.data, entries: InstalledPlugins.entries())
+        guard !plan.isEmpty else { return }
+        syncingPlugins = true
+        Task {
+            var installed: [String] = [], installedIDs: Set<String> = [], failed: [String] = []
+            for link in plan.install {
+                do {
+                    let staged = try await PluginInstaller.fetch(link)
+                    _ = try PluginInstaller.commit(staged)
+                    installed.append(staged.manifest.name)
+                    installedIDs.insert(staged.manifest.id)
+                } catch {
+                    failed.append(link)
+                    Log.plugin.error("sync \(link, privacy: .public): \(String(describing: error), privacy: .public)")
+                }
+            }
+            // A new tag of an installed plugin replaced it in place: nothing to remove.
+            for id in plan.remove where !installedIDs.contains(id) {
+                plugins.remove(id: id)
+                do { try PluginInstaller.remove(id: id) } catch { failed.append(id) }
+            }
+            syncingPlugins = false
+            reloadInstalledPlugins()
+            if !failed.isEmpty {
+                HUD.shared.fail("Plugins: could not sync \(failed.joined(separator: ", "))")
+            } else {
+                var parts: [String] = []
+                if !installed.isEmpty { parts.append("installed \(installed.joined(separator: ", "))") }
+                let removed = plan.remove.filter { !installedIDs.contains($0) }.count
+                if removed > 0 { parts.append("removed \(removed)") }
+                HUD.shared.show("Plugins: " + parts.joined(separator: ", "))
+            }
+        }
     }
 
     /// `hop plugin install` and `remove` changed the plugins folder: load it again.

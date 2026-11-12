@@ -21,6 +21,25 @@ nonisolated struct PluginManifest: Decodable, Equatable, Sendable {
     var preferences: [Preference] = []
     /// What the plugin says it does, shown before installing. hop does not enforce it.
     var permissions: Permissions = Permissions()
+    /// `hop <name> …` runs the plugin's `cli` request.
+    var cli: CLI?
+    /// Root search sends every query (`answer`) and shows what comes back above the results.
+    var answers = false
+    /// Extra actions on application rows; they arrive as `action` with command "app".
+    var appActions: [AppAction] = []
+
+    nonisolated struct CLI: Decodable, Equatable, Sendable {
+        /// The command word: `hop gh …`.
+        var name: String
+        /// Lines for `hop help`, each starting with the name.
+        var usage: [String] = []
+    }
+
+    nonisolated struct AppAction: Decodable, Equatable, Sendable {
+        var id: String
+        var title: String
+        var symbol: String?
+    }
 
     nonisolated struct Command: Decodable, Equatable, Sendable {
         enum Kind: String, Decodable, Sendable {
@@ -115,6 +134,9 @@ nonisolated struct PluginManifest: Decodable, Equatable, Sendable {
                 throw Problem.invalid("background command \"\(c.id)\" needs an interval like \"15m\"")
             }
         }
+        if let cli {
+            guard cli.name.wholeMatch(of: /[a-z][a-z0-9-]*/) != nil else { throw Problem.invalid("cli name \"\(cli.name)\" must be a lower-case word") }
+        }
         var prefs = Set<String>()
         for p in preferences {
             guard p.id.wholeMatch(of: /^[A-Za-z][A-Za-z0-9_]*$/) != nil, prefs.insert(p.id).inserted, p.id != "enabled" else {
@@ -138,7 +160,7 @@ nonisolated struct PluginManifest: Decodable, Equatable, Sendable {
 
 nonisolated extension PluginManifest {
     private enum Keys: String, CodingKey {
-        case id, name, version, summary, author, hop, entry, symbol, color, commands, preferences, permissions
+        case id, name, version, summary, author, hop, entry, symbol, color, commands, preferences, permissions, cli, answers, appActions
     }
 
     init(from decoder: Decoder) throws {
@@ -155,6 +177,9 @@ nonisolated extension PluginManifest {
         commands = try c.value(.commands, [])
         preferences = try c.value(.preferences, [])
         permissions = try c.value(.permissions, Permissions())
+        cli = try c.decodeIfPresent(CLI.self, forKey: .cli)
+        answers = try c.value(.answers, false)
+        appActions = try c.value(.appActions, [])
     }
 }
 
@@ -199,5 +224,14 @@ nonisolated extension PluginManifest.Permissions {
         clipboard = try c.value(.clipboard, "none")
         files = try c.value(.files, [])
         exec = try c.value(.exec, [])
+    }
+}
+
+nonisolated extension PluginManifest.CLI {
+    private enum Keys: String, CodingKey { case name, usage }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: Keys.self)
+        name = try c.decode(String.self, forKey: .name)
+        usage = try c.value(.usage, [])
     }
 }

@@ -138,7 +138,7 @@ struct PluginInstallerTests {
         let staged = try PluginInstaller.stage(archive: data, source: Self.source, tag: "v1")
         defer { PluginInstaller.discard(staged) }
         #expect(staged.manifest.id == "dev.you.thing" && staged.record.repository == "you/thing" && staged.record.tag == "v1")
-        #expect(staged.record.sha256.count == 64 && !staged.record.verified)
+        #expect(staged.record.sha256.count == 64)
         #expect(FileManager.default.isExecutableFile(atPath: staged.folder.appending(path: "bin/thing").path))
     }
 
@@ -164,7 +164,7 @@ struct PluginProcessTests {
     static let script = #"""
     #!/bin/sh
     while IFS= read -r line; do
-      id=$(printf '%s' "$line" | sed -n 's/.*"id":\([0-9]*\).*/\1/p')
+      id=$(printf '%s' "$line" | sed -n 's/^{"id":\([0-9]*\),.*/\1/p')
       case "$line" in
         *'"method":"initialize"'*) printf '{"jsonrpc":"2.0","id":%s,"result":{}}\n' "$id" ;;
         *'"command":"fail"'*) printf '{"jsonrpc":"2.0","id":%s,"error":{"code":-32000,"message":"nope"}}\n' "$id" ;;
@@ -217,5 +217,119 @@ struct PluginProcessTests {
             _ = try await process.request("run", PluginProtocol.Run(command: "list"))
         }
         #expect(!process.isRunning)
+    }
+}
+
+struct PluginParityTests {
+    @Test func manifestDeclaresCLIAnswersAndAppActions() throws {
+        let m = try PluginManifest.decode(Data(#"""
+        { id: "dev.you.thing", name: "T", version: "1", entry: "x", answers: true,
+          cli: { name: "thing", usage: ["thing list   Things"] },
+          appActions: [{ id: "pin", title: "Pin App", symbol: "pin" }] }
+        """#.utf8))
+        #expect(m.answers && m.cli?.name == "thing" && m.cli?.usage.count == 1 && m.appActions.first?.id == "pin")
+        #expect((try? PluginManifest.decode(Data(#"{ id: "dev.you.thing", name: "T", version: "1", entry: "x", cli: { name: "Bad Name" } }"#.utf8))) == nil)
+    }
+
+    @Test func protocolCarriesPromptsConfirmsAndChips() throws {
+        let text = #"""
+        { "view": { "submit": true, "secureInput": true, "items": [
+            { "id": "a", "title": "A", "chip": { "text": "on", "tone": "good" },
+              "actions": [ { "title": "Delete", "type": "callback", "id": "d", "destructive": true,
+                             "confirm": { "message": "Sure?" } } ] } ] } }
+        """#
+        let r = try JSONDecoder().decode(PluginProtocol.Response.self, from: Data(text.utf8))
+        #expect(r.view?.submit == true && r.view?.secureInput == true)
+        let item = try #require(r.view?.sections.first?.items.first)
+        #expect(item.chip == PluginProtocol.ChipSpec(text: "on", tone: "good"))
+        #expect(item.actions.first?.confirm == PluginProtocol.Confirm(title: nil, message: "Sure?", button: nil))
+        let cli = try JSONDecoder().decode(PluginProtocol.CLIResult.self, from: Data(#"{"stdout":"x\n","exitCode":3}"#.utf8))
+        #expect(cli.stdout == "x\n" && cli.exitCode == 3 && cli.stderr == nil)
+        let answer = try JSONDecoder().decode(PluginProtocol.AnswerResult.self, from: Data(#"{"items":[{"id":"a","title":"A"}]}"#.utf8))
+        #expect(answer.title == nil && answer.items.count == 1)
+    }
+}
+
+@MainActor
+struct PluginSyncTests {
+    static func entry(_ id: String, repository: String, tag: String) throws -> InstalledPlugins.Entry {
+        let m = try PluginManifest.decode(Data("{ id: \"\(id)\", name: \"N\", version: \"1\", entry: \"x\" }".utf8))
+        return InstalledPlugins.Entry(manifest: m, directory: URL(fileURLWithPath: "/tmp"),
+                                      record: PluginInstallRecord(repository: repository, tag: tag, sha256: "", installedAt: Date()))
+    }
+
+    @Test func plansInstallsAndRemovals() throws {
+        let a = try Self.entry("dev.a.one", repository: "a/one", tag: "v1")
+        let b = try Self.entry("dev.b.two", repository: "b/two", tag: "v2")
+        var config = HopConfig()
+        #expect(PluginSync.plan(config, entries: [a, b]).isEmpty, "no plugins.install: hands off")
+        config.plugins.install = ["github.com/A/One", "c/three@v3"]
+        let plan = PluginSync.plan(config, entries: [a, b])
+        #expect(plan.install == ["c/three@v3"] && plan.remove == ["dev.b.two"])
+        config.plugins.install = ["a/one@v2", "b/two@v2"]
+        // A different tag is a different install.
+        #expect(PluginSync.plan(config, entries: [a, b]) == PluginSync.Plan(install: ["a/one@v2"], remove: ["dev.a.one"]))
+        config.plugins.install = []
+        #expect(PluginSync.plan(config, entries: [a, b]).remove == ["dev.a.one", "dev.b.two"])
+    }
+}
+
+/// An installed plugin end to end, without the launcher: commands, callbacks, confirms, app
+/// actions and answers against a program in sh.
+@MainActor
+struct ExternalPluginRunTests {
+    static let script = #"""
+    #!/bin/sh
+    while IFS= read -r line; do
+      id=$(printf '%s' "$line" | sed -n 's/^{"id":\([0-9]*\),.*/\1/p')
+      case "$line" in
+        *'"method":"initialize"'*) printf '{"jsonrpc":"2.0","id":%s,"result":{}}\n' "$id" ;;
+        *'"method":"run"'*) printf '{"jsonrpc":"2.0","id":%s,"result":{"view":{"submit":true,"items":[{"id":"a","title":"A","chip":{"text":"on","tone":"good"},"actions":[{"title":"Zap","type":"callback","id":"zap","confirm":{"message":"Sure?"}},{"title":"Ping","type":"callback","id":"ping","shortcut":"cmd+p"}]}]}}}\n' "$id" ;;
+        *'"method":"action"'*'"command":"app"'*) printf '{"jsonrpc":"2.0","id":%s,"result":{"hud":{"text":"app action"}}}\n' "$id" ;;
+        *'"method":"action"'*) printf '{"jsonrpc":"2.0","id":%s,"result":{"hud":{"text":"pong","style":"warn"}}}\n' "$id" ;;
+        *'"method":"submit"'*) printf '{"jsonrpc":"2.0","id":%s,"result":{"hud":{"text":"got it"},"dismiss":true}}\n' "$id" ;;
+        *'"method":"answer"'*) printf '{"jsonrpc":"2.0","id":%s,"result":{"title":"Ans","items":[{"id":"x","title":"42"}]}}\n' "$id" ;;
+        *'"method":"cli"'*) printf '{"jsonrpc":"2.0","id":%s,"result":{"stdout":"hi\\n","exitCode":4}}\n' "$id" ;;
+      esac
+    done
+    """#
+
+    func makePlugin() throws -> (ExternalPlugin, URL) {
+        let dir = FileManager.default.temporaryDirectory.appending(path: "hop-ext-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir.appending(path: "bin"), withIntermediateDirectories: true)
+        let exe = dir.appending(path: "bin/p")
+        try Self.script.write(to: exe, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: exe.path)
+        let manifest = try PluginManifest.decode(Data(#"""
+        { id: "dev.test.run", name: "Run", version: "1", entry: "bin/p", answers: true,
+          commands: [{ id: "list", title: "List" }], appActions: [{ id: "pin", title: "Pin" }] }
+        """#.utf8))
+        return (ExternalPlugin(manifest: manifest, directory: dir, record: nil), dir)
+    }
+
+    @Test func commandsCallbacksConfirmsAndAppActions() async throws {
+        let (plugin, dir) = try makePlugin()
+        defer { plugin.stop(); try? FileManager.default.removeItem(at: dir) }
+        let open = try #require(plugin.commands().first?.actions.first)
+        guard case .push(let pushed) = await open.perform(), let mode = pushed as? ExternalMode else {
+            Issue.record("the command did not open a view")
+            return
+        }
+        // No launcher: run the view's first request by hand, as didEnter would.
+        let response = try await plugin.request("run", PluginProtocol.Run(command: "list"))
+        mode.apply(response)
+        let item = try #require(mode.sections(for: "").first?.items.first)
+        #expect(item.title == "A" && item.chip?.text == "on")
+        #expect(item.actions[1].shortcut == KeyCombo.parse("cmd+p"))
+        guard case .push(let confirm) = await item.actions[0].perform() else { Issue.record("no confirm screen"); return }
+        #expect(confirm is ConfirmMode)
+        guard case .warnWithHUD(let text) = await item.actions[1].perform() else { Issue.record("callback"); return }
+        #expect(text == "pong")
+        if case .stay? = mode.submit("hello") {} else { Issue.record("submit") }
+
+        let app = AppEntry(path: "/Applications/X.app", name: "X", bundleID: "x.y", alternateNames: [], kind: .application, isGame: false)
+        let pin = try #require(plugin.appActions(app).first)
+        guard case .stayWithHUD(let appText) = await pin.perform() else { Issue.record("app action"); return }
+        #expect(appText == "app action")
     }
 }
