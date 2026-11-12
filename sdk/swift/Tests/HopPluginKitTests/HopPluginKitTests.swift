@@ -20,3 +20,12 @@ import Testing
     #expect(json["type"]?.string == "push")
     #expect(json["view"]?["type"]?.string == "list")
 }
+
+@Test func cliOutputAndConfirmEncode() throws {
+    let out = try JSONDecoder().decode(JSONValue.self, from: JSONEncoder().encode(CLIOutput.print("hi\n")))
+    #expect(out["stdout"]?.string == "hi\n" && out["exitCode"]?.number == 0)
+    let a = try JSONDecoder().decode(JSONValue.self, from: JSONEncoder().encode(Action.callback("Delete", id: "d").destructive().confirm("Sure?")))
+    #expect(a["confirm"]?["message"]?.string == "Sure?")
+    let v = try JSONDecoder().decode(JSONValue.self, from: JSONEncoder().encode(View.list().submitting().secure()))
+    #expect(v["submit"]?.bool == true && v["secureInput"]?.bool == true)
+}

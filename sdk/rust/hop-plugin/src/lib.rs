@@ -88,6 +88,12 @@ pub struct View {
     pub empty_text: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub loading: Option<bool>,
+    /// ↵ with no row selected sends the typed text to [`Plugin::submit`].
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub submit: Option<bool>,
+    /// The search field hides what is typed.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub secure_input: Option<bool>,
 }
 
 impl View {
@@ -122,6 +128,18 @@ impl View {
 
     pub fn loading(mut self, loading: bool) -> Self {
         self.loading = Some(loading);
+        self
+    }
+
+    /// ↵ with nothing selected calls [`Plugin::submit`] (a text prompt).
+    pub fn submit(mut self) -> Self {
+        self.submit = Some(true);
+        self
+    }
+
+    /// Hide what is typed (a password prompt).
+    pub fn secure(mut self) -> Self {
+        self.secure_input = Some(true);
         self
     }
 
@@ -175,7 +193,17 @@ pub struct Item {
     pub accessory: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub keywords: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub chip: Option<Chip>,
     pub actions: Vec<Action>,
+}
+
+/// A tinted status chip on a row; `tone` is neutral, good, warn, bad or info.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct Chip {
+    pub text: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tone: Option<String>,
 }
 
 impl Item {
@@ -203,10 +231,25 @@ impl Item {
         self
     }
 
+    pub fn chip(mut self, text: impl Into<String>, tone: impl Into<String>) -> Self {
+        self.chip = Some(Chip { text: text.into(), tone: Some(tone.into()) });
+        self
+    }
+
     pub fn action(mut self, action: Action) -> Self {
         self.actions.push(action);
         self
     }
+}
+
+/// Asks before an action runs.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Confirm {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    pub message: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub button: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -277,6 +320,8 @@ pub struct Action {
     pub shortcut: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub destructive: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub confirm: Option<Confirm>,
 }
 
 impl Action {
@@ -292,6 +337,7 @@ impl Action {
             payload: None,
             shortcut: None,
             destructive: None,
+            confirm: None,
         }
     }
 
@@ -332,6 +378,12 @@ impl Action {
 
     pub fn destructive(mut self) -> Self {
         self.destructive = Some(true);
+        self
+    }
+
+    /// A screen with `message` and a confirm row before the action runs.
+    pub fn confirm(mut self, message: impl Into<String>) -> Self {
+        self.confirm = Some(Confirm { title: None, message: message.into(), button: None });
         self
     }
 }
@@ -455,6 +507,40 @@ impl Context {
     pub fn loading(&mut self, on: bool) {
         send(&json!({"jsonrpc": "2.0", "method": "loading", "params": {"loading": on}}));
     }
+
+    /// Root-search commands and Upcoming items, beyond those in plugin.json5 (send again to change).
+    pub fn root_items(&mut self, items: Vec<Item>, upcoming: Vec<Item>) {
+        send(&json!({"jsonrpc": "2.0", "method": "rootItems", "params": {"items": items, "upcoming": upcoming}}));
+    }
+}
+
+/// An inline answer in root search: a titled section of items.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct Answer {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    pub items: Vec<Item>,
+}
+
+/// What `hop <name> …` prints and exits with.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CliOutput {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stdout: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stderr: Option<String>,
+    pub exit_code: i32,
+}
+
+impl CliOutput {
+    pub fn print(text: impl Into<String>) -> Self {
+        CliOutput { stdout: Some(text.into()), stderr: None, exit_code: 0 }
+    }
+
+    pub fn fail(text: impl Into<String>, code: i32) -> Self {
+        CliOutput { stdout: None, stderr: Some(text.into()), exit_code: code }
+    }
 }
 
 /// Implement what you need; `run` is the only required method.
@@ -472,9 +558,24 @@ pub trait Plugin {
         Ok(Response::none())
     }
 
-    /// A `callback` action ran.
+    /// A `callback` action ran. Root items use command "root", answers "answer", app actions "app".
     fn action(&mut self, _cx: &mut Context, _command: &str, _id: &str, _payload: Option<Value>) -> Result<Response> {
         Ok(Response::none())
+    }
+
+    /// ↵ in a view with [`View::submit`].
+    fn submit(&mut self, _cx: &mut Context, _command: &str, _text: &str) -> Result<Response> {
+        Ok(Response::none())
+    }
+
+    /// A root-search query (with `answers: true` in plugin.json5); `None` shows nothing.
+    fn answer(&mut self, _cx: &mut Context, _text: &str) -> Result<Option<Answer>> {
+        Ok(None)
+    }
+
+    /// `hop <cli name> …` (with `cli` in plugin.json5). `stdin` is set when piped.
+    fn cli(&mut self, _cx: &mut Context, _args: &[String], _stdin: Option<&str>) -> Result<CliOutput> {
+        Ok(CliOutput::fail("this plugin has no command line\n", 2))
     }
 }
 
@@ -516,6 +617,19 @@ pub fn serve<P: Plugin>(mut plugin: P) {
             "action" => plugin
                 .action(&mut cx, str_param(params, "command"), str_param(params, "id"), params.get("payload").cloned())
                 .map(to_value),
+            "submit" => plugin.submit(&mut cx, str_param(params, "command"), str_param(params, "text")).map(to_value),
+            "answer" => plugin
+                .answer(&mut cx, str_param(params, "text"))
+                .map(|a| a.map(|a| serde_json::to_value(a).unwrap_or(Value::Null)).unwrap_or(Value::Null)),
+            "cli" => {
+                let args: Vec<String> = params
+                    .get("args")
+                    .and_then(Value::as_array)
+                    .map(|a| a.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+                    .unwrap_or_default();
+                let stdin = params.get("stdin").and_then(Value::as_str);
+                plugin.cli(&mut cx, &args, stdin).map(|o| serde_json::to_value(o).unwrap_or(Value::Null))
+            }
             "shutdown" => break,
             other => Err(Error::new(format!("unknown method {other}"))),
         };
@@ -546,6 +660,18 @@ mod tests {
         assert_eq!(json["view"]["sections"][0]["items"][0]["actions"][0]["type"], "copy");
         assert_eq!(json["view"]["sections"][0]["items"][0]["actions"][0]["shortcut"], "cmd+c");
         assert!(json.get("hud").is_none());
+    }
+
+    #[test]
+    fn cli_output_and_confirm_serialize() {
+        let out = serde_json::to_value(CliOutput::print("hi\n")).unwrap();
+        assert_eq!(out["stdout"], "hi\n");
+        assert_eq!(out["exitCode"], 0);
+        let a = serde_json::to_value(Action::callback("Delete", "del", json!(1)).destructive().confirm("Sure?")).unwrap();
+        assert_eq!(a["confirm"]["message"], "Sure?");
+        let v = serde_json::to_value(View::list().submit().secure()).unwrap();
+        assert_eq!(v["submit"], true);
+        assert_eq!(v["secureInput"], true);
     }
 
     #[test]

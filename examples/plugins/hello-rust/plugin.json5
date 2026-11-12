@@ -12,7 +12,12 @@
   commands: [
     { id: "greet", title: "Hello Rust", subtitle: "Greetings to copy", keywords: ["hi", "example"], prefix: "hi " },
     { id: "time", title: "What Time Is It", kind: "instant" },
+    { id: "echo", title: "Echo Backwards", subtitle: "Type, then ↵" },
   ],
+  // `hop hello Bunny --shout`
+  cli: { name: "hello", usage: ["hello [name] [--shout]              Greet someone (the Hello (Rust) example plugin)"] },
+  // "hello Bunny" in root search shows a greeting above the results.
+  answers: true,
   preferences: [
     { id: "name", title: "Your name", type: "text", placeholder: "Bunny", default: "friend" },
     { id: "shout", title: "Shout", type: "toggle", default: false, help: "Greetings in capitals." },

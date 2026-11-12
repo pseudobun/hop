@@ -62,6 +62,10 @@ public struct View: Codable, Equatable, Sendable {
     public var sections: [Section] = []
     public var emptyText: String?
     public var loading: Bool?
+    /// ↵ with no row selected sends the typed text to `submit(…)`.
+    public var submit: Bool?
+    /// The search field hides what is typed.
+    public var secureInput: Bool?
 
     public init() {}
 
@@ -81,6 +85,10 @@ public struct View: Codable, Equatable, Sendable {
     public func emptyText(_ text: String) -> View { var v = self; v.emptyText = text; return v }
     public func loading(_ on: Bool) -> View { var v = self; v.loading = on; return v }
     public func section(_ s: Section) -> View { var v = self; v.sections.append(s); return v }
+    /// ↵ with nothing selected calls `submit(…)` (a text prompt).
+    public func submitting() -> View { var v = self; v.submit = true; return v }
+    /// Hide what is typed (a password prompt).
+    public func secure() -> View { var v = self; v.secureInput = true; return v }
 
     /// Adds an item to the last untitled section.
     public func item(_ item: Item) -> View {
@@ -114,6 +122,7 @@ public struct Item: Codable, Equatable, Sendable {
     public var icon: Icon?
     public var accessory: String?
     public var keywords: [String]?
+    public var chip: Chip?
     public var actions: [Action] = []
 
     public init(_ id: String, _ title: String) {
@@ -126,6 +135,20 @@ public struct Item: Codable, Equatable, Sendable {
     public func accessory(_ text: String) -> Item { var i = self; i.accessory = text; return i }
     public func keywords(_ words: [String]) -> Item { var i = self; i.keywords = words; return i }
     public func action(_ action: Action) -> Item { var i = self; i.actions.append(action); return i }
+    /// A tinted status chip; `tone` is neutral, good, warn, bad or info.
+    public func chip(_ text: String, tone: String = "neutral") -> Item { var i = self; i.chip = Chip(text: text, tone: tone); return i }
+}
+
+public struct Chip: Codable, Equatable, Sendable {
+    public var text: String
+    public var tone: String?
+}
+
+/// Asks before an action runs.
+public struct Confirm: Codable, Equatable, Sendable {
+    public var title: String?
+    public var message: String
+    public var button: String?
 }
 
 public struct Icon: Codable, Equatable, Sendable {
@@ -157,6 +180,7 @@ public struct Action: Codable, Equatable, Sendable {
     public var payload: JSONValue?
     public var shortcut: String?
     public var destructive: Bool?
+    public var confirm: Confirm?
 
     init(_ title: String, _ type: Kind) {
         self.title = title
@@ -179,6 +203,12 @@ public struct Action: Codable, Equatable, Sendable {
     /// "cmd+c", "cmd+shift+return".
     public func shortcut(_ keys: String) -> Action { var a = self; a.shortcut = keys; return a }
     public func destructive(_ on: Bool = true) -> Action { var a = self; a.destructive = on; return a }
+    /// A screen with `message` and a confirm row before the action runs.
+    public func confirm(_ message: String, title: String? = nil, button: String? = nil) -> Action {
+        var a = self
+        a.confirm = Confirm(title: title, message: message, button: button)
+        return a
+    }
 }
 
 /// Lets a view hold actions that hold views.
@@ -254,6 +284,38 @@ public struct Context {
     public func loading(_ on: Bool) {
         send(["jsonrpc": .string("2.0"), "method": .string("loading"), "params": .object(["loading": .bool(on)])])
     }
+
+    /// Root-search commands and Upcoming items beyond plugin.json5's (send again to change).
+    public func rootItems(_ items: [Item], upcoming: [Item] = []) {
+        let params = (try? JSONDecoder().decode(JSONValue.self, from: JSONEncoder().encode(RootItems(items: items, upcoming: upcoming)))) ?? .null
+        send(["jsonrpc": .string("2.0"), "method": .string("rootItems"), "params": params])
+    }
+}
+
+struct RootItems: Codable { var items: [Item]; var upcoming: [Item] }
+
+/// An inline answer in root search: a titled section of items.
+public struct Answer: Codable, Equatable, Sendable {
+    public var title: String?
+    public var items: [Item]
+    public init(title: String? = nil, items: [Item]) {
+        self.title = title
+        self.items = items
+    }
+}
+
+/// What `hop <name> …` prints and exits with.
+public struct CLIOutput: Codable, Equatable, Sendable {
+    public var stdout: String?
+    public var stderr: String?
+    public var exitCode: Int
+    public init(stdout: String? = nil, stderr: String? = nil, exitCode: Int = 0) {
+        self.stdout = stdout
+        self.stderr = stderr
+        self.exitCode = exitCode
+    }
+    public static func print(_ text: String) -> CLIOutput { CLIOutput(stdout: text) }
+    public static func fail(_ text: String, code: Int = 1) -> CLIOutput { CLIOutput(stderr: text, exitCode: code) }
 }
 
 /// Implement what you need; `run` is the only required method.
@@ -263,14 +325,25 @@ public protocol HopPlugin {
     mutating func run(_ cx: inout Context, command: String, query: String?) throws -> Response
     /// The search text changed in a view with `.filtering(.plugin)`.
     mutating func query(_ cx: inout Context, command: String, text: String) throws -> Response
-    /// A `callback` action ran.
+    /// A `callback` action ran. Root items use command "root", answers "answer", app actions "app".
     mutating func action(_ cx: inout Context, command: String, id: String, payload: JSONValue?) throws -> Response
+    /// ↵ in a view made with `.submitting()`.
+    mutating func submit(_ cx: inout Context, command: String, text: String) throws -> Response
+    /// A root-search query (with `answers: true` in plugin.json5); nil shows nothing.
+    mutating func answer(_ cx: inout Context, text: String) throws -> Answer?
+    /// `hop <cli name> …` (with `cli` in plugin.json5); `stdin` is set when piped.
+    mutating func cli(_ cx: inout Context, args: [String], stdin: String?) throws -> CLIOutput
 }
 
 public extension HopPlugin {
     mutating func initialize(_ cx: inout Context) throws {}
     mutating func query(_ cx: inout Context, command: String, text: String) throws -> Response { .none }
     mutating func action(_ cx: inout Context, command: String, id: String, payload: JSONValue?) throws -> Response { .none }
+    mutating func submit(_ cx: inout Context, command: String, text: String) throws -> Response { .none }
+    mutating func answer(_ cx: inout Context, text: String) throws -> Answer? { nil }
+    mutating func cli(_ cx: inout Context, args: [String], stdin: String?) throws -> CLIOutput {
+        .fail("this plugin has no command line\n", code: 2)
+    }
 }
 
 /// An error shown to the user as a failed HUD.
@@ -312,6 +385,16 @@ public func serve<P: HopPlugin>(_ plugin: P) {
                 result = .success(try encode(plugin.query(&cx, command: command, text: params["text"]?.string ?? "")))
             case "action":
                 result = .success(try encode(plugin.action(&cx, command: command, id: params["id"]?.string ?? "", payload: params["payload"])))
+            case "submit":
+                result = .success(try encode(plugin.submit(&cx, command: command, text: params["text"]?.string ?? "")))
+            case "answer":
+                let answer = try plugin.answer(&cx, text: params["text"]?.string ?? "")
+                result = .success(try answer.map { try JSONDecoder().decode(JSONValue.self, from: JSONEncoder().encode($0)) } ?? .null)
+            case "cli":
+                var args: [String] = []
+                if case .array(let list)? = params["args"] { args = list.compactMap(\.string) }
+                let output = try plugin.cli(&cx, args: args, stdin: params["stdin"]?.string)
+                result = .success(try JSONDecoder().decode(JSONValue.self, from: JSONEncoder().encode(output)))
             case "shutdown":
                 return
             default:
