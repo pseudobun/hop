@@ -70,17 +70,35 @@ final class SettingsController: NSObject, NSWindowDelegate, NSTableViewDataSourc
     private var bindings: [(field: SettingsField, view: NSView, set: (Any?) -> Void)] = []
     private var gated: [NSView] = []
     private var fieldsByControl: [ObjectIdentifier: SettingsField] = [:]
+    private var pluginsByControl: [ObjectIdentifier: PluginInfo] = [:]
 
-    init(settings: AppSettings) {
+    private weak var plugins: PluginManager?
+
+    init(settings: AppSettings, plugins: PluginManager? = nil) {
         self.settings = settings
+        self.plugins = plugins
         super.init()
         build()
     }
 
+    /// The running plugins' pages (installed ones included), or the built-in ones.
+    private var groups: [SettingsGroup] {
+        SettingsCatalog.groups(plugins: plugins?.pages ?? SettingsCatalog.builtinPluginPages)
+    }
+
+    private var pages: [SettingsPage] { groups.flatMap(\.pages) }
+
     var isVisible: Bool { window.isVisible }
 
     func show(page: String? = nil) {
-        if let page, SettingsCatalog.pages.contains(where: { $0.id == page }) { pageID = page }
+        if let page, pages.contains(where: { $0.id == page }) {
+            pageID = page
+            // Search could hide the page asked for.
+            if !filter.isEmpty {
+                filter = ""
+                search.stringValue = ""
+            }
+        }
         if !window.isVisible {
             let front = NSWorkspace.shared.frontmostApplication
             previousApp = front?.processIdentifier == ProcessInfo.processInfo.processIdentifier ? nil : front
@@ -273,7 +291,7 @@ final class SettingsController: NSObject, NSWindowDelegate, NSTableViewDataSourc
     private func reloadSidebar() {
         let words = filter.split(separator: " ")
         sidebarRows = []
-        for group in SettingsCatalog.groups {
+        for group in groups {
             let pages = group.pages.filter { page in words.allSatisfy { page.haystack.contains($0) } }
             guard !pages.isEmpty else { continue }
             sidebarRows.append(.header(group.title))
@@ -354,7 +372,7 @@ final class SettingsController: NSObject, NSWindowDelegate, NSTableViewDataSourc
     // MARK: - Page
 
     private var page: SettingsPage {
-        SettingsCatalog.pages.first { $0.id == pageID } ?? SettingsCatalog.general
+        pages.first { $0.id == pageID } ?? SettingsCatalog.general
     }
 
     private var editingText: Bool {
@@ -368,6 +386,7 @@ final class SettingsController: NSObject, NSWindowDelegate, NSTableViewDataSourc
         bindings = []
         gated = []
         fieldsByControl = [:]
+        pluginsByControl = [:]
         contentStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
         let page = page
         let config = settings.data
@@ -394,13 +413,24 @@ final class SettingsController: NSObject, NSWindowDelegate, NSTableViewDataSourc
                 contentStack.setCustomSpacing(8, after: label)
             }
             let card = Card()
-            for (i, row) in section.rows.enumerated() {
-                if i > 0 { card.stack.addArrangedSubview(Hairline()) }
-                let view: NSView
+            var views: [NSView] = []
+            for row in section.rows {
                 switch row {
-                case .field(let field): view = fieldRow(field, page: page, config: config)
-                case .info(let info): view = infoRow(info, config: config)
+                case .field(let field) where field.hidden: continue
+                case .field(let field): views.append(fieldRow(field, page: page, config: config))
+                case .info(let info): views.append(infoRow(info, config: config))
+                case .plugins: views += pluginRows(config: config)
+                case .installPlugin: views.append(installRow())
+                case .pluginEnabled:
+                    if let plugin = page.plugin { views.append(pluginSwitchRow(plugin, config: config)) }
                 }
+            }
+            guard !views.isEmpty else {
+                if section.title != nil, let label = contentStack.arrangedSubviews.last { label.removeFromSuperview() }
+                continue
+            }
+            for (i, view) in views.enumerated() {
+                if i > 0 { card.stack.addArrangedSubview(Hairline()) }
                 card.stack.addArrangedSubview(view)
                 view.widthAnchor.constraint(equalTo: card.stack.widthAnchor).isActive = true
             }
@@ -408,6 +438,7 @@ final class SettingsController: NSObject, NSWindowDelegate, NSTableViewDataSourc
             card.widthAnchor.constraint(equalTo: contentStack.widthAnchor, constant: -2 * Self.pad).isActive = true
             contentStack.setCustomSpacing(24, after: card)
         }
+        addHiddenFields(page)
         refreshGate()
         contentStack.layoutSubtreeIfNeeded()
         contentScroll.contentView.scroll(to: keepScroll ? scroll : .zero)
@@ -444,6 +475,97 @@ final class SettingsController: NSObject, NSWindowDelegate, NSTableViewDataSourc
         card.stack.addArrangedSubview(row)
         row.widthAnchor.constraint(equalTo: card.stack.widthAnchor).isActive = true
         return card
+    }
+
+    // MARK: Plugin rows
+
+    /// Keys a page keeps out of sight, listed with a way to the config.
+    private func addHiddenFields(_ page: SettingsPage) {
+        let hidden = page.fields.filter(\.hidden)
+        guard !hidden.isEmpty else { return }
+        let label = NSTextField(labelWithAttributedString: Theme.labelString("More in the config"))
+        contentStack.addArrangedSubview(label)
+        contentStack.setCustomSpacing(8, after: label)
+        let card = Card()
+        let info = SettingsInfo(label: hidden.count == 1 ? "1 more setting" : "\(hidden.count) more settings",
+                                help: "Rarely changed; set them in config.json5.",
+                                lines: { _ in hidden.map { "\($0.key)  ·  \($0.label)" } },
+                                button: "Edit in Config", action: .openConfig)
+        let row = infoRow(info, config: settings.data)
+        card.stack.addArrangedSubview(row)
+        row.widthAnchor.constraint(equalTo: card.stack.widthAnchor).isActive = true
+        contentStack.addArrangedSubview(card)
+        card.widthAnchor.constraint(equalTo: contentStack.widthAnchor, constant: -2 * Self.pad).isActive = true
+        contentStack.setCustomSpacing(24, after: card)
+    }
+
+    /// One row per plugin: icon, name, what it does and who made it, its page, its switch.
+    private func pluginRows(config: HopConfig) -> [NSView] {
+        let all = plugins?.plugins.map(\.info) ?? BuiltinPlugins.types.map { $0.info }
+        guard !all.isEmpty else { return [] }
+        return all.map { info in
+            let icon = NSImageView(image: IconCache.shared.image(for: .tile(info.symbol, info.color), size: 28) ?? NSImage())
+            icon.widthAnchor.constraint(equalToConstant: 28).isActive = true
+            icon.heightAnchor.constraint(equalToConstant: 28).isActive = true
+            var meta = [info.tier.label]
+            if let version = info.version { meta.append(version) }
+            if let author = info.author { meta.append(author) }
+            let text = textColumn(info.name, "\(info.summary)\n\(meta.joined(separator: " · "))", width: Self.textWidth + 40)
+            let left = NSStackView(views: [icon, text])
+            left.spacing = 12
+            left.alignment = .centerY
+
+            var controls: [NSView] = []
+            if info.tier != .builtin {
+                let id = info.id
+                controls.append(button("Remove") { [weak self] in self?.onAction?(.removePlugin(id)) })
+            }
+            let id = info.id
+            controls.append(button("Settings") { [weak self] in self?.onAction?(.showPage(id)) })
+            controls.append(pluginSwitch(info, config: config))
+            let right = NSStackView(views: controls)
+            right.spacing = 10
+            right.alignment = .centerY
+            return rowStack([left, right])
+        }
+    }
+
+    private func pluginSwitchRow(_ info: PluginInfo, config: HopConfig) -> NSView {
+        rowStack([textColumn(info.name, "Turns the plugin's commands, hotkeys and background work on or off."),
+                  pluginSwitch(info, config: config)])
+    }
+
+    private func pluginSwitch(_ info: PluginInfo, config: HopConfig) -> NSSwitch {
+        let toggle = NSSwitch()
+        toggle.controlSize = .small
+        toggle.state = info.isEnabled(in: config) ? .on : .off
+        toggle.target = self
+        toggle.action = #selector(pluginToggled(_:))
+        pluginsByControl[ObjectIdentifier(toggle)] = info
+        return toggle
+    }
+
+    @objc private func pluginToggled(_ sender: NSSwitch) {
+        guard let info = pluginsByControl[ObjectIdentifier(sender)] else { return }
+        if !info.setEnabled(sender.state == .on, in: settings) {
+            HUD.shared.fail("Could not save \(info.name) to the config")
+        }
+    }
+
+    private func installRow() -> NSView {
+        let field = NSTextField()
+        field.placeholderString = "github.com/owner/repo"
+        field.font = Theme.mono(12.5)
+        field.widthAnchor.constraint(equalToConstant: 260).isActive = true
+        let install = button("Install") { [weak self, weak field] in
+            guard let link = field?.stringValue.trimmingCharacters(in: .whitespaces), !link.isEmpty else { return }
+            self?.onAction?(.installPlugin(link))
+        }
+        let controls = NSStackView(views: [field, install])
+        controls.spacing = 8
+        let text = textColumn("GitHub link",
+                              "A repository with a hop plugin release. Plugins from GitHub run as their own program with your permissions: install only code you trust.")
+        return rowStack([text, controls])
     }
 
     // MARK: Rows
@@ -859,7 +981,7 @@ final class HotkeyRecorder: NSView {
         } else if value.isEmpty {
             button.title = optional ? "Record Hotkey" : "None"
         } else {
-            button.title = HotkeySpec.parse(value) == nil ? "\(value) (invalid)" : NotesCommands.display(value)
+            button.title = HotkeySpec.parse(value) == nil ? "\(value) (invalid)" : HotkeySpec.display(value)
         }
         clear.isHidden = !optional || value.isEmpty || recording
     }

@@ -10,17 +10,12 @@ final class RootMode: Mode {
     private let frecency: FrecencyStore
     private let settings: AppSettings
     private let commands: () -> [Item]
-    /// Query prefixes that jump straight into a sub-mode, e.g. "kp ".
-    var prefixModes: [(prefix: String, make: () -> Mode)] = []
+    /// Prefixes, path modes, answers and upcoming items come from the plugins that are on.
+    weak var plugins: PluginManager?
     weak var context: LauncherContext?
-    var hyperError: (() -> String?)?
     /// Hotkeys from the config that could not be set up.
     var hotkeyProblems: (() -> [String])?
     var permissionsMode: (() -> Mode)?
-    /// A query that is a path (`~/…`, `/…`) opens this mode with the path kept.
-    var pathMode: (() -> Mode)?
-    /// Events starting soon and birthdays, shown above the suggestions.
-    var upcoming: (() -> [Item])?
 
     private var items: [Item] = []
     private var candidates: [RankCandidate] = []
@@ -77,17 +72,18 @@ final class RootMode: Mode {
     }
 
     func sections(for query: String) -> [ResultSection] {
-        if settings.data.files.enabled, let make = pathMode, query.hasPrefix("~/") || query.hasPrefix("/") {
-            let mode = make()
+        // A query that is a path (`~/…`, `/…`) opens the path mode with the path kept.
+        if query.hasPrefix("~/") || query.hasPrefix("/"), let mode = plugins?.pathMode() {
             DispatchQueue.main.async { [weak self] in
                 self?.context?.push(mode)
                 self?.context?.setQuery(query)
             }
             return []
         }
-        if let (prefix, make) = prefixModes.first(where: { query.lowercased().hasPrefix($0.prefix) }) {
-            let mode = make()
-            let rest = String(query.dropFirst(prefix.count))
+        // Query prefixes that jump straight into a sub-mode, e.g. "kp ".
+        if let prefixMode = plugins?.prefixModes().first(where: { query.lowercased().hasPrefix($0.prefix) }) {
+            let mode = prefixMode.make()
+            let rest = String(query.dropFirst(prefixMode.prefix.count))
             DispatchQueue.main.async { [weak self] in
                 self?.context?.push(mode)
                 if !rest.isEmpty { self?.context?.setQuery(rest) }
@@ -106,9 +102,7 @@ final class RootMode: Mode {
         let lower = query.lowercased()
         let startsATitle = results.contains { $0.title.lowercased().hasPrefix(lower) }
         // Loose answers (dates, arithmetic, "2 min") must not push aside an app that starts that way.
-        if let a = Answers.answer(for: query, config: settings.data, isAmbiguous: startsATitle) {
-            sections.append(ResultSection(title: a.kind, items: [answerItem(a)]))
-        }
+        if let answer = plugins?.answer(for: query, isAmbiguous: startsATitle) { sections.append(answer) }
         sections.append(ResultSection(title: "Results", items: results))
         // Last, so they never outrank a match; alone (and selected) when nothing matches.
         if let fallbacks = FallbackSearch.section(for: query, entries: settings.data.general.fallbacks) {
@@ -158,7 +152,7 @@ final class RootMode: Mode {
             setup.append(hint)
         }
         sections.append(ResultSection(title: "Setup", items: setup))
-        if let upcoming = upcoming?(), !upcoming.isEmpty { sections.append(ResultSection(title: "Upcoming", items: upcoming)) }
+        if let upcoming = plugins?.upcomingItems(), !upcoming.isEmpty { sections.append(ResultSection(title: "Upcoming", items: upcoming)) }
 
         let suggested = candidates.indices
             .filter { candidates[$0].frecency > 1 }
@@ -190,38 +184,6 @@ final class RootMode: Mode {
                     ], tracksFrecency: false)
     }
 
-    /// The answer card: ↵ copies the result, ⌘↵ pastes it, ⇧⌘C copies it with its unit.
-    private func answerItem(_ a: SmartAnswer) -> Item {
-        let record = { CalculatorHistory.shared.record(a) }
-        var actions = [
-            Action(title: "Copy Answer") {
-                record()
-                Pasteboard.copy(a.result)
-                return .dismissWithHUD("Copied \(a.result)")
-            },
-            Action(title: "Paste Answer", shortcut: .ret(.command)) { [weak self] in
-                record()
-                self?.context?.dismiss()
-                if !(await Pasteboard.paste(a.result, concealed: false)) {
-                    HUD.shared.show("Copied. Allow hop in Accessibility to paste")
-                }
-                return .stay
-            },
-        ]
-        if let unit = a.resultWithUnit, unit != a.result {
-            actions.insert(Action(title: "Copy with Unit", shortcut: .cmd("c", .shift)) {
-                record()
-                Pasteboard.copy(unit)
-                return .dismissWithHUD("Copied \(unit)")
-            }, at: 1)
-        }
-        actions += a.extraActions
-        var item = Item(id: "answer", title: a.display ?? a.result, subtitle: a.expression, actions: actions, tracksFrecency: false,
-                        calculation: (a.expression, a.display ?? a.result, a.left, a.right))
-        item.swatch = a.swatch
-        return item
-    }
-
     private func item(for entry: AppEntry) -> Item {
         let iconPath = entry.kind == .settingsPane ? "/System/Applications/System Settings.app" : entry.path
         let kindName = switch entry.kind {
@@ -229,7 +191,7 @@ final class RootMode: Mode {
         case .settingsPane, .preferencePane: "System Settings"
         }
         let accessory = HotkeyLookup.binding(id: entry.id, title: entry.name, bundleID: entry.bundleID, in: settings.data.hotkeys)
-            .map(NotesCommands.display) ?? kindName
+            .map(HotkeySpec.display) ?? kindName
         var actions = [
             Action(title: entry.kind == .application ? "Open Application" : "Open Settings") {
                 AppLauncher.open(entry.openURL)
@@ -245,11 +207,7 @@ final class RootMode: Mode {
                 Pasteboard.copy(entry.path)
                 return .dismissWithHUD("Copied path")
             })
-            if UninstallMode.isRemovable(entry.path) {
-                actions.append(Action(title: "Uninstall…", style: .destructive) {
-                    .push(UninstallMode(app: entry))
-                })
-            }
+            actions += plugins?.appActions(entry) ?? []
             if let bundleID = entry.bundleID {
                 actions.append(Action(title: "Copy Bundle Identifier", shortcut: .cmd("c", .shift)) {
                     Pasteboard.copy(bundleID)

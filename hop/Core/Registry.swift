@@ -1,19 +1,13 @@
 import AppKit
 
-/// Shared services handed to commands and modes.
+/// Shared services handed to commands and modes. A plugin's own objects are reached through
+/// `plugin(_:)` (each plugin adds a shortcut, e.g. `services.notes`).
 final class Services {
     let settings: AppSettings
     let frecency: FrecencyStore
     let apps: AppIndex
-    var hyper: HyperKeyController?
-    var keepassMode: (() -> Mode)?
-    var keepass: KeePassManager?
+    weak var plugins: PluginManager?
     var permissionsMode: (() -> Mode)?
-    var notes: NotesController?
-    var clipboard: ClipboardController?
-    var snippets: SnippetService?
-    var shelves: ShelfController?
-    var calendar: CalendarController?
     /// Shows the app in a theme without saving it (the Theme picker's preview).
     var previewTheme: ((HopConfig.General.ThemeName) -> Void)?
     /// Opens the Settings window, on a page (`SettingsPage.id`) or the last one.
@@ -25,6 +19,8 @@ final class Services {
         ConfigOpener.open(settings.url, at: settings.error)
     }
 
+    func plugin<P: HopPlugin>(_ type: P.Type) -> P? { plugins?.plugin(type) }
+
     init(settings: AppSettings, frecency: FrecencyStore, apps: AppIndex) {
         self.settings = settings
         self.frecency = frecency
@@ -32,28 +28,13 @@ final class Services {
     }
 }
 
-/// Compiled-in root commands. One feature adds its items here.
+/// Root commands: hop's own, then those of the plugins that are on.
 enum Registry {
     static func commands(_ services: Services) -> [Item] {
         var items: [Item] = []
-        items += SystemCommands.items(services)
         items += ThemeCommands.items(services)
-        items += PawCommands.items(services)
-        items += WireGuardCommands.items(services)
-        items += KeePassCommands.items(services)
-        items += BookmarkCommands.items(services)
-        items += NotesCommands.items(services)
-        items += ClipboardCommands.items(services)
-        items += SnippetCommands.items(services)
-        items += FileCommands.items(services)
-        items += ShelfCommands.items(services)
-        items += MessagesCommands.items(services)
-        items += CalendarCommands.items(services)
-        items += TranslateCommands.items(services)
-        items += ScreenTextCommands.items(services)
         items += OpenAICommands.items(services)
-        items += CalculatorCommands.items(services)
-        items += EmojiCommands.items(services)
+        items += services.plugins?.commands() ?? []
         items += [
             Item(id: "hop.settings", title: "Settings", subtitle: "hop's preferences",
                  aliases: ["preferences", "config", "configure", "options", "hop settings"],
@@ -66,6 +47,15 @@ enum Registry {
                      Action(title: "Open Config File", shortcut: .ret(.command)) {
                          services.openConfig()
                          return .dismiss
+                     },
+                 ]),
+            Item(id: "hop.plugins", title: "Open Plugins", subtitle: "Turn plugins on or off, install more from GitHub",
+                 aliases: ["plugins", "extensions", "install plugin", "hop plugins"],
+                 icon: .tile("puzzlepiece.extension.fill", Theme.info), accessory: "Command",
+                 actions: [
+                     Action(title: "Open Plugins", symbol: "puzzlepiece.extension") {
+                         services.openSettings?("plugins")
+                         return .stay
                      },
                  ]),
             Item(id: "hop.config", title: "Open hop Config", subtitle: "~/.config/hop/config.json5",
@@ -93,7 +83,7 @@ enum Registry {
         if !bindings.isEmpty {
             items = items.map { item in
                 var item = item
-                if let h = HotkeyLookup.binding(id: item.id, title: item.title, in: bindings) { item.accessory = NotesCommands.display(h) }
+                if let h = HotkeyLookup.binding(id: item.id, title: item.title, in: bindings) { item.accessory = HotkeySpec.display(h) }
                 return item
             }
         }
@@ -127,3 +117,15 @@ enum HopApp {
     }
 }
 
+
+extension ActionResult {
+    /// The HUD an action's result asks for, when it ran without the launcher (a hotkey).
+    func showHUD() {
+        switch self {
+        case .dismissWithHUD(let text), .stayWithHUD(let text): HUD.shared.show(text)
+        case .failWithHUD(let text): HUD.shared.fail(text)
+        case .warnWithHUD(let text): HUD.shared.warn(text)
+        case .dismiss, .stay, .pop, .reload, .push: break
+        }
+    }
+}

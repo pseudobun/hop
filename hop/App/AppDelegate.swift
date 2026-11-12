@@ -13,39 +13,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         withExtendedLifetime(delegate) { app.run() }
     }
 
-    private var services: Services!
+    private var serviceBag: Services!
     private var root: RootMode!
-    private var launcher: LauncherController!
+    private var launcherController: LauncherController!
     private var hotkey: GlobalHotkey!
-    private var notes: NotesController!
-    private var notesHotkey: GlobalHotkey!
-    private var clipboardStore: ClipboardStore!
-    private var clipboardMonitor: ClipboardMonitor!
-    private var clipboard: ClipboardController!
-    private var clipboardHotkey: GlobalHotkey!
-    private var shelves: ShelfController!
-    private var shelfHotkeys: [GlobalHotkey] = []
-    private var calendar: CalendarController!
+    private var plugins: PluginManager!
     private var settingsWindow: SettingsController!
-    private let messageWatcher = MessageCodeWatcher()
-    private var messagesHotkey: GlobalHotkey!
     private let bindings = HotkeyBindings()
+    /// The `hotkeys` map and reserved hotkeys last handed to `bindings`.
+    private var appliedBindings: (map: [String: String], reserved: [String])?
     /// The sub-mode a command hotkey last opened, so pressing it again hides the launcher.
     private weak var bindingMode: Mode?
     private var bindingKey: String?
-    private var snippetService: SnippetService!
-    private var wireGuardBar: WireGuardBar?
-    private let expander = SnippetExpander()
-    private var expanderRetry: Timer?
     private let activity = SystemActivity()
     private var statusItem: StatusItem?
     #if DEBUG
     private var debugBackdrop: NSWindow?
     #endif
-    private let hyper = HyperKeyController()
     private let startupIndicator = StartupIndicator()
     private var signalSources: [DispatchSourceSignal] = []
     private var ipc: HopIPCServer?
+
+    // Shortcuts to plugins hop itself drives (menu bar, IPC, debug flags).
+    private var notes: NotesController? { services.notes }
+    private var clipboard: ClipboardController? { services.clipboard }
+    private var shelves: ShelfController? { services.shelves }
+    private var calendar: CalendarController? { services.calendar }
 
     /// `hop shelf` and `hop update` reach the running hop here (see `HopIPC`).
     private func startIPC() {
@@ -53,6 +46,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             guard let self else { return .fail("hop is quitting") }
             switch m.verb {
             case .shelfAdd:
+                guard let shelves else { return .fail("the Shelf plugin is off") }
                 shelves.addFromCLI(m.paths ?? [])
                 return .ok
             case .updateInstall, .updateCheck:
@@ -75,71 +69,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Theme.variant = settings.data.general.theme
         let frecency = FrecencyStore(store: JSONStore(url: AppPaths.file("frecency.json")))
         let apps = AppIndex()
-        services = Services(settings: settings, frecency: frecency, apps: apps)
-        services.hyper = hyper
-        let keepass = KeePassManager(settings: settings)
-        let pins = KeePassPins()
-        let makeKeePass: () -> Mode = { [unowned self] in
-            KeePassMode(manager: keepass, pins: pins, sensitivity: settings.data.general.sensitivity,
-                        openConfig: { [weak self] in self?.services.openConfig() })
-        }
-        services.keepassMode = makeKeePass
-        services.keepass = keepass
-        makeNotes()
-        var clipDir = AppPaths.file("Clipboard")
-        #if DEBUG
-        if let dir = UserDefaults.standard.string(forKey: "DebugClipboardDir") { clipDir = URL(fileURLWithPath: dir) }
-        #endif
-        clipboardStore = ClipboardStore(dir: clipDir)
-        clipboardStore.load()
-        clipboardMonitor = ClipboardMonitor(store: clipboardStore) { settings.data.clipboard }
-        makeClipboard()
-        shelves = ShelfController(settings: settings)
-        shelves.onChange = { [weak self] in self?.root?.rebuild() }
-        services.shelves = shelves
-        calendar = CalendarController(settings: settings)
-        calendar.onChange = { [weak self] in
-            guard let self, launcher?.isVisible == true, launcher.query.isEmpty else { return }
-            launcher.reload()
-        }
-        services.calendar = calendar
-        shelfHotkeys = [
-            GlobalHotkey { [weak self] in self?.shelves.newShelf() },
-            GlobalHotkey { [weak self] in self?.shelves.newShelfFromClipboard() },
-            GlobalHotkey { [weak self] in self?.shelves.reopenLast() },
-        ]
-        let snippetsFile = SnippetsFile(url: URL(fileURLWithPath: settings.data.snippets.file.expandingTilde))
-        snippetService = SnippetService(file: snippetsFile, clipboard: clipboardStore)
-        services.snippets = snippetService
-        snippetService.presentArguments = { [weak self] mode in
-            self?.launcher.show()
-            self?.launcher.push(mode)
-        }
-        snippetsFile.onChange = { [weak self] in
-            self?.updateExpanderKeywords()
-            self?.root?.rebuild()
-        }
-        expander.onMatch = { [weak self] index, keyword in
-            guard let self, index < snippetService.snippets.count else { return }
-            snippetService.insert(snippetService.snippets[index], keyword: keyword)
-        }
-        snippetsFile.start()
+        serviceBag = Services(settings: settings, frecency: frecency, apps: apps)
+        plugins = PluginManager(plugins: BuiltinPlugins.makeAll() + InstalledPlugins.load())
+        services.plugins = plugins
 
         root = RootMode(apps: apps, frecency: frecency, settings: settings) { [unowned self] in
             Registry.commands(services)
         }
-        root.hyperError = { [weak self] in self?.hyper.lastError }
-        root.hotkeyProblems = { [weak self] in self?.bindings.problems ?? [] }
-        root.upcoming = { [weak self] in self?.calendar.upcomingItems() ?? [] }
+        root.plugins = plugins
+        root.hotkeyProblems = { [weak self] in (self?.bindings.problems ?? []) + (self?.plugins.hotkeyProblems ?? []) }
         bindings.run = { [weak self] key in self?.runBinding(key) }
-        let makeFiles: () -> Mode = { FileSearchMode(settings: settings, frecency: frecency) }
-        root.prefixModes = [(prefix: "kp ", make: makeKeePass), (prefix: "f ", make: makeFiles)]
-        root.pathMode = makeFiles
         let makePermissions: () -> Mode = { PermissionsMode { settings.data } }
         root.permissionsMode = makePermissions
         services.permissionsMode = makePermissions
-        launcher = LauncherController(root: root)
-        settingsWindow = SettingsController(settings: settings)
+        launcherController = LauncherController(root: root)
+        settingsWindow = SettingsController(settings: settings, plugins: plugins)
         settingsWindow.onAction = { [weak self] in self?.runSettingsAction($0) }
         services.openSettings = { [weak self] page in
             self?.launcher.hide()
@@ -149,27 +93,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         services.hideLauncher = { [weak self] in self?.launcher.hide() }
         launcher.popToRootSeconds = { settings.data.general.popToRootSeconds }
         launcher.keepQueryFor = { settings.data.general.keepQueryFor }
-        launcher.onWillShow = { [weak self] in self?.calendar.launcherWillShow() }
+        launcher.onWillShow = { [weak self] in self?.plugins.launcherWillShow() }
         // A theme previewed in the picker lasts while the launcher is up.
         launcher.onDidHide = { [weak self] in self?.preview(theme: settings.data.general.theme) }
         services.previewTheme = { [weak self] in self?.preview(theme: $0) }
-        let wireGuardBar = WireGuardBar()
-        wireGuardBar.config = { settings.data.wireguard }
-        wireGuardBar.onShowAll = { [weak self] in
-            let wg = settings.data.wireguard
-            self?.launcher.push(WireGuardMode(showFlags: wg.showFlags, sensitivity: settings.data.general.sensitivity,
-                                              exclusive: wg.exclusive))
-        }
-        launcher.setStrip(wireGuardBar)
-        self.wireGuardBar = wireGuardBar
-        #if DEBUG
-        if UserDefaults.standard.bool(forKey: "DebugWireGuardFocus") {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { wireGuardBar.debugFocus() }
-        }
-        #endif
         launcher.onItemPerformed = { item, index in
             if index == 0 && item.tracksFrecency { frecency.recordVisit(item.id) }
         }
+        plugins.start(self)
         root.didEnter(launcher)
 
         apps.onChange = { [weak self] in
@@ -181,19 +112,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             if self?.launcher.isVisible == true { self?.launcher.reload() }
         }
         RunningApps.shared.start()
-        ExchangeRates.shared.onUpdate = { [weak self] in
-            if self?.launcher.isVisible == true { self?.launcher.reload() }
-        }
         hotkey = GlobalHotkey { [weak self] in self?.launcher.toggle() }
-        clipboardHotkey = GlobalHotkey { [weak self] in
-            self?.launcher.hide()
-            self?.clipboard.toggle()
-        }
-        notesHotkey = GlobalHotkey { [weak self] in
-            self?.launcher.hide()
-            self?.notes.toggle()
-        }
-        messagesHotkey = GlobalHotkey { [weak self] in self?.runBinding("messages.pasteCode") }
 
         settings.onChange = { [weak self] old, new in self?.apply(new, previous: old) }
         settings.start()
@@ -202,7 +121,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         apply(settings.data, previous: nil)
         startIPC()
 
-        activity.onChange = { [weak self] away in self?.setAway(away) }
+        activity.onChange = { [weak self] away in self?.plugins.setAway(away) }
         activity.start()
 
         root.rebuild()
@@ -228,13 +147,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     ("root sections, empty query", { _ = root.sections(for: "") }),
                     ("root sections, \"saf\"", { _ = root.sections(for: "saf") }),
                     ("clipboard show + hide", { [unowned self] in
+                        guard let clipboard else { return }
                         clipboard.show(); clipboard.panel.displayIfNeeded(); clipboard.hide()
                     }),
                     ("clipboard type \"the\" (4 keys)", { [unowned self] in
+                        guard let clipboard else { return }
                         if !clipboard.isVisible { clipboard.show() }
                         for q in ["t", "th", "the", ""] { clipboard.debugSearch(q); clipboard.panel.displayIfNeeded() }
                     }),
                     ("notes show + hide", { [unowned self] in
+                        guard let notes else { return }
                         notes.show(); notes.panel.displayIfNeeded(); notes.hide()
                     }),
                     ("settings show + close", { [unowned self] in
@@ -252,7 +174,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         if defaults.bool(forKey: "DebugClipboard") {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
-                guard let self else { return }
+                guard let self, let clipboard else { return }
                 clipboard.show()
                 if let q = defaults.string(forKey: "DebugClipboardQuery") { clipboard.debugSearch(q) }
                 if defaults.object(forKey: "DebugClipboardSelect") != nil { clipboard.debugSelect(defaults.integer(forKey: "DebugClipboardSelect")) }
@@ -261,9 +183,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     Task {
                         try? await Task.sleep(for: .milliseconds(700))
                         if self.debugBackdrop != nil {
-                            await DebugSnapshot.captureRegion(around: self.clipboard.panel, padding: 60, to: path)
+                            await DebugSnapshot.captureRegion(around: clipboard.panel, padding: 60, to: path)
                         } else {
-                            await DebugSnapshot.capture(self.clipboard.panel, to: path)
+                            await DebugSnapshot.capture(clipboard.panel, to: path)
                         }
                     }
                 }
@@ -271,7 +193,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         if defaults.bool(forKey: "DebugNotes") {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
-                guard let self else { return }
+                guard let self, let notes else { return }
                 notes.show(newNote: defaults.bool(forKey: "DebugNotesNew"))
                 if let q = defaults.string(forKey: "DebugNotesQuery") { notes.debugSearch(q) }
                 if defaults.bool(forKey: "DebugNotesShortcuts") { notes.debugShowShortcuts() }
@@ -284,9 +206,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     Task {
                         try? await Task.sleep(for: .milliseconds(700))
                         if self.debugBackdrop != nil {
-                            await DebugSnapshot.captureRegion(around: self.notes.panel, padding: 60, to: path)
+                            await DebugSnapshot.captureRegion(around: notes.panel, padding: 60, to: path)
                         } else {
-                            await DebugSnapshot.capture(self.notes.panel, to: path)
+                            await DebugSnapshot.capture(notes.panel, to: path)
                         }
                     }
                 }
@@ -294,7 +216,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         if let paths = defaults.string(forKey: "DebugShelf") {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
-                guard let self else { return }
+                guard let self, let shelves else { return }
                 let items = paths.split(separator: ",").map { ShelfItem.classify(String($0)).kind == .link ? ShelfItem.link(String($0)) : ShelfItem.file(String($0)) }
                 let main = NSScreen.main?.frame ?? .zero
                 let shelf = shelves.newShelf(items, at: NSPoint(x: main.midX, y: main.midY))
@@ -316,7 +238,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if let names = defaults.string(forKey: "DebugBirthdays") {
             // "Ana Novak,Bor|Cene": today's names, then tomorrow's after "|".
             let days = names.split(separator: "|", omittingEmptySubsequences: false).map { $0.split(separator: ",").map(String.init) }
-            calendar.debugBirthdays(today: days.first ?? [], tomorrow: days.count > 1 ? days[1] : [])
+            calendar?.debugBirthdays(today: days.first ?? [], tomorrow: days.count > 1 ? days[1] : [])
         }
         if defaults.bool(forKey: "DebugShowOnLaunch") {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
@@ -357,14 +279,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         #endif
     }
 
-    /// Applies config changes: hotkey, login item, menu bar icon, feature commands.
+    /// Applies config changes: hotkey, plugins, login item, menu bar icon, commands.
     private func apply(_ config: HopConfig, previous: HopConfig?) {
         if let previous, previous.general.theme != config.general.theme {
             // After the action that saved it has finished with the launcher.
             DispatchQueue.main.async { [weak self] in self?.applyTheme(config.general.theme) }
-        }
-        if previous?.hyperKey != config.hyperKey {
-            hyper.update(enabled: config.hyperKey.enabled, quickPressEscape: config.hyperKey.quickPressEscape)
         }
 
         if previous?.general.hotkey != config.general.hotkey {
@@ -377,114 +296,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
-        if previous?.notes.enabled != config.notes.enabled || previous?.notes.hotkey != config.notes.hotkey {
-            if config.notes.enabled, let spec = HotkeySpec.parse(config.notes.hotkey) {
-                if !notesHotkey.register(keyCode: spec.keyCode, modifiers: spec.modifiers) {
-                    Log.app.error("Could not register notes hotkey \(config.notes.hotkey, privacy: .public)")
-                }
-            } else {
-                if config.notes.enabled { Log.app.error("Invalid notes hotkey \(config.notes.hotkey, privacy: .public)") }
-                notesHotkey.unregister()
-                notes.hide()
-            }
-        }
-        if previous != nil && previous?.notes.folder != config.notes.folder { notes.folderChanged() }
+        plugins.apply(config, previous: previous)
 
-        if previous?.snippets != config.snippets {
-            let url = URL(fileURLWithPath: config.snippets.file.expandingTilde)
-            if previous != nil && snippetService.file.url != url {
-                snippetService.file.url = url
-                snippetService.file.start()
-            }
-            expander.withinWords = config.snippets.expandWithinWords
-            expander.disabledApps = Set(config.snippets.disabledApps)
-            updateExpander(config.snippets)
-        }
-
-        if previous?.clipboard != config.clipboard {
-            if config.clipboard.enabled {
-                clipboardMonitor.start()
-                clipboardStore.prune(keepDays: config.clipboard.keepDays, maxItems: config.clipboard.maxItems)
-            } else {
-                clipboardMonitor.stop()
-                clipboard.hide()
-            }
-            if config.clipboard.enabled, let spec = HotkeySpec.parse(config.clipboard.hotkey) {
-                if !clipboardHotkey.register(keyCode: spec.keyCode, modifiers: spec.modifiers) {
-                    Log.app.error("Could not register clipboard hotkey \(config.clipboard.hotkey, privacy: .public)")
-                }
-            } else {
-                if config.clipboard.enabled { Log.app.error("Invalid clipboard hotkey \(config.clipboard.hotkey, privacy: .public)") }
-                clipboardHotkey.unregister()
-            }
-        }
-
-        if previous?.calendar != config.calendar { calendar.apply(config.calendar) }
-
-        if previous?.messages != config.messages {
-            messageWatcher.apply(config.messages)
-            let spec = config.messages.pasteHotkey
-            if config.messages.enabled, !spec.isEmpty, let parsed = HotkeySpec.parse(spec) {
-                if !messagesHotkey.register(keyCode: parsed.keyCode, modifiers: parsed.modifiers) {
-                    Log.app.error("Could not register messages hotkey \(spec, privacy: .public)")
-                }
-            } else {
-                if config.messages.enabled, !spec.isEmpty { Log.app.error("Invalid messages hotkey \(spec, privacy: .public)") }
-                messagesHotkey.unregister()
-            }
-        }
-
-        if previous?.emoji != config.emoji {
-            // ":" like Slack and GitHub shortcodes: ":fire" searches emoji for "fire".
-            root.prefixModes.removeAll { $0.prefix == ":" }
-            if config.emoji.enabled {
-                root.prefixModes.append((prefix: ":", make: { [unowned self] in EmojiCommands.mode(services) }))
-            }
-        }
-
-        if previous?.translate != config.translate {
-            // "tr hvala za vse" opens Translate with that text.
-            root.prefixModes.removeAll { $0.prefix == "tr " }
-            if config.translate.enabled {
-                root.prefixModes.append((prefix: "tr ", make: { [unowned self] in TranslateCommands.mode(services) }))
-            }
-        }
-
-        if previous?.shelf != config.shelf {
-            shelves.apply(config.shelf)
-            let specs = [config.shelf.hotkey, config.shelf.clipboardHotkey, config.shelf.reopenHotkey]
-            for (hotkey, spec) in zip(shelfHotkeys, specs) {
-                guard config.shelf.enabled, !spec.isEmpty else {
-                    hotkey.unregister()
-                    continue
-                }
-                if let parsed = HotkeySpec.parse(spec) {
-                    if !hotkey.register(keyCode: parsed.keyCode, modifiers: parsed.modifiers) {
-                        Log.app.error("Could not register shelf hotkey \(spec, privacy: .public)")
-                    }
-                } else {
-                    Log.app.error("Invalid shelf hotkey \(spec, privacy: .public)")
-                    hotkey.unregister()
-                }
-            }
-        }
-
-        if previous?.hotkeys != config.hotkeys || previous?.general.hotkey != config.general.hotkey
-            || previous?.notes.hotkey != config.notes.hotkey || previous?.notes.enabled != config.notes.enabled
-            || previous?.clipboard.hotkey != config.clipboard.hotkey || previous?.clipboard.enabled != config.clipboard.enabled
-            || previous?.shelf != config.shelf || previous?.messages != config.messages {
-            var reserved = [(owner: "the hop hotkey", hotkey: config.general.hotkey)]
-            if config.notes.enabled { reserved.append((owner: "the notes hotkey", hotkey: config.notes.hotkey)) }
-            if config.clipboard.enabled { reserved.append((owner: "the clipboard hotkey", hotkey: config.clipboard.hotkey)) }
-            if config.shelf.enabled {
-                for (owner, spec) in [("shelf.hotkey", config.shelf.hotkey), ("shelf.clipboardHotkey", config.shelf.clipboardHotkey),
-                                      ("shelf.reopenHotkey", config.shelf.reopenHotkey)] where !spec.isEmpty {
-                    reserved.append((owner: owner, hotkey: spec))
-                }
-            }
-            if config.messages.enabled && !config.messages.pasteHotkey.isEmpty {
-                reserved.append((owner: "messages.pasteHotkey", hotkey: config.messages.pasteHotkey))
-            }
+        let reserved = [(owner: "the hop hotkey", hotkey: config.general.hotkey)] + plugins.reservedHotkeys(config)
+        let signature = reserved.map { "\($0.owner)=\($0.hotkey)" }
+        if appliedBindings?.map != config.hotkeys || appliedBindings?.reserved != signature {
+            appliedBindings = (config.hotkeys, signature)
             bindings.apply(config.hotkeys, reserved: reserved)
             for p in bindings.problems { Log.app.error("hotkeys: \(p, privacy: .public)") }
         }
@@ -503,8 +320,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         if config.general.menuBarIcon && statusItem == nil {
             statusItem = StatusItem(onOpen: { [weak self] in self?.launcher.show() },
-                                    onNotes: { [weak self] in self?.notes.show() },
-                                    onClipboard: { [weak self] in self?.clipboard.show() },
+                                    onNotes: { [weak self] in self?.notes?.show() },
+                                    onClipboard: { [weak self] in self?.clipboard?.show() },
                                     onSettings: { [weak self] in self?.services.openSettings?(nil) },
                                     onConfig: { [weak self] in self?.services.openConfig() })
         } else if !config.general.menuBarIcon, let item = statusItem {
@@ -532,62 +349,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             NSPasteboard.general.clearContents()
             NSPasteboard.general.setString(text, forType: .string)
         case .checkForUpdates: Updater.shared.installNow()
-        }
-    }
-
-    private func updateExpanderKeywords() {
-        expander.keywords = snippetService.snippets.enumerated().compactMap { i, s in s.keyword.map { ($0, i) } }
-    }
-
-    /// Starts the expander when wanted; without Accessibility it retries until granted.
-    private func updateExpander(_ config: HopConfig.Snippets) {
-        expanderRetry?.invalidate()
-        expanderRetry = nil
-        guard config.enabled && config.expand else {
-            expander.stop()
-            return
-        }
-        updateExpanderKeywords()
-        if expander.start() { return }
-        Log.app.notice("snippets: expansion waits for Accessibility")
-        guard !activity.isAway else { return }
-        let retry = Timer(timeInterval: 5, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated {
-                guard let self, AXIsProcessTrusted(), self.expander.start() else { return }
-                self.expanderRetry?.invalidate()
-                self.expanderRetry = nil
-            }
-        }
-        retry.tolerance = 2
-        RunLoop.main.add(retry, forMode: .common)
-        expanderRetry = retry
-    }
-
-    /// Screen locked, asleep or another user in front: periodic work stops until return.
-    private func setAway(_ away: Bool) {
-        clipboardMonitor.isPaused = away
-        calendar.isPaused = away
-        if away {
-            expanderRetry?.invalidate()
-            expanderRetry = nil
-        } else if !expander.isRunning {
-            // Starts it now if Accessibility was granted meanwhile, otherwise retries again.
-            updateExpander(services.settings.data.snippets)
+        case .showPage(let id): settingsWindow.show(page: id)
+        case .installPlugin(let link): installPlugin(link)
+        case .removePlugin(let id): removePlugin(id)
         }
     }
 
     /// A `hotkeys` binding fired: run that command, or open (or hide) that app.
     private func runBinding(_ key: String) {
         let lower = key.lowercased()
-        switch lower {
-        case "launcher", "hop": launcher.toggle(); return
-        case "notes.open", "notes": notes.toggle(); return
-        case "notes.new", "new note": launcher.hide(); notes.show(newNote: true); return
-        case "clipboard.history", "clipboard history", "clipboard": launcher.hide(); clipboard.toggle(); return
-        case "shelf.new", "new shelf", "shelf": shelves.newShelf(); return
-        case "shelf.clipboard", "new shelf from clipboard": shelves.newShelfFromClipboard(); return
-        case "shelf.reopen", "reopen shelf": shelves.reopenLast(); return
-        default: break
+        if lower == "launcher" || lower == "hop" {
+            launcher.toggle()
+            return
+        }
+        if let binding = plugins.binding(named: lower) {
+            binding.action()
+            return
         }
         let commands = Registry.commands(services)
         let appKey = lower.hasPrefix("app:") ? String(key.dropFirst(4)) : key
@@ -600,20 +377,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 return
             }
             Task {
-                switch await action.perform() {
-                case .push(let mode):
+                let result = await action.perform()
+                if case .push(let mode) = result {
                     launcher.show()
                     launcher.push(mode)
                     bindingMode = mode
                     bindingKey = key
-                case .dismissWithHUD(let text), .stayWithHUD(let text):
-                    HUD.shared.show(text)
-                case .failWithHUD(let text):
-                    HUD.shared.fail(text)
-                case .warnWithHUD(let text):
-                    HUD.shared.warn(text)
-                case .dismiss, .stay, .pop, .reload:
-                    break
+                } else {
+                    result.showHUD()
                 }
             }
             return
@@ -647,59 +418,62 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         startupIndicator.stop()
-        notes?.saveNow()
-        clipboardStore?.saveNow()
-        shelves?.saveNow()
-        hyper.stop()
-        expander.stop()
-        messageWatcher.stop()
+        plugins?.stop()
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-        launcher?.show()
+        launcherController?.show()
         return false
     }
 }
 
-extension AppDelegate {
-    func makeNotes() {
-        notes = NotesController(settings: services.settings)
-        notes.openConfig = { [weak self] in self?.services.openConfig() }
-        services.notes = notes
+extension AppDelegate: PluginHost {
+    var services: Services { serviceBag }
+    var settings: AppSettings { services.settings }
+    var launcher: LauncherController { launcherController }
+    var isAway: Bool { activity.isAway }
+
+    func rebuildRoot() { root?.rebuild() }
+
+    func reloadLauncher() {
+        if launcherController?.isVisible == true { launcher.reload() }
     }
 
-    func makeClipboard() {
-        clipboard = ClipboardController(store: clipboardStore, monitor: clipboardMonitor, settings: services.settings)
-        clipboard.saveSnippet = { [weak self] text in
-            guard let file = self?.snippetService?.file else { return false }
-            let first = text.split(whereSeparator: \.isNewline).first.map(String.init) ?? text
-            return file.append(Snippet(name: String(first.trimmingCharacters(in: .whitespaces).prefix(40)), text: text))
-        }
-        services.clipboard = clipboard
+    func present(_ mode: Mode) {
+        launcher.show()
+        launcher.push(mode)
     }
+
+    func openSettings(_ page: String?) { services.openSettings?(page) }
+    func openConfig() { services.openConfig() }
+    func plugin<P: HopPlugin>(_ type: P.Type) -> P? { plugins?.plugin(type) }
 
     /// Views take their colours and fonts when they are built: the launcher is built again
-    /// in `name`, keeping its mode, query and selection. Notes and Clipboard follow in `applyTheme`.
+    /// in `name`, keeping its mode, query and selection. Plugin windows follow in `applyTheme`.
     func preview(theme name: HopConfig.General.ThemeName) {
         guard Theme.variant != name else { return }
         Theme.variant = name
-        wireGuardBar?.retheme()
+        plugins.themeDidChange(saved: false)
         launcher.retheme()
     }
 
-    /// A saved theme: the launcher, Notes, Clipboard and root items in it, no restart.
+    /// A saved theme: the launcher, plugin windows and root items in it, no restart.
     /// Open shelves keep theirs until closed; new ones use it.
     func applyTheme(_ name: HopConfig.General.ThemeName) {
         preview(theme: name)
-        let notesShown = notes.isVisible, clipboardShown = clipboard.isVisible
-        notes.hide()
-        clipboard.hide()
-        makeNotes()
-        makeClipboard()
-        if notesShown { notes.show() }
-        if clipboardShown { clipboard.show() }
+        plugins.themeDidChange(saved: true)
         settingsWindow.retheme()
         root.rebuild()
         if launcher.isVisible { launcher.reload() } else { launcher.prepare() }
+    }
+}
+
+extension AppDelegate {
+    func installPlugin(_ link: String) {
+        HUD.shared.warn("Installing plugins is not ready yet")
+    }
+
+    func removePlugin(_ id: String) {
+        HUD.shared.warn("Removing plugins is not ready yet")
     }
 }
