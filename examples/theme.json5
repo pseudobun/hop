@@ -1,0 +1,47 @@
+// A hop theme (JSON5: comments and trailing commas are fine).
+// Keep it in ~/.config/hop/themes/: the file name is the theme's id, so `theme: "nord"` in
+// config.json5 picks nord.json5. The Theme command lists it; saved changes apply at once.
+{
+  name: "My Theme",
+  description: "Based on OG.",
+  // Every key left out comes from this built-in theme:
+  // "og", "og-light", "modern", "solarpunk" or "cyberpunk"
+  base: "og",
+  // Light themes get light window chrome and controls
+  light: false,
+  // "#rgb", "#rrggbb" or "#rrggbbaa"
+  colors: {
+    // Surfaces
+    background: "#0c0c09", // window
+    card: "#1d1d16", // selected row, panels
+    muted: "#2b2b22", // subtle fills
+    foreground: "#fbfbf9", // text
+    mutedForeground: "#abab9c", // secondary text
+    border: "#ffffff1a",
+    ring: "#7c7c67", // focus
+    primary: "#016630", // accent
+    // Status, one meaning each
+    good: "#43d58f", // healthy, done
+    warn: "#fcb52c", // needs attention
+    info: "#55b8f8", // in progress, selected
+    destructive: "#ff6467", // failed, bad
+    // Icons and charts
+    chart1: "#00cc87",
+    chart2: "#ffaf1d",
+    chart3: "#00afff",
+    chart4: "#ff586e",
+    chart5: "#ac79ff",
+  },
+  // An installed font's family ("Inter") or PostScript name ("Inter-Medium"), "system" or
+  // "system-mono". Font files (.ttf, .otf) anywhere in the themes folder are loaded too.
+  fonts: {
+    // sans: "Inter",
+    // heading: "Inter",
+    // mono: "JetBrains Mono",
+  },
+  // Labels and meta lines in the mono font, uppercase and tracked by `tracking` em
+  monoLabels: true,
+  tracking: 0.18,
+  // Weight of a screen's title, 100–900
+  titleWeight: 500,
+}

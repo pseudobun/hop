@@ -16,4 +16,9 @@ struct ExampleConfigTests {
         let text = try String(contentsOf: Self.examples.appending(path: "snippets.json5"), encoding: .utf8)
         #expect(text == SnippetsFile.template, "run `just examples`")
     }
+
+    @MainActor @Test func themeExampleMatchesTemplate() throws {
+        let text = try String(contentsOf: Self.examples.appending(path: "theme.json5"), encoding: .utf8)
+        #expect(text == CustomThemes.defaultTemplate, "run `just examples`")
+    }
 }

@@ -176,12 +176,12 @@ enum SettingsCatalog {
     }
 
     static var appearance: SettingsPage {
-        let themes = HopConfig.General.ThemeName.allCases.map { (value: $0.rawValue, label: Theme.spec($0).label) }
+        let themes = Theme.all.map { (value: $0.rawValue, label: $0.isBuiltIn ? Theme.spec($0).label : "\(Theme.spec($0).label) (custom)") }
         return SettingsPage(id: "appearance", title: "Appearance", subtitle: "Colours and fonts for every hop window.",
                             symbol: "paintpalette.fill", color: Theme.chart5, sections: [
             SettingsSection([
                 f("general.theme", "Theme", .choice(themes),
-                  "Applies at once. The Theme command in the launcher previews each one live."),
+                  "Applies at once. The Theme command in the launcher previews each one live. Your own themes are .json5 files in ~/.config/hop/themes/; the Theme command can start or import one."),
             ]),
         ])
     }

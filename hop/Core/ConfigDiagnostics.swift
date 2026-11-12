@@ -38,7 +38,7 @@ nonisolated indirect enum ConfigSchema: Equatable, Sendable {
 
     private static func describing(_ value: Any, path: String, samples: [String: Any]) -> ConfigSchema {
         if let choice = value as? any ConfigChoice { return .choice(type(of: choice).choices) }
-        if value is String || value is Bool || value is Int || value is Double { return .value }
+        if value is String || value is HopConfig.General.ThemeName || value is Bool || value is Int || value is Double { return .value }
         let mirror = Mirror(reflecting: value)
         switch mirror.displayStyle {
         case .struct:
