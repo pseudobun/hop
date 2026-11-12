@@ -6,6 +6,18 @@
     <description>hop releases</description>
     <language>en</language>
     <item>
+      <title>hop 0.1.0-beta.10</title>
+      <pubDate>Thu, 12 Nov 2026 10:36:10 +0000</pubDate>
+      <sparkle:version>141</sparkle:version>
+      <sparkle:shortVersionString>0.1.0-beta.10</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
+      <description><![CDATA[<style>body{font:13px -apple-system,sans-serif;margin:12px 14px;color:#222}h3{font-size:13px;margin:12px 0 4px}ul{padding-left:18px;margin:4px 0}li{margin:2px 0}code{font:12px ui-monospace,monospace}a{color:#0a64d0}@media(prefers-color-scheme:dark){body{color:#ddd}a{color:#6ab0ff}}</style><h3>Bug Fixes</h3>
+<ul>
+<li><b>cask:</b> use the current depends_on macos syntax (<a href="https://github.com/pseudobun/hop/issues/28">#28</a>) (<a href="https://github.com/pseudobun/hop/commit/cd2bde2cfaf89084b809a566bcbb79f851e27f4b">cd2bde2</a>)</li>
+</ul><p><a href="https://github.com/pseudobun/hop/releases/tag/v0.1.0-beta.10">Release on GitHub</a></p>]]></description>
+      <enclosure url="https://github.com/pseudobun/hop/releases/download/v0.1.0-beta.10/hop-0.1.0-beta.10-macos.zip" type="application/octet-stream" sparkle:edSignature="sDCc5ZLuSDYyexpJ09op2/Btzq1UZkTQUF+Jw7fbEb474Mwc7Z4jZhupSO8thnUXmaS7l2NRlAyxdR6TRHVbCg==" length="5164648"/>
+    </item>
+    <item>
       <title>hop 0.1.0-beta.9</title>
       <pubDate>Thu, 12 Nov 2026 10:15:32 +0000</pubDate>
       <sparkle:version>139</sparkle:version>
