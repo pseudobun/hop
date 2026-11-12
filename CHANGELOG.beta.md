@@ -7,7 +7,3 @@
 
 * add custom themes from json5 files ([#18](https://github.com/pseudobun/hop/issues/18)) ([95d36df](https://github.com/pseudobun/hop/commit/95d36df6080c7bf04b3932661b0013e6761156cd))
 * **updates:** add a beta channel and release betas from a beta branch ([#20](https://github.com/pseudobun/hop/issues/20)) ([6a8e9fb](https://github.com/pseudobun/hop/commit/6a8e9fb8038feb4d800fd175a7eec823cece8eb8))
-
-## Changelog (betas)
-
-Betas from the `beta` branch. Stable versions, and betas before 0.1.0, are in CHANGELOG.md.
