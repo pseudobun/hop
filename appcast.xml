@@ -6,6 +6,19 @@
     <description>hop releases</description>
     <language>en</language>
     <item>
+      <title>hop 0.1.0-beta.7</title>
+      <pubDate>Thu, 12 Nov 2026 09:23:31 +0000</pubDate>
+      <sparkle:version>135</sparkle:version>
+      <sparkle:shortVersionString>0.1.0-beta.7</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
+      <description><![CDATA[<style>body{font:13px -apple-system,sans-serif;margin:12px 14px;color:#222}h3{font-size:13px;margin:12px 0 4px}ul{padding-left:18px;margin:4px 0}li{margin:2px 0}code{font:12px ui-monospace,monospace}a{color:#0a64d0}@media(prefers-color-scheme:dark){body{color:#ddd}a{color:#6ab0ff}}</style><h3>Features</h3>
+<ul>
+<li>add custom themes from json5 files (<a href="https://github.com/pseudobun/hop/issues/18">#18</a>) (<a href="https://github.com/pseudobun/hop/commit/95d36df6080c7bf04b3932661b0013e6761156cd">95d36df</a>)</li>
+<li><b>updates:</b> add a beta channel and release betas from a beta branch (<a href="https://github.com/pseudobun/hop/issues/20">#20</a>) (<a href="https://github.com/pseudobun/hop/commit/6a8e9fb8038feb4d800fd175a7eec823cece8eb8">6a8e9fb</a>)</li>
+</ul><p><a href="https://github.com/pseudobun/hop/releases/tag/v0.1.0-beta.7">Release on GitHub</a></p>]]></description>
+      <enclosure url="https://github.com/pseudobun/hop/releases/download/v0.1.0-beta.7/hop-0.1.0-beta.7-macos.zip" type="application/octet-stream" sparkle:edSignature="KUDMM0T0aksAXiSieU6rz9aD+IGBtRMNd8B6OUT7/THTK4Lu8AzzWlHrrE9M938uYqU7cJAu+M1TGdDy5C08CA==" length="4900441"/>
+    </item>
+    <item>
       <title>hop 0.1.0-beta.6</title>
       <pubDate>Wed, 11 Nov 2026 21:36:55 +0000</pubDate>
       <sparkle:version>132</sparkle:version>
