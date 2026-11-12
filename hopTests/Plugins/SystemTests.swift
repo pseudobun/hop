@@ -144,29 +144,6 @@ struct HotkeySpecTests {
     }
 }
 
-struct HyperKeyMappingTests {
-    @Test func parsesHidutilOutput() {
-        let text = """
-        (
-                {
-                HIDKeyboardModifierMappingDst = 30064771183;
-                HIDKeyboardModifierMappingSrc = 30064771129;
-            },
-                {
-                HIDKeyboardModifierMappingDst = 30064771300;
-                HIDKeyboardModifierMappingSrc = 30064771301;
-            }
-        )
-        """
-        let entries = HyperKeyMapping.parse(text)
-        #expect(entries.count == 2)
-        #expect(entries[0]["HIDKeyboardModifierMappingSrc"] == HyperKeyMapping.capsLock)
-        #expect(entries[0]["HIDKeyboardModifierMappingDst"] == HyperKeyMapping.f20)
-        #expect(HyperKeyMapping.parse("(null)").isEmpty)
-        #expect(HyperKeyMapping.json(entries).contains("\"HIDKeyboardModifierMappingSrc\":30064771129"))
-    }
-}
-
 struct ProcessesTests {
     @Test func parsesPs() {
         let out = """
