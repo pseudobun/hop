@@ -85,7 +85,7 @@ final class ExternalPlugin: HopPlugin {
             case .hotkey: .hotkey(optional: !p.required)
             }
             rows.append(.field(SettingsField(path: path(manifest, p), p.title, kind, help: p.help, hidden: p.hidden,
-                                             fallback: p.default?.plain)))
+                                             fallback: p.default?.plain, check: p.required ? SettingsChecks.required : nil)))
         }
         var sections: [SettingsSection] = []
         if !rows.isEmpty { sections.append(SettingsSection("Settings", rows)) }
