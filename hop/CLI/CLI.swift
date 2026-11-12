@@ -35,6 +35,8 @@ enum CLI {
         "emoji": emoji,
         "bookmarks": bookmarks,
         "permissions": permissions,
+        "plugin": plugin,
+        "plugins": plugin,
         "version": { _ in version() },
         "--version": { _ in version() },
         "update": { a in await update(a) },
@@ -108,6 +110,9 @@ enum CLI {
           emoji <query> [--limit=N] [--json]  Search emoji by name or slang (English, Slovenian)
           bookmarks [query] [--json]          Bookmarks from the config; bookmarks open <name>
           permissions [--json]                Which macOS permissions hop has
+          plugin list [--json]                Built-in and installed plugins, on or off
+          plugin install <github link | zip> [--yes]   Install a plugin from a GitHub release (owner/repo[@tag]) or a .hopplugin.zip
+          plugin remove <id> [--yes]          Remove an installed plugin
           version                             hop's version and build
           update [--check] | status           Install the newest version now (hop restarts); --check only looks
           snippets [list] [--json]            Snippets from snippets.json5 with their keywords

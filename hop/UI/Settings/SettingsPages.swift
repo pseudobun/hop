@@ -13,6 +13,8 @@ struct SettingsField {
         /// Comma-separated in the field, a JSON array in the file.
         case list(placeholder: String = "")
         case multiline
+        /// A password field kept in the login Keychain (service, account), never in the config.
+        case secret(service: String, account: String)
     }
 
     let path: [String]
@@ -23,12 +25,21 @@ struct SettingsField {
     /// showing a control (rarely changed or advanced keys).
     var hidden = false
 
+    /// Shown when the config has no value at `path` (an installed plugin's default).
+    var fallback: Any?
+
     init(_ path: String, _ label: String, _ kind: Kind, help: String? = nil, hidden: Bool = false) {
-        self.path = path.split(separator: ".").map(String.init)
+        self.init(path: path.split(separator: ".").map(String.init), label, kind, help: help, hidden: hidden)
+    }
+
+    /// A key path whose keys may contain dots (`["plugins", "dev.you.plugin", "token"]`).
+    init(path: [String], _ label: String, _ kind: Kind, help: String? = nil, hidden: Bool = false, fallback: Any? = nil) {
+        self.path = path
         self.label = label
         self.help = help
         self.kind = kind
         self.hidden = hidden
+        self.fallback = fallback
     }
 
     var key: String { path.joined(separator: ".") }

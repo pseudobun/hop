@@ -634,7 +634,7 @@ final class SettingsController: NSObject, NSWindowDelegate, NSTableViewDataSourc
     }
 
     private func fieldRow(_ field: SettingsField, page: SettingsPage, config: HopConfig) -> NSView {
-        let value = SettingsValue.read(field.path, in: config)
+        let value = SettingsValue.read(field.path, in: config) ?? field.fallback
         let isGate = field.path == page.gate
         let row: NSView
         switch field.kind {
@@ -709,6 +709,24 @@ final class SettingsController: NSObject, NSWindowDelegate, NSTableViewDataSourc
             recorder.onChange = { [weak self] spec in self?.write(field, ConfigEdit.literal(spec)) }
             bindings.append((field, recorder, { recorder.value = $0 as? String ?? "" }))
             row = rowStack([textColumn(field.label, field.help), recorder])
+        case .secret(let service, let account):
+            let secure = NSSecureTextField()
+            let saved = Keychain.read(service: service, account: account) != nil
+            secure.placeholderString = saved ? "Saved in the Keychain · type to replace" : "Not set"
+            secure.font = Theme.sans(13)
+            secure.delegate = self
+            secure.widthAnchor.constraint(equalToConstant: 240).isActive = true
+            fieldsByControl[ObjectIdentifier(secure)] = field
+            var controls: [NSView] = [secure]
+            if saved {
+                controls.append(button("Remove") { [weak self] in
+                    Keychain.delete(service: service, account: account)
+                    self?.showPage(keepScroll: true)
+                })
+            }
+            let group = NSStackView(views: controls)
+            group.spacing = 8
+            row = rowStack([textColumn(field.label, field.help), group])
         case .multiline:
             let scroll = NSTextView.scrollableTextView()
             let tv = scroll.documentView as! NSTextView
@@ -778,7 +796,7 @@ final class SettingsController: NSObject, NSWindowDelegate, NSTableViewDataSourc
         for binding in bindings {
             // Leave the field being typed in alone.
             if let editor, editor === binding.view || editor.delegate === binding.view as AnyObject { continue }
-            binding.set(SettingsValue.read(binding.field.path, in: config))
+            binding.set(SettingsValue.read(binding.field.path, in: config) ?? binding.field.fallback)
         }
         refreshGate()
     }
@@ -815,7 +833,7 @@ final class SettingsController: NSObject, NSWindowDelegate, NSTableViewDataSourc
     @objc private func chose(_ sender: NSPopUpButton) {
         guard let field = fieldsByControl[ObjectIdentifier(sender)],
               let value = sender.selectedItem?.representedObject as? String else { return }
-        if SettingsValue.read(field.path, in: settings.data) as? String == value { return }
+        if (SettingsValue.read(field.path, in: settings.data) ?? field.fallback) as? String == value { return }
         write(field, ConfigEdit.literal(value))
     }
 
@@ -836,8 +854,18 @@ final class SettingsController: NSObject, NSWindowDelegate, NSTableViewDataSourc
     }
 
     private func commit(_ field: SettingsField, _ input: String, revert: (String) -> Void) {
-        let current = SettingsValue.read(field.path, in: settings.data)
+        let current = SettingsValue.read(field.path, in: settings.data) ?? field.fallback
         switch field.kind {
+        case .secret(let service, let account):
+            let value = input.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !value.isEmpty else { return }
+            if Keychain.write(value, service: service, account: account, label: "hop: \(field.label)") {
+                HUD.shared.show("Saved to the Keychain")
+                revert("")
+                DispatchQueue.main.async { [weak self] in self?.showPage(keepScroll: true) }
+            } else {
+                HUD.shared.fail("Could not save \(field.label) to the Keychain")
+            }
         case .text, .multiline:
             let value = field.kind.isMultiline ? input : input.trimmingCharacters(in: .whitespaces)
             if value != current as? String { write(field, ConfigEdit.literal(value)) }

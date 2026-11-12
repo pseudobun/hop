@@ -10,7 +10,7 @@ import os
 /// drive the running hop. The verbs stay narrow.
 nonisolated enum HopIPC {
     struct Message: Codable, Sendable {
-        enum Verb: String, Codable, Sendable { case shelfAdd, updateInstall, updateCheck }
+        enum Verb: String, Codable, Sendable { case shelfAdd, updateInstall, updateCheck, pluginsChanged }
         var verb: Verb
         var value: String?
         var paths: [String]?

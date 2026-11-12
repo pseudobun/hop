@@ -31,7 +31,7 @@ final class PluginManager {
 
     /// Adds a plugin after launch (one just installed) and applies the current config to it.
     func add(_ plugin: any HopPlugin, host: PluginHost) {
-        plugins.removeAll { $0.info.id == plugin.info.id }
+        remove(id: plugin.info.id)
         plugins.append(plugin)
         plugin.start(host)
         let config = host.settings.data

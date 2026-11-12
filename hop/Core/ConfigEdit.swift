@@ -53,9 +53,16 @@ nonisolated enum ConfigEdit {
     private static func nested(_ path: [String], _ literal: String) -> String {
         var out = literal
         for (i, key) in path.enumerated().reversed() {
-            out = i == path.count - 1 ? "\(key): \(out)" : "\(key): { \(out) }"
+            let name = memberName(key)
+            out = i == path.count - 1 ? "\(name): \(out)" : "\(name): { \(out) }"
         }
         return out
+    }
+
+    /// A key as JSON5 writes it: bare when it is an identifier, quoted otherwise
+    /// ("dev.you.plugin").
+    static func memberName(_ key: String) -> String {
+        key.wholeMatch(of: /[A-Za-z_$][A-Za-z0-9_$]*/) != nil ? key : literal(key)
     }
 
     private static func replace(_ range: Range<Int>, with literal: String, in chars: [UInt16]) -> String {

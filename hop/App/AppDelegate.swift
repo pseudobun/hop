@@ -49,6 +49,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 guard let shelves else { return .fail("the Shelf plugin is off") }
                 shelves.addFromCLI(m.paths ?? [])
                 return .ok
+            case .pluginsChanged:
+                reloadInstalledPlugins()
+                return .ok
             case .updateInstall, .updateCheck:
                 guard Updater.shared.isAvailable else { return .fail("this hop has no updater") }
                 if m.verb == .updateInstall { Updater.shared.installNow() } else { Updater.shared.checkOnly() }
@@ -469,11 +472,79 @@ extension AppDelegate: PluginHost {
 }
 
 extension AppDelegate {
+    /// Downloads a plugin, asks before installing it, then starts it.
     func installPlugin(_ link: String) {
-        HUD.shared.warn("Installing plugins is not ready yet")
+        if PluginInstaller.localArchive(link) == nil {
+            do { HUD.shared.show("Downloading \(try PluginInstaller.parse(link).repository)…") } catch {
+                HUD.shared.fail("\(error)")
+                return
+            }
+        }
+        Task {
+            do {
+                let staged = try await PluginInstaller.fetch(link)
+                guard confirmInstall(staged) else {
+                    PluginInstaller.discard(staged)
+                    return
+                }
+                let directory = try PluginInstaller.commit(staged)
+                plugins.remove(id: staged.manifest.id)
+                plugins.add(ExternalPlugin(manifest: staged.manifest, directory: directory, record: staged.record), host: self)
+                rebuildRoot()
+                settingsWindow.show(page: staged.manifest.id)
+                HUD.shared.show("Installed \(staged.manifest.name) \(staged.manifest.version)")
+            } catch {
+                HUD.shared.fail("Could not install: \(error)")
+            }
+        }
+    }
+
+    private func confirmInstall(_ staged: PluginInstaller.Staged) -> Bool {
+        let m = staged.manifest, r = staged.record
+        let alert = NSAlert()
+        alert.alertStyle = r.verified ? .informational : .warning
+        alert.messageText = "Install \(m.name) \(m.version)?"
+        let origin = r.repository.hasPrefix("local") ? r.repository : "github.com/\(r.repository) (\(r.tag))"
+        var lines = ["From \(origin)" + (m.author.map { " by \($0)" } ?? "") + ".",
+                     r.verified ? "Listed in hop's plugin index." : "Not reviewed by hop."]
+        let uses = m.permissions.lines
+        lines.append("")
+        lines.append(uses.isEmpty ? "It declares no network, clipboard, file or program use." : "It says it uses:\n" + uses.joined(separator: "\n"))
+        lines.append("")
+        lines.append("It runs as its own program with your user's access to files and the network. Install only plugins you trust.")
+        alert.informativeText = lines.joined(separator: "\n")
+        alert.addButton(withTitle: "Install")
+        alert.addButton(withTitle: "Cancel")
+        NSApp.activate()
+        return alert.runModal() == .alertFirstButtonReturn
     }
 
     func removePlugin(_ id: String) {
-        HUD.shared.warn("Removing plugins is not ready yet")
+        guard let plugin = plugins.plugin(id: id), plugin.info.tier != .builtin else { return }
+        let alert = NSAlert()
+        alert.messageText = "Remove \(plugin.info.name)?"
+        alert.informativeText = "Deletes the plugin and the secrets it keeps in the Keychain. Its settings stay in config.json5."
+        alert.addButton(withTitle: "Remove")
+        alert.addButton(withTitle: "Cancel")
+        NSApp.activate()
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        plugins.remove(id: id)
+        do {
+            try PluginInstaller.remove(id: id)
+            HUD.shared.show("Removed \(plugin.info.name)")
+        } catch {
+            HUD.shared.fail("Could not remove: \(error)")
+        }
+        rebuildRoot()
+        settingsWindow.show(page: "plugins")
+    }
+
+    /// `hop plugin install` and `remove` changed the plugins folder: load it again.
+    func reloadInstalledPlugins() {
+        for plugin in plugins.plugins where plugin.info.tier != .builtin { plugins.remove(id: plugin.info.id) }
+        for plugin in InstalledPlugins.load() { plugins.add(plugin, host: self) }
+        rebuildRoot()
+        if launcher.isVisible { launcher.reload() }
+        settingsWindow.configDidChange()
     }
 }
