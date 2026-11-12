@@ -7,7 +7,7 @@ cask "@CASK@" do
   desc "Tiny native launcher with calculator, clipboard history, snippets and notes"
   homepage "https://github.com/pseudobun/hop"
 
-  conflicts_with cask: "@OTHER@"
+  conflicts_with cask: "pseudobun/tap/@OTHER@"
   depends_on macos: :tahoe
   depends_on arch: :arm64
 
