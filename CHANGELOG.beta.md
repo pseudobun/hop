@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.0-beta.16](https://github.com/pseudobun/hop/compare/v0.1.0-beta.15...v0.1.0-beta.16) (2026-11-12)
+
+
+### Bug Fixes
+
+* **ui:** fade the launcher in instead of popping it up ([#49](https://github.com/pseudobun/hop/issues/49)) ([de18cff](https://github.com/pseudobun/hop/commit/de18cffb95de99c8db972395891d0afd0ed2696f))
+
 ## [0.1.0-beta.15](https://github.com/pseudobun/hop/compare/v0.1.0-beta.14...v0.1.0-beta.15) (2026-11-12)
 
 
