@@ -4,7 +4,7 @@ import Testing
 
 /// `examples/` mirrors the templates hop writes on first launch; `just examples` regenerates it.
 struct ExampleConfigTests {
-    static let examples = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+    static let examples = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
         .appending(path: "examples")
 
     @Test func configExampleMatchesTemplate() throws {
