@@ -40,3 +40,31 @@ struct PendingUpdateTests {
         #expect(info == .init(version: "0.1.0-beta.5", build: "73"))
     }
 }
+
+@MainActor
+struct UpdateCommandTests {
+    @Test func channelModeWritesTheConfig() async throws {
+        let dir = FileManager.default.temporaryDirectory.appending(path: "hop-ch-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let url = dir.appending(path: "config.json5")
+        try "{\n}\n".write(to: url, atomically: true, encoding: .utf8)
+        let settings = AppSettings(url: url)
+        let mode = UpdateChannelMode(settings: settings)
+        let items = try #require(mode.sections(for: "").first?.items)
+        #expect(items.map(\.title) == ["Automatic", "Beta", "Stable"])
+        #expect(items[0].chip?.text == "Current")
+        _ = await items[1].actions[0].perform()
+        #expect(settings.data.updates.channel == "beta")
+        #expect(mode.sections(for: "").first?.items[1].chip?.text == "Current")
+        #expect(mode.sections(for: "sta").first?.items.map(\.title) == ["Stable"])
+    }
+
+    @Test func updateCommandsAreInRootSearch() {
+        let services = Services(settings: AppSettings(url: URL(fileURLWithPath: "/nonexistent/config.json5")),
+                                frecency: FrecencyStore(store: JSONStore(url: FileManager.default.temporaryDirectory.appending(path: "f-\(UUID().uuidString).json"))),
+                                apps: AppIndex())
+        let ids = Registry.commands(services).map(\.id)
+        #expect(ids.contains("hop.update") && ids.contains("hop.updateChannel"))
+    }
+}
