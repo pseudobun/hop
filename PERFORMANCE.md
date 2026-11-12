@@ -113,7 +113,7 @@ are judged from the code.
 
 ## Motion
 
-The launcher and the clipboard history fade in (120 ms), the ⌘K action panel fades in (100 ms)
+The launcher and the clipboard history fade in (180 ms), the ⌘K action panel fades in (100 ms)
 and the HUD fades in. The selected row's highlight glides to the next row on ↑↓ and clicks
 (160 ms); new results place it at once. Reduce Motion turns all of it off.
 

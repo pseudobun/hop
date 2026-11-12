@@ -8,13 +8,20 @@ enum Motion {
     /// Fast start, long soft landing (as tip's workspace highlight).
     static let glideTiming = CAMediaTimingFunction(controlPoints: 0.22, 1, 0.36, 1)
 
-    /// Fades a window in from transparent; the window server does the frames.
-    static func fadeIn(_ window: NSWindow, duration: TimeInterval = 0.12) {
-        guard allowed else { window.alphaValue = 1; return }
+    /// Orders a window in and fades it from transparent. Transparent before it is ordered in:
+    /// set after, the window server shows a frame at full opacity first and the fade reads as a pop.
+    static func orderFrontFadingIn(_ window: NSWindow, duration: TimeInterval = 0.18) {
+        guard allowed else {
+            window.alphaValue = 1
+            window.orderFrontRegardless()
+            return
+        }
         window.alphaValue = 0
+        window.orderFrontRegardless()
         NSAnimationContext.runAnimationGroup { ctx in
             ctx.duration = duration
-            ctx.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            // An even ease: a steep ease-out reaches 40 % in the first frame and looks like a pop.
+            ctx.timingFunction = CAMediaTimingFunction(controlPoints: 0.25, 0.1, 0.25, 1)
             window.animator().alphaValue = 1
         }
     }
