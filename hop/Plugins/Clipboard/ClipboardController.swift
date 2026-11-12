@@ -142,9 +142,7 @@ final class ClipboardController: NSObject, NSWindowDelegate, NSTableViewDataSour
         reload(keepSelection: false)
         // Centred like the launcher every time; only the size you leave it at is remembered.
         panel.positionOnMouseScreen()
-        let wasVisible = panel.isVisible
-        panel.orderFrontRegardless()
-        if !wasVisible { Motion.fadeIn(panel) }
+        if panel.isVisible { panel.orderFrontRegardless() } else { Motion.orderFrontFadingIn(panel) }
         panel.makeKey()
         panel.makeFirstResponder(searchField)
     }
