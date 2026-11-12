@@ -31,6 +31,8 @@
     check: true,
     // Install as soon as it is downloaded; hop restarts
     automatic: false,
+    // "stable", "beta" (betas too) or "auto" (beta when this hop is one)
+    channel: "auto",
   },
 
   // Global hotkeys for any command or app, on top of general.hotkey, notes.hotkey and

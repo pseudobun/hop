@@ -167,6 +167,9 @@ enum SettingsCatalog {
                 f("updates.check", "Check for updates", .toggle,
                   "Once a day, downloaded in the background; installs when hop quits, or from the launcher or hop update."),
                 f("updates.automatic", "Install right away", .toggle, "As soon as it is downloaded; hop restarts."),
+                f("updates.channel", "Channel", .choice([
+                    ("auto", "Automatic"), ("stable", "Stable"), ("beta", "Beta"),
+                ]), "Beta also gets betas, ahead of stable versions. Automatic follows the hop you run (now \(AppPaths.version))."),
                 .info(SettingsInfo(label: "Latest release", lines: { _ in
                     guard Updater.shared.isAvailable else { return ["Builds from source don't check"] }
                     return [Updater.shared.pending.map { "hop \($0) is downloaded and ready" } ?? Updater.shared.state.text]

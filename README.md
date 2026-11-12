@@ -82,7 +82,8 @@ hop keeps itself current, without windows or prompts:
 | What's waiting | `hop update status` (exit 10 when a version is downloaded) |
 | Install right after downloading | `updates.automatic: true` |
 | No checks at all | `updates.check: false` |
-| Homebrew instead | `brew upgrade --cask pseudobun/tap/hop` |
+| Betas too | `updates.channel: "beta"` (a beta build follows betas by itself; `"stable"` leaves them) |
+| Homebrew instead | `brew upgrade --cask pseudobun/tap/hop`; betas: `pseudobun/tap/hop@beta` |
 
 Updates are signed (EdDSA) and keep every permission. Builds from source don't check.
 

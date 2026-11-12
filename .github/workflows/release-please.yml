@@ -1,10 +1,14 @@
 name: release-please
 
-# Keeps a release PR open from conventional commits on main (VERSION + CHANGELOG.md).
-# Merging it tags the version, creates the GitHub release and runs the release build.
+# Two release lines, each with a release PR kept open from conventional commits:
+#   main → stable versions (0.2.0), CHANGELOG.md, .release-please-manifest.json
+#   beta → betas (0.3.0-beta, 0.3.0-beta.1…), CHANGELOG.beta.md, .release-please-manifest.beta.json
+# Merging a release PR tags the version, creates the GitHub release and runs the release build.
+# Promote betas by merging beta into main; after each stable release, main is merged back into
+# beta so the next beta counts from it.
 on:
   push:
-    branches: [main]
+    branches: [main, beta]
   workflow_dispatch:
 
 permissions:
@@ -12,7 +16,7 @@ permissions:
   pull-requests: write
 
 concurrency:
-  group: release-please
+  group: release-please-${{ github.ref_name }}
   cancel-in-progress: false
 
 jobs:
@@ -21,14 +25,16 @@ jobs:
     outputs:
       created: ${{ steps.rp.outputs.release_created }}
       tag: ${{ steps.rp.outputs.tag_name }}
+      version: ${{ steps.rp.outputs.version }}
     steps:
       - id: rp
         uses: googleapis/release-please-action@5c625bfb5d1ff62eadeeb3772007f7f66fdcf071 # v4.4.1
         with:
           # A PAT lets CI run on the release PR; GITHUB_TOKEN works without it.
           token: ${{ secrets.RELEASE_TOKEN || github.token }}
-          config-file: release-please-config.json
-          manifest-file: .release-please-manifest.json
+          target-branch: ${{ github.ref_name }}
+          config-file: ${{ github.ref_name == 'beta' && 'release-please-config.beta.json' || 'release-please-config.json' }}
+          manifest-file: ${{ github.ref_name == 'beta' && '.release-please-manifest.beta.json' || '.release-please-manifest.json' }}
 
   release:
     needs: release-please
@@ -37,3 +43,38 @@ jobs:
     with:
       tag: ${{ needs.release-please.outputs.tag }}
     secrets: inherit
+
+  # A stable release: beta takes main, and its next beta builds on this version.
+  sync-beta:
+    needs: release-please
+    if: github.ref_name == 'main' && needs.release-please.outputs.created == 'true'
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.release-please.outputs.version }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.RELEASE_TOKEN || github.token }}
+
+      - name: Merge main into beta
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if ! git ls-remote --exit-code --heads origin beta >/dev/null; then
+            echo "no beta branch; nothing to sync"; exit 0
+          fi
+          git checkout -q -B beta origin/beta
+          if ! git merge --no-ff --no-commit origin/main; then
+            # VERSION changes on both lines; main's stable version wins. Anything else is real.
+            git checkout origin/main -- VERSION
+            if git diff --name-only --diff-filter=U | grep -q .; then
+              git diff --name-only --diff-filter=U
+              echo "::error::merging main into beta conflicts; merge it by hand and set .release-please-manifest.beta.json to $VERSION"
+              exit 1
+            fi
+          fi
+          printf '{".":"%s"}\n' "$VERSION" > .release-please-manifest.beta.json
+          git add -A
+          git commit -m "chore(beta): sync main after $VERSION"
+          git push origin beta

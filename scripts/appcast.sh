@@ -2,8 +2,15 @@
 # Puts a release at the top of a Sparkle appcast, keeping the newest 20.
 # Usage: scripts/appcast.sh <appcast.xml> <version> <build> <zip url> <"sparkle:edSignature=… length=…"> [notes.md]
 # notes.md (this version's CHANGELOG section) becomes the notes Sparkle shows; without it, a link.
+# A prerelease (a version with "-") goes into Sparkle's `beta` channel, which only hops following
+# betas see (`updates.channel`); stable versions stay in the default channel everyone sees. Until
+# the appcast has a stable version, betas stay in the default channel too: every hop out there is
+# a beta then, and those before 0.1.0 don't know channels.
 set -euo pipefail
 file="$1" version="$2" build="$3" url="$4" sig="$5" notes_md="${6:-}"
+channel=""
+case "$version" in *-*) channel="
+      <sparkle:channel>beta</sparkle:channel>" ;; esac
 min_os="26.0"
 date="$(LC_ALL=C date -u '+%a, %d %b %Y %H:%M:%S +0000')"
 notes="https://github.com/pseudobun/hop/releases/tag/v$version"
@@ -13,7 +20,7 @@ item="    <item>
       <pubDate>$date</pubDate>
       <sparkle:version>$build</sparkle:version>
       <sparkle:shortVersionString>$version</sparkle:shortVersionString>
-      <sparkle:minimumSystemVersion>$min_os</sparkle:minimumSystemVersion>
+      <sparkle:minimumSystemVersion>$min_os</sparkle:minimumSystemVersion>$channel
       @NOTES@
       <enclosure url=\"$url\" type=\"application/octet-stream\" $sig/>
     </item>"
@@ -84,6 +91,8 @@ else:
 item = item.replace("@NOTES@", notes)
 xml = open(path).read()
 items = re.findall(r"    <item>.*?</item>\n", xml, re.S)
+if not re.search(r"<sparkle:shortVersionString>[^<-]+</sparkle:shortVersionString>", "".join(items)):
+    item = re.sub(r"\n *<sparkle:channel>beta</sparkle:channel>", "", item)
 items = [i for i in items if f"<sparkle:shortVersionString>{version}<" not in i]
 items = ([item + "\n"] + items)[:20]
 head = re.sub(r"    <item>.*?</item>\n", "", xml, flags=re.S)
