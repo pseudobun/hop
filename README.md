@@ -337,7 +337,7 @@ just test         # Swift Testing, golden fixtures in hopTests/Fixtures
 scripts/build-local.sh build && open ~/Applications/hop.app --args -DebugShowOnLaunch YES -DebugQuery saf -DebugSnapshotPath /tmp/hop.png
 ```
 
-Commits follow [Conventional Commits](https://www.conventionalcommits.org). CI builds and tests every pull request, scans the history for secrets and checks that `examples/` matches the templates (`just examples` regenerates them).
+Commits follow [Conventional Commits](https://www.conventionalcommits.org). CI builds and tests every pull request that touches the app (docs-only ones skip it; the plugin SDKs build when `sdk/` or `examples/plugins/` change), scans the history for secrets and checks that `examples/` matches the templates (`just examples` regenerates them).
 
 ### Releasing
 
