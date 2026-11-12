@@ -27,19 +27,23 @@ struct SettingsField {
 
     /// Shown when the config has no value at `path` (an installed plugin's default).
     var fallback: Any?
+    /// Checks the value as it is typed (`SettingsChecks`); an error is not saved.
+    var check: SettingsCheck?
 
-    init(_ path: String, _ label: String, _ kind: Kind, help: String? = nil, hidden: Bool = false) {
-        self.init(path: path.split(separator: ".").map(String.init), label, kind, help: help, hidden: hidden)
+    init(_ path: String, _ label: String, _ kind: Kind, help: String? = nil, hidden: Bool = false, check: SettingsCheck? = nil) {
+        self.init(path: path.split(separator: ".").map(String.init), label, kind, help: help, hidden: hidden, check: check)
     }
 
     /// A key path whose keys may contain dots (`["plugins", "dev.you.plugin", "token"]`).
-    init(path: [String], _ label: String, _ kind: Kind, help: String? = nil, hidden: Bool = false, fallback: Any? = nil) {
+    init(path: [String], _ label: String, _ kind: Kind, help: String? = nil, hidden: Bool = false, fallback: Any? = nil,
+         check: SettingsCheck? = nil) {
         self.path = path
         self.label = label
         self.help = help
         self.kind = kind
         self.hidden = hidden
         self.fallback = fallback
+        self.check = check
     }
 
     var key: String { path.joined(separator: ".") }
@@ -79,8 +83,8 @@ enum SettingsRow {
 
     /// A config value with a control: `.setting("notes.folder", "Folder", .text())`.
     static func setting(_ path: String, _ label: String, _ kind: SettingsField.Kind, _ help: String? = nil,
-                        hidden: Bool = false) -> SettingsRow {
-        .field(SettingsField(path, label, kind, help: help, hidden: hidden))
+                        hidden: Bool = false, check: SettingsCheck? = nil) -> SettingsRow {
+        .field(SettingsField(path, label, kind, help: help, hidden: hidden, check: check))
     }
 }
 
@@ -182,8 +186,9 @@ nonisolated enum SettingsValue {
 // MARK: - The pages
 
 enum SettingsCatalog {
-    private static func f(_ path: String, _ label: String, _ kind: SettingsField.Kind, _ help: String? = nil) -> SettingsRow {
-        .setting(path, label, kind, help)
+    private static func f(_ path: String, _ label: String, _ kind: SettingsField.Kind, _ help: String? = nil,
+                          check: SettingsCheck? = nil) -> SettingsRow {
+        .setting(path, label, kind, help, check: check)
     }
 
     private static func choices(_ values: [String]) -> SettingsField.Kind { .choices(values) }
@@ -229,7 +234,8 @@ enum SettingsCatalog {
                 f("general.keepQueryFor", "Keep last search for", .number(min: 0, max: 86_400, unit: "s"),
                   "Reopening within this long brings back the last search, selected; 0 always starts empty."),
                 f("general.fallbacks", "Fallbacks", .list(placeholder: "chatgpt, google, github"),
-                  "Under root results and alone when nothing matches: chatgpt, google, github or a URL with {query}."),
+                  "Under root results and alone when nothing matches: chatgpt, google, github or a URL with {query}.",
+                  check: SettingsChecks.fallbacks),
             ]),
             SettingsSection("Startup", [
                 f("general.openAtLogin", "Open at login", .toggle),
@@ -239,10 +245,8 @@ enum SettingsCatalog {
                 f("updates.check", "Check for updates", .toggle,
                   "Once a day, downloaded in the background; installs when hop quits, or from the launcher or hop update."),
                 f("updates.automatic", "Install right away", .toggle, "As soon as it is downloaded; hop restarts."),
-                // Only betas until 0.1.0; then: ("auto", "Automatic"), ("stable", "Stable"), ("beta", "Beta")
-                // with "Beta also gets betas, ahead of stable versions. Automatic follows the hop you run."
-                f("updates.channel", "Channel", .choice([("auto", "Beta")]),
-                  "Every version is a beta until 0.1.0; then you can pick Stable here."),
+                f("updates.channel", "Channel", .choice([("auto", "Automatic"), ("beta", "Beta"), ("stable", "Stable")]),
+                  "Automatic follows the hop you run (now \(AppPaths.version)); Beta also gets betas. There is no stable version yet. \"Update Channel\" in the launcher picks it too."),
                 .info(SettingsInfo(label: "Latest release", lines: { _ in
                     guard Updater.shared.isAvailable else { return ["Builds from source don't check"] }
                     return [Updater.shared.pending.map { "hop \($0) is downloaded and ready" } ?? Updater.shared.state.text]

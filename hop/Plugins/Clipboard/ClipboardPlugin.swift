@@ -22,7 +22,8 @@ final class ClipboardPlugin: BuiltinPlugin {
             ]),
             SettingsSection("Privacy", [
                 .setting("clipboard.ignoreApps", "Never record from", .list(placeholder: "com.1password.1password"),
-                  "Bundle identifiers. Copies marked concealed (KeePassXC, 1Password, hop) are skipped anyway."),
+                  "Bundle identifiers. Copies marked concealed (KeePassXC, 1Password, hop) are skipped anyway.",
+                  check: SettingsChecks.bundleIDs),
                 .setting("clipboard.cliAccess", "Allow `hop clip`", .toggle, "Lets the CLI (and agents) read the history; it holds whatever you copied."),
             ]),
         ]

@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.1.0-beta.11](https://github.com/pseudobun/hop/compare/v0.1.0-beta.10...v0.1.0-beta.11) (2026-11-12)
+
+
+### Features
+
+* **settings:** check field values as you type and refuse ones that are wrong ([#32](https://github.com/pseudobun/hop/issues/32)) ([b997fc7](https://github.com/pseudobun/hop/commit/b997fc7fe150f5b463a44707199f93f4a2d49310))
+* **updates:** add Update hop and Update Channel commands to the launcher ([#30](https://github.com/pseudobun/hop/issues/30)) ([1c36a00](https://github.com/pseudobun/hop/commit/1c36a002e9dc3546f1d613e3fa50033fa38f2abe))
+
+## [0.1.0-beta.10](https://github.com/pseudobun/hop/compare/v0.1.0-beta.9...v0.1.0-beta.10) (2026-11-12)
+
+
+### Bug Fixes
+
+* **cask:** use the current depends_on macos syntax ([#28](https://github.com/pseudobun/hop/issues/28)) ([cd2bde2](https://github.com/pseudobun/hop/commit/cd2bde2cfaf89084b809a566bcbb79f851e27f4b))
+
 ## [0.1.0-beta.9](https://github.com/pseudobun/hop/compare/v0.1.0-beta.8...v0.1.0-beta.9) (2026-11-12)
 
 

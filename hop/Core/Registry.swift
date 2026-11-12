@@ -36,6 +36,7 @@ enum Registry {
         var items: [Item] = []
         items += ThemeCommands.items(services)
         items += OpenAICommands.items(services)
+        items += UpdateCommands.items(services)
         items += services.plugins?.commands() ?? []
         items += [
             Item(id: "hop.settings", title: "Settings", subtitle: "hop's preferences",

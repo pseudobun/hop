@@ -144,6 +144,10 @@ enum CLI {
             if !theme.isBuiltIn, !loaded.themes.contains(where: { $0.name == theme }) {
                 print("warning: general.theme: no theme \"\(theme.rawValue)\" (built-in or in themes/), using \"og\"")
             }
+            // The same checks Settings shows under its fields.
+            let problems = SettingsCatalog.problems(in: settings.data)
+            for (key, problem) in problems { print("\(problem.level == .error ? "error" : "warning"): \(key): \(problem.message)") }
+            if problems.contains(where: { $0.problem.level == .error }) { return 1 }
             print("ok")
             return 0
         case "show":

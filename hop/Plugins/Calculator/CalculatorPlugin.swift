@@ -12,7 +12,7 @@ final class CalculatorPlugin: BuiltinPlugin {
             SettingsSection([
                 .setting("calculator.currencies", "Currencies", .toggle,
                   "Rates from open.er-api.com, fetched only after you type a currency, at most twice a day."),
-                .setting("calculator.currency", "Default currency", .text(placeholder: "EUR"), "Where an amount goes when you type no target (\"50 usd\")."),
+                .setting("calculator.currency", "Default currency", .text(placeholder: "EUR"), "Where an amount goes when you type no target (\"50 usd\").", check: SettingsChecks.currency),
             ]),
         ]
     }

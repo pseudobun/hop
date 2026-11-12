@@ -11,7 +11,7 @@ final class ScreenTextPlugin: BuiltinPlugin {
         [
             SettingsSection([
                 .setting("ocr.enabled", "Copy Text from Screen", .toggle),
-                .setting("ocr.languages", "Languages", .list(placeholder: "en-US, sl-SI"), "Vision recognition languages, most likely first."),
+                .setting("ocr.languages", "Languages", .list(placeholder: "en-US, sl-SI"), "Vision recognition languages, most likely first.", check: ScreenText.checkLanguages),
             ]),
         ]
     }

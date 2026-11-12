@@ -10,7 +10,7 @@ final class SystemPlugin: BuiltinPlugin {
     static var settings: [SettingsSection] {
         [
             SettingsSection([
-                .setting("system.downloadsFolder", "Downloads folder", .text(placeholder: "~/Downloads"), "Emptied by \"Clear Downloads\"."),
+                .setting("system.downloadsFolder", "Downloads folder", .text(placeholder: "~/Downloads"), "Emptied by \"Clear Downloads\".", check: SettingsChecks.folder()),
             ]),
         ]
     }
