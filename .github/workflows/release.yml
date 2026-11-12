@@ -61,8 +61,8 @@ jobs:
             echo "ZIP=build.noindex/release/hop-$VERSION-macos.zip"
           } >> "$GITHUB_ENV"
 
-      - name: Test
-        run: scripts/build-local.sh test
+      # No tests here: the release PR only changes VERSION and the changelog, and the commits it
+      # releases passed CI as pull requests (and on main). Run `just test` before a hand-run rebuild.
 
       - name: Import Developer ID certificate
         uses: apple-actions/import-codesign-certs@fe74d46e82474f87e1ba79832ad28a4013d0e33a # v6.1.0
