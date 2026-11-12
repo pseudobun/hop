@@ -15,7 +15,7 @@ Pure Swift and AppKit, no web views of its own. ~45 MB RAM, 0 % idle CPU.
 [![Swift 6](https://img.shields.io/badge/Swift-6-F05138?logo=swift&logoColor=white)](hop.xcodeproj)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
-[Install](#install) · [With paw](#with-paw) · [Features](#features) · [Config](#config) · [Permissions](#permissions) · [CLI](#cli) · [Development](#development)
+[Install](#install) · [With paw](#with-paw) · [Features](#features) · [Plugins](#plugins) · [Config](#config) · [Permissions](#permissions) · [CLI](#cli) · [Development](#development)
 
 <br>
 
@@ -157,9 +157,31 @@ Install paw with `brew install --cask pseudobun/tap/paw`; hop finds its CLI on i
 - KeePassXC: several databases (⌘D to switch, or search all), paste or copy password / username / TOTP / URL, favicons, pins, folder filter. Stays unlocked until ⌘L or quit (`keepass.autoLock` locks on sleep, screen lock and inactivity)
 - Bookmarks from the config: name, URL, aliases ("hass") and an icon (image file, SF Symbol or emoji); ↵ opens in the default browser
 - Emoji picker: "Search Emoji" or type `:` (`:fire`). A grid by category with Recently and Frequently Used on top; ←→↑↓ move, ↵ pastes, ⌘C copies, ⇧⌘C copies the name, ⌥⌘C the code points. Searches CLDR names and keywords in English and Slovenian (`srce`, `pivo`), plus slang and intents (`wtf`, `lol`, `rip`, `ship it`); `emoji.skinTone` for people and hands, ⌘T on one picks another skin tone. Data: `scripts/gen-emoji.py`, narrowed to what this macOS draws
-- Settings on ⌘, (in the launcher, "Settings" in root search, or the menu bar bunny): categories in a sidebar grouped like the config (hop, Keyboard, Tools, AI, Integrations, Advanced) with search, values on the right. Toggles, pickers, steppers and a hotkey recorder write straight into `config.json5`, one key at a time with its comments kept, and apply at once. Bookmarks, KeePassXC databases and `hotkeys` bindings are listed with a button to the file
+- Settings on ⌘, (in the launcher, "Settings" in root search, or the menu bar bunny): hop's own pages, a Plugins page, then each plugin's page by category (Keyboard, Tools, AI, Integrations, System, Installed) with search, values on the right. Toggles, pickers, steppers and a hotkey recorder write straight into `config.json5`, one key at a time with its comments kept, and apply at once. Bookmarks, KeePassXC databases and `hotkeys` bindings are listed with a button to the file
 - Permissions screen: every macOS permission hop needs, with the system prompts (opens on first launch)
 - `hop` CLI for scripts and agents
+
+## Plugins
+
+Every feature above is a plugin: core is the launcher, root search, apps, themes, hotkeys,
+Settings and the CLI. **Open Plugins** (or Settings → Plugins) turns each one on or off and opens
+its settings.
+
+- **Built-in plugins** live in this repository (`hop/Plugins/`), in Swift, with their tests in
+  `hopTests/Plugins/`. New ones come as pull requests.
+- **Installed plugins** come from a GitHub release and run as their own program; hop draws their
+  lists and settings. Write them in any language, or with the Rust (`sdk/rust/hop-plugin`) or
+  Swift (`sdk/swift`) SDK:
+
+```sh
+hop plugin install github.com/owner/repo     # asks first; --yes installs
+hop plugin list
+hop plugin remove <id> --yes
+```
+
+An installed plugin runs with your user's access to files and the network, but not with hop's
+macOS permissions. [docs/plugins.md](docs/plugins.md) has the manifest, the protocol, both SDKs
+and the trust model.
 
 ## Config
 
@@ -299,7 +321,7 @@ The workflow needs these repository secrets: `MACOS_CERT_P12_BASE64`, `MACOS_CER
 
 ## Contributing
 
-Issues and pull requests are welcome. Run `just test` before you open one. Commit messages
+Issues and pull requests are welcome, new built-in plugins included ([docs/plugins.md](docs/plugins.md)). Run `just test` before you open one. Commit messages
 follow [Conventional Commits](https://www.conventionalcommits.org).
 
 ## License
