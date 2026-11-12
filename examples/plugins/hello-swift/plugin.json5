@@ -1,0 +1,17 @@
+// A hop plugin in Swift: ./pack.sh builds dev.hop.hello-swift.hopplugin.zip.
+{
+  id: "dev.hop.hello-swift",
+  name: "Hello (Swift)",
+  version: "0.1.0",
+  summary: "An example plugin: a list, a pushed view and a callback.",
+  author: "pseudobun",
+  entry: "bin/hello-swift",
+  symbol: "swift",
+  color: "#f05138",
+  commands: [
+    { id: "fruit", title: "Fruit Picker", subtitle: "Paste a fruit emoji", keywords: ["fruit", "example"], prefix: "fruit " },
+  ],
+  preferences: [
+    { id: "name", title: "Your name", type: "text", default: "friend" },
+  ],
+}

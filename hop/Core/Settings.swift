@@ -56,294 +56,46 @@ nonisolated struct HopConfig: Decodable, Equatable, Sendable {
         }
     }
 
-    nonisolated struct HyperKey: Decodable, Equatable, Sendable {
-        var enabled = false
-        /// Caps Lock pressed and released alone sends Escape.
-        var quickPressEscape = false
-    }
-
-    nonisolated struct WireGuard: Decodable, Equatable, Sendable {
-        var enabled = true
-        var showFlags = true
-        /// Activating a tunnel deactivates the others first.
-        var exclusive = true
-        /// Tunnels as pills under the root search field.
-        var bar = true
-        /// Names shown in the bar, in this order; empty shows every tunnel.
-        var barTunnels: [String] = []
-        var keys = Keys()
-
-        /// Launcher keys for the bar, in hotkey syntax ("cmd+j"); "" turns one off.
-        nonisolated struct Keys: Decodable, Equatable, Sendable {
-            /// Moves the keys into the bar: ←→ select, ↵ toggles, Esc back.
-            var focus = "cmd+j"
-            var disconnectAll = "cmd+shift+j"
-            /// Modifiers for 1…9 that toggle a tunnel straight away, e.g. "alt+cmd"; "" = off.
-            var direct = ""
-        }
-    }
-
-    nonisolated struct KeePass: Decodable, Equatable, Sendable {
-        nonisolated enum PasswordSource: String, Decodable, Equatable, Sendable, CaseIterable {
-            /// Ask in hop once, remember it behind Touch ID / login password.
-            case keychain
-            /// Ask in hop every time the database is unlocked.
-            case prompt
-            /// Run `passwordCommand` and read the password from its stdout.
-            case command
-            /// The database has no master password (key file only).
-            case none
-        }
-
-        nonisolated struct Database: Decodable, Equatable, Sendable {
-            var name = ""
-            var path = ""
-            var keyFile = ""
-            var password: PasswordSource = .keychain
-            var passwordCommand = ""
-
-            /// Label for pills and lists: `name`, or the file name without extension.
-            var label: String { name.isEmpty ? ((path as NSString).lastPathComponent as NSString).deletingPathExtension : name }
-            var expandedPath: String { path.expandingTilde }
-        }
-
-        var enabled = false
-        /// Several databases; when empty, the single `database` keys below are used.
-        var databases: [Database] = []
-        var database = ""
-        var keyFile = ""
-        var password: PasswordSource = .keychain
-        var passwordCommand = ""
-        /// Lock on sleep, screen lock and after `lockAfterMinutes`; off keeps databases
-        /// unlocked until locked by hand or hop quits.
-        var autoLock = false
-        /// Minutes of inactivity before locking (with `autoLock`); -1 never.
-        var lockAfterMinutes = 10
-        /// Override the keepassxc-cli path.
-        var cli = ""
-        /// Let `hop kp get` print passwords, TOTP codes and notes (for agents).
-        var cliAccess = false
-        /// Show site icons, fetched directly from each entry's site.
-        var favicons = true
-
-        /// Configured databases, including the legacy single-database keys.
-        var allDatabases: [Database] {
-            if !databases.isEmpty { return databases.filter { !$0.path.isEmpty } }
-            guard !database.isEmpty else { return [] }
-            return [Database(name: "", path: database, keyFile: keyFile, password: password, passwordCommand: passwordCommand)]
-        }
-    }
-
-    nonisolated struct System: Decodable, Equatable, Sendable {
-        var downloadsFolder = "~/Downloads"
-    }
-
-    /// A link searchable from the root, opened in the default browser.
-    nonisolated struct Bookmark: Decodable, Equatable, Sendable {
-        var name = ""
-        var url = ""
-        /// Other names that find it, e.g. "hass" for Home Assistant.
-        var aliases: [String] = []
-        /// Image file (absolute, ~/ or relative to the config folder), SF Symbol name or emoji.
-        var icon = ""
-        /// Tile colour for an SF Symbol icon, "#rrggbb".
-        var color = ""
-        /// Shown next to the name; defaults to the URL without its scheme.
-        var subtitle = ""
-    }
-
-    nonisolated struct Notes: Decodable, Equatable, Sendable {
-        var enabled = true
-        var hotkey = "alt+."
-        /// Folder of Markdown files; an Obsidian vault works as is.
-        var folder = "~/Notes"
-        /// Where new notes go, relative to `folder`.
-        var newNoteFolder = "Inbox"
-        /// Start of every new note; `{{title}}` and `{{date}}` are filled in.
-        var template = "---\ntitle: {{title}}\ntags: [inbox]\ntype: note\nstatus: stub\nupdated: {{date}}\n---\n\n"
-        /// Set an existing `updated:` frontmatter date to today when a note is edited.
-        var bumpUpdated = true
-
-        var expandedFolder: String { folder.expandingTilde }
-    }
-
-    nonisolated struct Clipboard: Decodable, Equatable, Sendable {
-        var enabled = true
-        var hotkey = "shift+alt+c"
-        /// Days to keep unpinned entries; -1 keeps them forever.
-        var keepDays = 90
-        var maxItems = 2000
-        /// Keep copied images (stored as PNG next to the history).
-        var images = true
-        /// Larger images are not kept.
-        var maxImageMB = 20
-        /// Apps whose copies are never recorded (bundle identifiers).
-        var ignoreApps = ["com.apple.keychainaccess", "com.apple.Passwords", "org.keepassxc.keepassxc",
-                          "com.1password.1password", "com.bitwarden.desktop"]
-        /// ↵ pastes into the app you were in; false only copies.
-        var pasteOnReturn = true
-        /// Let `hop clip` read the history (for agents); it can hold anything you copied.
-        var cliAccess = false
-    }
-
-    nonisolated struct Snippets: Decodable, Equatable, Sendable {
-        var enabled = true
-        /// Replace a snippet's keyword with the snippet as soon as it is typed (Accessibility).
-        var expand = true
-        /// Also expand keywords typed in the middle of a word.
-        var expandWithinWords = false
-        /// Apps where keywords never expand (bundle identifiers).
-        var disabledApps: [String] = []
-        var file = "~/.config/hop/snippets.json5"
-    }
-
-    nonisolated struct Files: Decodable, Equatable, Sendable {
-        var enabled = true
-        /// Folders Spotlight searches.
-        var scopes = ["~"]
-        /// Path components that hide a result.
-        var exclude = ["node_modules", ".git", "Library", "DerivedData", ".Trash", ".cache", "Caches"]
-        /// Also list files whose text matches (Spotlight's content index).
-        var contentSearch = true
-        var maxResults = 60
-        /// Show dotfiles when browsing a path.
-        var showHidden = false
-    }
-
-    nonisolated struct Shelf: Decodable, Equatable, Sendable {
-        var enabled = true
-        /// Shake the pointer while dragging to open a shelf under it.
-        var shake = true
-        var shakeSensitivity: ShakeDetector.Sensitivity = .medium
-        /// Hold exactly these modifiers while dragging to open a shelf; "" turns it off.
-        var modifier = "shift"
-        /// New empty shelf, new shelf from the clipboard, reopen the last closed shelf.
-        var hotkey = ""
-        var clipboardHotkey = ""
-        var reopenHotkey = ""
-        /// Dragged-out items stay on the shelf.
-        var keepAfterDragOut = false
-        /// Drags that start in these apps never open a shelf (bundle identifiers).
-        var ignoreApps: [String] = []
-    }
-
-    nonisolated struct Messages: Decodable, Equatable, Sendable {
-        var enabled = true
-        /// How far back "Messages Codes" looks.
-        var days = 3
-        /// "Paste Latest Code" only takes a code this recent.
-        var latestMinutes = 15
-        /// A HUD when a new code arrives.
-        var notify = true
-        /// Global hotkey for "Paste Latest Code"; "" turns it off.
-        var pasteHotkey = "alt+cmd+v"
-        /// Put a new code on the clipboard (concealed, cleared after two minutes).
-        var autoCopy = false
-    }
-
-    nonisolated struct CalendarSettings: Decodable, Equatable, Sendable {
-        var enabled = true
-        /// Root search shows events starting within this many minutes (and ones running now).
-        var soonMinutes = 60
-        /// How many days "Calendar" lists.
-        var days = 7
-        /// Today's and tomorrow's birthdays at the top of root search.
-        var birthdays = true
-        /// Calendars to leave out, by name.
-        var ignoreCalendars: [String] = []
-    }
-
-    nonisolated struct Emoji: Decodable, Equatable, Sendable {
-        var enabled = true
-        /// none, light, mediumLight, medium, mediumDark or dark; for emoji that take one.
-        var skinTone = "none"
-        /// Ask OpenAI for emoji when the index finds little (needs a key: "Set OpenAI API Key").
-        var ai = true
-        /// The cheapest current model is plenty for picking emoji.
-        var aiModel = "gpt-6-luna"
-        /// reasoning_effort ("none" answers in about 1.5 s); "" omits it.
-        var aiReasoning = "none"
-    }
-
-    nonisolated struct Translate: Decodable, Equatable, Sendable {
-        var enabled = true
-        /// Translations are rare and should read well: a strong model, not the cheapest.
-        var model = "gpt-6.1-terra"
-        /// reasoning_effort; "" leaves it out.
-        var reasoning = "none"
-        /// Two ISO 639 codes: text in the first goes to the second, anything else to the first.
-        /// Empty: the macOS language and English.
-        var languages: [String] = []
-    }
-
-    nonisolated struct OCR: Decodable, Equatable, Sendable {
-        var enabled = true
-        /// Vision recognition languages, most likely first ("en-US", "de-DE", "sl-SI").
-        var languages = ["en-US"]
-    }
-
-    nonisolated struct CalculatorSettings: Decodable, Equatable, Sendable {
-        /// Convert currencies; rates come from open.er-api.com, only once you type one.
-        var currencies = true
-        /// The currency an amount converts to when no target is typed.
-        var currency = "EUR"
-    }
-
     var general = General()
     var updates = Updates()
-    var hyperKey = HyperKey()
-    var wireguard = WireGuard()
-    var keepass = KeePass()
-    var system = System()
-    var bookmarks: [Bookmark] = []
-    var notes = Notes()
-    var clipboard = Clipboard()
-    var snippets = Snippets()
-    var files = Files()
-    var calculator = CalculatorSettings()
-    var shelf = Shelf()
-    var messages = Messages()
-    var calendar = CalendarSettings()
-    var translate = Translate()
-    var ocr = OCR()
-    var emoji = Emoji()
+    /// `plugins: { disabled: [...], "<id>": {...} }`: plugins turned off, and the settings of
+    /// plugins installed from GitHub (built-in plugins keep their own top-level section).
+    var plugins = Plugins()
     /// Global hotkeys for any command or app: { "Empty Trash": "hyper+t", "Safari": "hyper+s" }.
     var hotkeys: [String: String] = [:]
+    /// The built-in plugins' sections (`notes: {…}`, `keepass: {…}`), each typed by its plugin.
+    /// Not a JSON key itself: every section is a top-level key.
+    var sections = PluginConfigs()
+
+    nonisolated struct Plugins: Equatable, Sendable {
+        /// Ids of plugins turned off that have no `enabled` key of their own.
+        var disabled: [String] = []
+        /// GitHub links (`owner/repo[@tag]`) hop keeps installed; nil leaves installed plugins alone.
+        var install: [String]?
+        /// Settings of installed plugins, by plugin id.
+        var settings: [String: JSONValue] = [:]
+    }
 
     init() {}
 }
 
 // MARK: - Lenient decoding (missing keys keep their defaults)
 
-nonisolated private extension KeyedDecodingContainer {
+nonisolated extension KeyedDecodingContainer {
     func value<T: Decodable>(_ key: Key, _ fallback: T) throws -> T {
         try decodeIfPresent(T.self, forKey: key) ?? fallback
     }
 }
 
 nonisolated extension HopConfig {
-    private enum Keys: String, CodingKey { case general, updates, hyperKey, wireguard, keepass, system, bookmarks, notes, clipboard, snippets, files, calculator, shelf, messages, calendar, translate, ocr, emoji, hotkeys }
+    private enum Keys: String, CodingKey { case general, updates, hotkeys, plugins }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: Keys.self)
         general = try c.value(.general, General())
         updates = try c.value(.updates, Updates())
-        hyperKey = try c.value(.hyperKey, HyperKey())
-        wireguard = try c.value(.wireguard, WireGuard())
-        keepass = try c.value(.keepass, KeePass())
-        system = try c.value(.system, System())
-        bookmarks = try c.value(.bookmarks, [])
-        notes = try c.value(.notes, Notes())
-        clipboard = try c.value(.clipboard, Clipboard())
-        snippets = try c.value(.snippets, Snippets())
-        files = try c.value(.files, Files())
-        calculator = try c.value(.calculator, CalculatorSettings())
-        shelf = try c.value(.shelf, Shelf())
-        messages = try c.value(.messages, Messages())
-        calendar = try c.value(.calendar, CalendarSettings())
-        translate = try c.value(.translate, Translate())
-        ocr = try c.value(.ocr, OCR())
-        emoji = try c.value(.emoji, Emoji())
         hotkeys = try c.value(.hotkeys, [:])
+        plugins = try c.value(.plugins, Plugins())
+        sections = try PluginConfigs(from: decoder)
     }
 }
 
@@ -372,224 +124,23 @@ nonisolated extension HopConfig.General {
     }
 }
 
-nonisolated extension HopConfig.HyperKey {
-    private enum Keys: String, CodingKey { case enabled, quickPressEscape }
-    init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: Keys.self), d = Self()
-        enabled = try c.value(.enabled, d.enabled)
-        quickPressEscape = try c.value(.quickPressEscape, d.quickPressEscape)
-    }
-}
 
-nonisolated extension HopConfig.WireGuard {
-    private enum Fields: String, CodingKey { case enabled, showFlags, exclusive, bar, barTunnels, keys }
-    init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: Fields.self), d = Self()
-        enabled = try c.value(.enabled, d.enabled)
-        showFlags = try c.value(.showFlags, d.showFlags)
-        exclusive = try c.value(.exclusive, d.exclusive)
-        bar = try c.value(.bar, d.bar)
-        barTunnels = try c.value(.barTunnels, d.barTunnels)
-        keys = try c.value(.keys, d.keys)
-    }
-}
 
-nonisolated extension HopConfig.WireGuard.Keys {
-    private enum Keys: String, CodingKey { case focus, disconnectAll, direct }
-    init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: Keys.self), d = Self()
-        focus = try c.value(.focus, d.focus)
-        disconnectAll = try c.value(.disconnectAll, d.disconnectAll)
-        direct = try c.value(.direct, d.direct)
-    }
-}
 
-nonisolated extension HopConfig.KeePass {
-    private enum Keys: String, CodingKey { case enabled, databases, database, keyFile, password, passwordCommand, autoLock, lockAfterMinutes, cli, cliAccess, favicons }
-    init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: Keys.self), d = Self()
-        enabled = try c.value(.enabled, d.enabled)
-        databases = try c.value(.databases, d.databases)
-        database = try c.value(.database, d.database)
-        keyFile = try c.value(.keyFile, d.keyFile)
-        password = try c.value(.password, d.password)
-        passwordCommand = try c.value(.passwordCommand, d.passwordCommand)
-        autoLock = try c.value(.autoLock, d.autoLock)
-        lockAfterMinutes = try c.value(.lockAfterMinutes, d.lockAfterMinutes)
-        cli = try c.value(.cli, d.cli)
-        cliAccess = try c.value(.cliAccess, d.cliAccess)
-        favicons = try c.value(.favicons, d.favicons)
-    }
-}
 
-nonisolated extension HopConfig.KeePass.Database {
-    private enum Keys: String, CodingKey { case name, path, keyFile, password, passwordCommand }
-    init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: Keys.self), d = Self()
-        name = try c.value(.name, d.name)
-        path = try c.value(.path, d.path)
-        keyFile = try c.value(.keyFile, d.keyFile)
-        password = try c.value(.password, d.password)
-        passwordCommand = try c.value(.passwordCommand, d.passwordCommand)
-    }
-}
 
-nonisolated extension HopConfig.System {
-    private enum Keys: String, CodingKey { case downloadsFolder }
-    init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: Keys.self), d = Self()
-        downloadsFolder = try c.value(.downloadsFolder, d.downloadsFolder)
-    }
-}
 
-nonisolated extension HopConfig.Bookmark {
-    private enum Keys: String, CodingKey { case name, url, aliases, icon, color, subtitle }
-    init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: Keys.self), d = Self()
-        name = try c.value(.name, d.name)
-        url = try c.value(.url, d.url)
-        aliases = try c.value(.aliases, d.aliases)
-        icon = try c.value(.icon, d.icon)
-        color = try c.value(.color, d.color)
-        subtitle = try c.value(.subtitle, d.subtitle)
-    }
-}
 
-nonisolated extension HopConfig.CalculatorSettings {
-    private enum Keys: String, CodingKey { case currencies, currency }
-    init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: Keys.self), d = Self()
-        currencies = try c.value(.currencies, d.currencies)
-        currency = try c.value(.currency, d.currency)
-    }
-}
 
-nonisolated extension HopConfig.Shelf {
-    private enum Keys: String, CodingKey { case enabled, shake, shakeSensitivity, modifier, hotkey, clipboardHotkey, reopenHotkey, keepAfterDragOut, ignoreApps }
-    init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: Keys.self), d = Self()
-        enabled = try c.value(.enabled, d.enabled)
-        shake = try c.value(.shake, d.shake)
-        shakeSensitivity = try c.value(.shakeSensitivity, d.shakeSensitivity)
-        modifier = try c.value(.modifier, d.modifier)
-        hotkey = try c.value(.hotkey, d.hotkey)
-        clipboardHotkey = try c.value(.clipboardHotkey, d.clipboardHotkey)
-        reopenHotkey = try c.value(.reopenHotkey, d.reopenHotkey)
-        keepAfterDragOut = try c.value(.keepAfterDragOut, d.keepAfterDragOut)
-        ignoreApps = try c.value(.ignoreApps, d.ignoreApps)
-    }
-}
 
-nonisolated extension HopConfig.Messages {
-    private enum Keys: String, CodingKey { case enabled, days, latestMinutes, notify, pasteHotkey, autoCopy }
-    init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: Keys.self), d = Self()
-        enabled = try c.value(.enabled, d.enabled)
-        days = try c.value(.days, d.days)
-        latestMinutes = try c.value(.latestMinutes, d.latestMinutes)
-        notify = try c.value(.notify, d.notify)
-        pasteHotkey = try c.value(.pasteHotkey, d.pasteHotkey)
-        autoCopy = try c.value(.autoCopy, d.autoCopy)
-    }
-}
 
-nonisolated extension HopConfig.Emoji {
-    private enum Keys: String, CodingKey { case enabled, skinTone, ai, aiModel, aiReasoning }
-    init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: Keys.self), d = Self()
-        enabled = try c.value(.enabled, d.enabled)
-        skinTone = try c.value(.skinTone, d.skinTone)
-        ai = try c.value(.ai, d.ai)
-        aiModel = try c.value(.aiModel, d.aiModel)
-        aiReasoning = try c.value(.aiReasoning, d.aiReasoning)
-    }
-}
 
-nonisolated extension HopConfig.CalendarSettings {
-    private enum Keys: String, CodingKey { case enabled, soonMinutes, days, birthdays, ignoreCalendars }
-    init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: Keys.self), d = Self()
-        enabled = try c.value(.enabled, d.enabled)
-        soonMinutes = try c.value(.soonMinutes, d.soonMinutes)
-        days = try c.value(.days, d.days)
-        birthdays = try c.value(.birthdays, d.birthdays)
-        ignoreCalendars = try c.value(.ignoreCalendars, d.ignoreCalendars)
-    }
-}
 
-nonisolated extension HopConfig.Translate {
-    private enum Keys: String, CodingKey { case enabled, model, reasoning, languages }
-    init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: Keys.self), d = Self()
-        enabled = try c.value(.enabled, d.enabled)
-        model = try c.value(.model, d.model)
-        reasoning = try c.value(.reasoning, d.reasoning)
-        languages = try c.value(.languages, d.languages)
-    }
-}
 
-nonisolated extension HopConfig.OCR {
-    private enum Keys: String, CodingKey { case enabled, languages }
-    init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: Keys.self), d = Self()
-        enabled = try c.value(.enabled, d.enabled)
-        languages = try c.value(.languages, d.languages)
-    }
-}
 
-nonisolated extension HopConfig.Files {
-    private enum Keys: String, CodingKey { case enabled, scopes, exclude, contentSearch, maxResults, showHidden }
-    init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: Keys.self), d = Self()
-        enabled = try c.value(.enabled, d.enabled)
-        scopes = try c.value(.scopes, d.scopes)
-        exclude = try c.value(.exclude, d.exclude)
-        contentSearch = try c.value(.contentSearch, d.contentSearch)
-        maxResults = try c.value(.maxResults, d.maxResults)
-        showHidden = try c.value(.showHidden, d.showHidden)
-    }
-}
 
-nonisolated extension HopConfig.Snippets {
-    private enum Keys: String, CodingKey { case enabled, expand, expandWithinWords, disabledApps, file }
-    init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: Keys.self), d = Self()
-        enabled = try c.value(.enabled, d.enabled)
-        expand = try c.value(.expand, d.expand)
-        expandWithinWords = try c.value(.expandWithinWords, d.expandWithinWords)
-        disabledApps = try c.value(.disabledApps, d.disabledApps)
-        file = try c.value(.file, d.file)
-    }
-}
 
-nonisolated extension HopConfig.Clipboard {
-    private enum Keys: String, CodingKey { case enabled, hotkey, keepDays, maxItems, images, maxImageMB, ignoreApps, pasteOnReturn, cliAccess }
-    init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: Keys.self), d = Self()
-        enabled = try c.value(.enabled, d.enabled)
-        hotkey = try c.value(.hotkey, d.hotkey)
-        keepDays = try c.value(.keepDays, d.keepDays)
-        maxItems = try c.value(.maxItems, d.maxItems)
-        images = try c.value(.images, d.images)
-        maxImageMB = try c.value(.maxImageMB, d.maxImageMB)
-        ignoreApps = try c.value(.ignoreApps, d.ignoreApps)
-        pasteOnReturn = try c.value(.pasteOnReturn, d.pasteOnReturn)
-        cliAccess = try c.value(.cliAccess, d.cliAccess)
-    }
-}
 
-nonisolated extension HopConfig.Notes {
-    private enum Keys: String, CodingKey { case enabled, hotkey, folder, newNoteFolder, template, bumpUpdated }
-    init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: Keys.self), d = Self()
-        enabled = try c.value(.enabled, d.enabled)
-        hotkey = try c.value(.hotkey, d.hotkey)
-        folder = try c.value(.folder, d.folder)
-        newNoteFolder = try c.value(.newNoteFolder, d.newNoteFolder)
-        template = try c.value(.template, d.template)
-        bumpUpdated = try c.value(.bumpUpdated, d.bumpUpdated)
-    }
-}
 
 nonisolated extension String {
     /// `~/x` → `/Users/me/x`; empty stays empty.
@@ -981,4 +532,19 @@ final class AppSettings {
     }
 
     """
+}
+
+nonisolated extension HopConfig.Plugins: Decodable {
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: PluginConfigs.AnyKey.self)
+        for key in c.allKeys {
+            if key.stringValue == "disabled" {
+                disabled = try c.decode([String].self, forKey: key)
+            } else if key.stringValue == "install" {
+                install = try c.decode([String].self, forKey: key)
+            } else {
+                settings[key.stringValue] = try c.decode(JSONValue.self, forKey: key)
+            }
+        }
+    }
 }

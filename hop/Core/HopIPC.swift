@@ -10,7 +10,7 @@ import os
 /// drive the running hop. The verbs stay narrow.
 nonisolated enum HopIPC {
     struct Message: Codable, Sendable {
-        enum Verb: String, Codable, Sendable { case shelfAdd, updateInstall, updateCheck }
+        enum Verb: String, Codable, Sendable { case shelfAdd, updateInstall, updateCheck, pluginsChanged, commands }
         var verb: Verb
         var value: String?
         var paths: [String]?
@@ -19,6 +19,8 @@ nonisolated enum HopIPC {
     struct Reply: Codable, Sendable {
         var ok: Bool
         var error: String?
+        /// `commands`: [[id, title]] of every root command, plugins included.
+        var commands: [[String]]?
         static let ok = Reply(ok: true)
         static func fail(_ e: String) -> Reply { Reply(ok: false, error: e) }
     }
