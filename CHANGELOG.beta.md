@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.0-beta.12](https://github.com/pseudobun/hop/compare/v0.1.0-beta.11...v0.1.0-beta.12) (2026-11-12)
+
+
+### Features
+
+* **settings:** one Plugins group, verified checks and a sortable plugin list ([#36](https://github.com/pseudobun/hop/issues/36)) ([a9a4967](https://github.com/pseudobun/hop/commit/a9a496779f2cbfbe3c1ecd7d430f4de3790bb513))
+
 ## [0.1.0-beta.11](https://github.com/pseudobun/hop/compare/v0.1.0-beta.10...v0.1.0-beta.11) (2026-11-12)
 
 
