@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.0-beta.14](https://github.com/pseudobun/hop/compare/v0.1.0-beta.13...v0.1.0-beta.14) (2026-11-12)
+
+
+### Features
+
+* **ui:** fade the launcher in and glide the selection between rows ([#42](https://github.com/pseudobun/hop/issues/42)) ([de8edbb](https://github.com/pseudobun/hop/commit/de8edbbfb7769f9e9103655663489d66b2bd851b))
+
 ## [0.1.0-beta.13](https://github.com/pseudobun/hop/compare/v0.1.0-beta.12...v0.1.0-beta.13) (2026-11-12)
 
 
