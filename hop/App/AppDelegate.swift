@@ -83,6 +83,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let apps = AppIndex()
         serviceBag = Services(settings: settings, frecency: frecency, apps: apps)
         plugins = PluginManager(plugins: BuiltinPlugins.makeAll() + InstalledPlugins.load())
+        plugins.usage = PluginUsage(store: JSONStore(url: AppPaths.file("plugin-usage.json")))
         services.plugins = plugins
 
         root = RootMode(apps: apps, frecency: frecency, settings: settings) { [unowned self] in
@@ -113,8 +114,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         themesWatcher = FolderWatcher(folder: CustomThemes.folder(beside: settings.url)) { [weak self] in
             self?.reloadCustomThemes()
         }
-        launcher.onItemPerformed = { item, index in
+        launcher.onItemPerformed = { [weak self] item, index in
             if index == 0 && item.tracksFrecency { frecency.recordVisit(item.id) }
+            self?.plugins.itemPerformed(item)
         }
         plugins.start(self)
         root.didEnter(launcher)
