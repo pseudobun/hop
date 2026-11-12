@@ -198,9 +198,7 @@ final class LauncherController: NSObject, LauncherContext, NSTableViewDataSource
         // Reopening soon after comes back to the same query and row (selected below, so typing replaces it).
         refresh(keepSelection: initial == nil)
         panel.positionOnMouseScreen()
-        let wasVisible = panel.isVisible
-        panel.orderFrontRegardless()
-        if !wasVisible { Motion.fadeIn(panel) }
+        if panel.isVisible { panel.orderFrontRegardless() } else { Motion.orderFrontFadingIn(panel) }
         strip?.launcherDidShow()
         #if DEBUG
         // Offscreen renders must not take keystrokes from whatever the user is typing in.

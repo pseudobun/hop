@@ -136,8 +136,7 @@ final class HUD {
                 panel.animator().alphaValue = 1
             }
         } else {
-            panel.orderFrontRegardless()
-            Motion.fadeIn(panel)
+            Motion.orderFrontFadingIn(panel, duration: 0.15)
         }
         hideTask?.cancel()
         hideTask = Task {
