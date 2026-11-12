@@ -4,6 +4,7 @@ import AppKit
 final class ActionPanelView: NSView, NSTableViewDataSource, NSTableViewDelegate {
     private let table = NSTableView()
     private let scroll = NSScrollView()
+    private lazy var glide = SelectionGlide(table: table)
     private(set) var actions: [Action] = []
     var onPerform: ((Action) -> Void)?
 
@@ -51,6 +52,7 @@ final class ActionPanelView: NSView, NSTableViewDataSource, NSTableViewDelegate 
         self.actions = actions
         table.reloadData()
         if !actions.isEmpty { table.selectRowIndexes([0], byExtendingSelection: false) }
+        glide.sync(animated: false)
     }
 
     /// Returns true when the key was handled.
@@ -71,6 +73,7 @@ final class ActionPanelView: NSView, NSTableViewDataSource, NSTableViewDelegate 
         let next = max(0, min(actions.count - 1, table.selectedRow + delta))
         table.selectRowIndexes([next], byExtendingSelection: false)
         table.scrollRowToVisible(next)
+        glide.sync(animated: true)
     }
 
     @objc private func clicked() {
@@ -80,7 +83,11 @@ final class ActionPanelView: NSView, NSTableViewDataSource, NSTableViewDelegate 
 
     func numberOfRows(in tableView: NSTableView) -> Int { actions.count }
 
-    func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? { ResultRowView.reused(by: tableView) }
+    func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? {
+        let v = ResultRowView.reused(by: tableView)
+        v.drawsSelection = false
+        return v
+    }
 
     func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
         let a = actions[row]
