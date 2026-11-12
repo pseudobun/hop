@@ -111,6 +111,18 @@ is mostly the window server ordering the window in (`SLSWindowIsOrderedIn`), not
 Items 5–7 do not appear in the benchmark (it doesn't copy, rescan, drag or unlock KeePass); they
 are judged from the code.
 
+## Motion
+
+The launcher and the clipboard history fade in (120 ms), the ⌘K action panel fades in (100 ms)
+and the HUD fades in. The selected row's highlight glides to the next row on ↑↓ and clicks
+(160 ms); new results place it at once. Reduce Motion turns all of it off.
+
+None of it draws: the highlight is one `CALayer` in a layer-hosting view under the rows
+(`SelectionGlide`), so a move changes one layer's frame and the render server animates it, and
+rows no longer redraw their own selection. Window fades are the window server's. Measured with
+`just bench` (2026-11-12): ten ↑↓ moves cost 0.2 ms of main-thread time in all; show + hide went
+from about 0.8 to 0.95 ms; typing, footprint and the other scenarios did not move.
+
 ## Known costs
 
 - Showing Notes and Settings costs about 30 ms, mostly in the window server.

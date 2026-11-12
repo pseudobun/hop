@@ -91,6 +91,9 @@ final class ClipboardController: NSObject, NSWindowDelegate, NSTableViewDataSour
     private let searchField = NSTextField()
     private let filterPopup = NSPopUpButton(frame: .zero, pullsDown: false)
     private let table = NSTableView()
+    private lazy var glide = SelectionGlide(table: table)
+    /// Set while the code (not a click or an arrow key) picks the row: the highlight jumps there.
+    private var selectingQuietly = false
     private let previewBox = NSView()
     private let textScroll = NSScrollView()
     private let textView = NSTextView()
@@ -139,7 +142,9 @@ final class ClipboardController: NSObject, NSWindowDelegate, NSTableViewDataSour
         reload(keepSelection: false)
         // Centred like the launcher every time; only the size you leave it at is remembered.
         panel.positionOnMouseScreen()
+        let wasVisible = panel.isVisible
         panel.orderFrontRegardless()
+        if !wasVisible { Motion.fadeIn(panel) }
         panel.makeKey()
         panel.makeFirstResponder(searchField)
     }
@@ -261,13 +266,16 @@ final class ClipboardController: NSObject, NSWindowDelegate, NSTableViewDataSour
         return item
     }
 
-    private func select(_ row: Int?) {
+    private func select(_ row: Int?, animated: Bool = false) {
+        selectingQuietly = !animated
+        defer { selectingQuietly = false }
         if let row {
             table.selectRowIndexes([row], byExtendingSelection: false)
             table.scrollRowToVisible(row == firstItemRow(from: 0, step: 1) ? 0 : row)
         } else {
             table.deselectAll(nil)
         }
+        glide.sync(animated: animated)
         updatePreview()
         updateFooter()
     }
@@ -283,7 +291,7 @@ final class ClipboardController: NSObject, NSWindowDelegate, NSTableViewDataSour
 
     private func move(_ step: Int) {
         let start = table.selectedRow < 0 ? (step > 0 ? 0 : rows.count - 1) : table.selectedRow + step
-        if let next = firstItemRow(from: start, step: step) { select(next) }
+        if let next = firstItemRow(from: start, step: step) { select(next, animated: true) }
     }
 
     // MARK: - Actions
@@ -445,6 +453,7 @@ final class ClipboardController: NSObject, NSWindowDelegate, NSTableViewDataSour
         actionPanel.onPerform = { [weak self] in self?.run($0) }
         actionPanelHeight.constant = actionPanel.preferredHeight
         actionPanel.isHidden = false
+        Motion.fadeIn(actionPanel)
         updateFooter()
     }
 
@@ -729,6 +738,7 @@ final class ClipboardController: NSObject, NSWindowDelegate, NSTableViewDataSour
     func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? {
         let v = ResultRowView.reused(by: tableView)
         v.tint = Palette.clipboard
+        v.drawsSelection = false
         return v
     }
 
@@ -748,6 +758,7 @@ final class ClipboardController: NSObject, NSWindowDelegate, NSTableViewDataSour
     }
 
     func tableViewSelectionDidChange(_ notification: Notification) {
+        if !selectingQuietly { glide.sync(animated: true) }
         updatePreview()
         updateFooter()
     }
@@ -829,6 +840,7 @@ final class ClipboardController: NSObject, NSWindowDelegate, NSTableViewDataSour
         table.delegate = self
         table.target = self
         table.doubleAction = #selector(doubleClicked)
+        glide.tint = Palette.clipboard
         let listScroll = NSScrollView()
         listScroll.documentView = table
         listScroll.drawsBackground = false
