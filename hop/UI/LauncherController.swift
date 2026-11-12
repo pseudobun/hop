@@ -176,7 +176,8 @@ final class LauncherController: NSObject, LauncherContext, NSTableViewDataSource
 
     // MARK: - Show / hide
 
-    var isVisible: Bool { panel.isVisible }
+    /// Up and not on its way out (a hiding launcher fades out for a moment).
+    var isVisible: Bool { panel.isVisible && !Motion.isLeaving(panel) }
 
     func toggle() { isVisible ? hide() : show() }
 
@@ -198,7 +199,7 @@ final class LauncherController: NSObject, LauncherContext, NSTableViewDataSource
         // Reopening soon after comes back to the same query and row (selected below, so typing replaces it).
         refresh(keepSelection: initial == nil)
         panel.positionOnMouseScreen()
-        if panel.isVisible { panel.orderFrontRegardless() } else { Motion.orderFrontFadingIn(panel) }
+        Motion.present(panel)
         strip?.launcherDidShow()
         #if DEBUG
         // Offscreen renders must not take keystrokes from whatever the user is typing in.
@@ -230,9 +231,9 @@ final class LauncherController: NSObject, LauncherContext, NSTableViewDataSource
     private var warmedUp = false
 
     func hide() {
-        guard panel.isVisible else { return }
+        guard isVisible else { return }
         closeActionPanel()
-        panel.orderOut(nil)
+        Motion.dismiss(panel)
         strip?.launcherDidHide()
         lastHidden = Date()
         onDidHide?()

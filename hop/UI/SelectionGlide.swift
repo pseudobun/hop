@@ -1,43 +1,5 @@
 import AppKit
 
-/// Small, render-server-only motion: nothing here redraws a view or runs on a timer.
-enum Motion {
-    /// Off when the user asked macOS to reduce motion.
-    static var allowed: Bool { !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion }
-
-    /// Fast start, long soft landing (as tip's workspace highlight).
-    static let glideTiming = CAMediaTimingFunction(controlPoints: 0.22, 1, 0.36, 1)
-
-    /// Orders a window in and fades it from transparent. Transparent before it is ordered in:
-    /// set after, the window server shows a frame at full opacity first and the fade reads as a pop.
-    static func orderFrontFadingIn(_ window: NSWindow, duration: TimeInterval = 0.18) {
-        guard allowed else {
-            window.alphaValue = 1
-            window.orderFrontRegardless()
-            return
-        }
-        window.alphaValue = 0
-        window.orderFrontRegardless()
-        NSAnimationContext.runAnimationGroup { ctx in
-            ctx.duration = duration
-            // An even ease: a steep ease-out reaches 40 % in the first frame and looks like a pop.
-            ctx.timingFunction = CAMediaTimingFunction(controlPoints: 0.25, 0.1, 0.25, 1)
-            window.animator().alphaValue = 1
-        }
-    }
-
-    /// Fades a layer-backed view in by its layer's opacity.
-    static func fadeIn(_ view: NSView, duration: CFTimeInterval = 0.1) {
-        guard allowed, let layer = view.layer else { return }
-        let a = CABasicAnimation(keyPath: "opacity")
-        a.fromValue = 0
-        a.toValue = 1
-        a.duration = duration
-        a.timingFunction = CAMediaTimingFunction(name: .easeOut)
-        layer.add(a, forKey: "fadeIn")
-    }
-}
-
 /// The selected row's rounded highlight as one layer under the rows, gliding from row to row
 /// instead of each row drawing its own. Rows using it set `ResultRowView.drawsSelection = false`.
 /// The highlight is a plain CALayer in a layer-hosting view, so AppKit never syncs or redraws it:

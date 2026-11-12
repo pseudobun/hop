@@ -113,15 +113,27 @@ are judged from the code.
 
 ## Motion
 
-The launcher and the clipboard history fade in (180 ms), the ⌘K action panel fades in (100 ms)
-and the HUD fades in. The selected row's highlight glides to the next row on ↑↓ and clicks
-(160 ms); new results place it at once. Reduce Motion turns all of it off.
+The launcher, the clipboard history and the HUD come in as Spotlight does: a fade (200 ms,
+CSS `ease`; HUD 180 ms) while the content settles from 96.5 % to full size (a soft spring,
+about 240 ms). They leave the same way, quicker: a 130 ms fade while shrinking to 98.5 % (HUD
+200 ms). The ⌘K action panel fades in (100 ms). The selected row's highlight glides to the next
+row on ↑↓ and clicks (160 ms); new results place it at once. Reduce Motion turns all of it off.
+
+The fade is the window's alpha (so glass, content and window shadow fade together), stepped
+once per display frame by `Motion`'s `WindowFade` and timed from the first frame the window is
+on screen. AppKit's `animator().alphaValue` starts its clock when called instead, and after a
+hotkey press the first frame lands about 40 ms later (the show's layout and drawing), so the fade
+began at 22 % and was at 61 % two frames on: sampled from the window server, it read as a pop.
+Now every step (7 %, 22 %, 41 %, 58 % …) reaches the screen; `-DebugFadeProbe 5
+-DebugFadeFrames <dir>` prints the alpha per frame and records the frames. A window on its way
+out still has the keyboard, so anything that sends ⌘V or captures the screen first calls
+`Motion.finishExits()`. Scale animations run on the render server.
 
 None of it draws: the highlight is one `CALayer` in a layer-hosting view under the rows
 (`SelectionGlide`), so a move changes one layer's frame and the render server animates it, and
-rows no longer redraw their own selection. Window fades are the window server's. Measured with
-`just bench` (2026-11-12): ten ↑↓ moves cost 0.2 ms of main-thread time in all; show + hide went
-from about 0.8 to 0.95 ms; typing, footprint and the other scenarios did not move.
+rows no longer redraw their own selection. Measured with `just bench` (2026-11-12): ten ↑↓ moves
+cost 0.2 ms of main-thread time in all; show + hide went from about 0.8 to 0.95 ms; typing,
+footprint and the other scenarios did not move.
 
 ## Release build at rest
 

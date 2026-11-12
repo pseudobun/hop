@@ -116,16 +116,17 @@ final class ClipboardController: NSObject, NSWindowDelegate, NSTableViewDataSour
         panel.keyHandler = { [weak self] in self?.handleKey($0) ?? false }
         panel.setFrameAutosaveName(Self.frameName)
         store.onChange = { [weak self] in
-            guard let self, panel.isVisible else { return }
+            guard let self, isVisible else { return }
             reload(keepSelection: true)
         }
     }
 
     // MARK: - Show / hide
 
-    var isVisible: Bool { panel.isVisible }
+    /// Up and not on its way out.
+    var isVisible: Bool { panel.isVisible && !Motion.isLeaving(panel) }
 
-    func toggle() { panel.isVisible ? hide() : show() }
+    func toggle() { isVisible ? hide() : show() }
 
     func show() {
         // A copy made in the last poll period shows up at the top right away.
@@ -142,15 +143,15 @@ final class ClipboardController: NSObject, NSWindowDelegate, NSTableViewDataSour
         reload(keepSelection: false)
         // Centred like the launcher every time; only the size you leave it at is remembered.
         panel.positionOnMouseScreen()
-        if panel.isVisible { panel.orderFrontRegardless() } else { Motion.orderFrontFadingIn(panel) }
+        Motion.present(panel)
         panel.makeKey()
         panel.makeFirstResponder(searchField)
     }
 
     func hide() {
-        guard panel.isVisible else { return }
+        guard isVisible else { return }
         closeActionPanel()
-        panel.orderOut(nil)
+        Motion.dismiss(panel)
         // The preview holds a decoded image (or a long text); don't keep it while hidden.
         imageView.image = nil
         textView.textStorage?.setAttributedString(NSAttributedString())
@@ -404,6 +405,8 @@ final class ClipboardController: NSObject, NSWindowDelegate, NSTableViewDataSour
     private func paste(_ item: ClipboardItem, plain: Bool = false) {
         write(item, plain: plain)
         hide()
+        // ⌘V must reach the app underneath, not this panel while it fades out.
+        Motion.finishExits()
         guard AXIsProcessTrusted() else {
             HUD.shared.show("Copied. Allow hop in Accessibility to paste", symbol: "exclamationmark.triangle.fill")
             return
