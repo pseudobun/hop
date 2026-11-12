@@ -47,6 +47,30 @@ jobs:
       - name: Check the cask template
         run: ruby -c packaging/hop.rb.template
 
+  plugin-sdks:
+    name: Plugin SDKs and examples
+    runs-on: macos-26
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+
+      - uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1.7.0
+        with:
+          xcode-version: latest-stable
+
+      - name: Swift SDK
+        run: swift test --package-path sdk/swift
+
+      - name: Rust SDK
+        run: cargo test --manifest-path sdk/rust/hop-plugin/Cargo.toml
+
+      - name: Example plugins pack
+        run: |
+          examples/plugins/hello-rust/pack.sh
+          examples/plugins/hello-swift/pack.sh
+          unzip -l examples/plugins/hello-rust/dev.hop.hello-rust.hopplugin.zip
+          unzip -l examples/plugins/hello-swift/dev.hop.hello-swift.hopplugin.zip
+
   secrets:
     name: Secret scan
     runs-on: ubuntu-latest
