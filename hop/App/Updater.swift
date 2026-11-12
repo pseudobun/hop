@@ -67,6 +67,7 @@ final class Updater: NSObject {
         driver.owner = self
         let u = SPUUpdater(hostBundle: AppPaths.appBundle, applicationBundle: AppPaths.appBundle, userDriver: driver, delegate: self)
         updater = u
+        self.config = config
         apply(config)
         do { try u.start() } catch {
             Log.app.error("updater: \(error.localizedDescription, privacy: .public)")
@@ -76,8 +77,11 @@ final class Updater: NSObject {
     }
 
     func apply(_ config: HopConfig.Updates) {
+        let switched = config.wantsBeta(running: AppPaths.version) != self.config.wantsBeta(running: AppPaths.version)
         self.config = config
         guard let u = updater else { return }
+        // A new channel: look at it now rather than in up to a day.
+        if switched, config.check, u.canCheckForUpdates { u.checkForUpdatesInBackground() }
         u.automaticallyChecksForUpdates = config.check
         // Always in the background; `automatic` decides whether it also installs right away.
         u.automaticallyDownloadsUpdates = config.check
@@ -162,6 +166,11 @@ final class Updater: NSObject {
 
 // Sparkle calls its delegate and user driver on the main thread.
 extension Updater: SPUUpdaterDelegate {
+    /// Betas sit in the appcast's `beta` channel; stable versions in the default one.
+    func allowedChannels(for updater: SPUUpdater) -> Set<String> {
+        config.wantsBeta(running: AppPaths.version) ? ["beta"] : []
+    }
+
     func updater(_ updater: SPUUpdater, didFindValidUpdate item: SUAppcastItem) {
         if probing { found = item.displayVersionString }
     }

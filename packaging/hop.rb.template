@@ -1,4 +1,4 @@
-cask "hop" do
+cask "@CASK@" do
   version "@VERSION@"
   sha256 "@SHA256@"
 
@@ -7,6 +7,7 @@ cask "hop" do
   desc "Tiny native launcher with calculator, clipboard history, snippets and notes"
   homepage "https://github.com/pseudobun/hop"
 
+  conflicts_with cask: "@OTHER@"
   depends_on macos: ">= :tahoe"
   depends_on arch: :arm64
 
