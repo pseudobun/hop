@@ -129,8 +129,16 @@ final class HUD {
         if let v = screen?.visibleFrame {
             panel.setFrameOrigin(NSPoint(x: (v.midX - frame.width / 2).rounded(), y: v.minY + v.height * 0.12))
         }
-        panel.alphaValue = 1
-        panel.orderFrontRegardless()
+        if panel.isVisible {
+            // Still up, or fading out: back to full (an animation replaces one in flight).
+            NSAnimationContext.runAnimationGroup { ctx in
+                ctx.duration = 0.08
+                panel.animator().alphaValue = 1
+            }
+        } else {
+            panel.orderFrontRegardless()
+            Motion.fadeIn(panel)
+        }
         hideTask?.cancel()
         hideTask = Task {
             // Long enough to read: 2.2 s, plus a little for longer messages.

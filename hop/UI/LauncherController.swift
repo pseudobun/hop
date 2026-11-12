@@ -37,6 +37,7 @@ final class LauncherController: NSObject, LauncherContext, NSTableViewDataSource
     private var spinner = NSProgressIndicator()
     private var table = NSTableView()
     private var scroll = NSScrollView()
+    private var glide: SelectionGlide!
     /// Stands in for the table when the mode's layout is a grid (emoji).
     private var grid = GridResultsView()
     private var footerTitle = NSTextField(labelWithString: "")
@@ -197,7 +198,9 @@ final class LauncherController: NSObject, LauncherContext, NSTableViewDataSource
         // Reopening soon after comes back to the same query and row (selected below, so typing replaces it).
         refresh(keepSelection: initial == nil)
         panel.positionOnMouseScreen()
+        let wasVisible = panel.isVisible
         panel.orderFrontRegardless()
+        if !wasVisible { Motion.fadeIn(panel) }
         strip?.launcherDidShow()
         #if DEBUG
         // Offscreen renders must not take keystrokes from whatever the user is typing in.
@@ -258,6 +261,7 @@ final class LauncherController: NSObject, LauncherContext, NSTableViewDataSource
         modePill.layer?.backgroundColor = tone.withAlphaComponent(0.15).cgColor
         modePill.textColor = tone
         modePill.isHidden = current.title == nil
+        glide.tint = tone
         updateStrip()
         accessoryHolder.arrangedSubviews.forEach { $0.removeFromSuperview() }
         if let accessory = current.accessoryView { accessoryHolder.addArrangedSubview(accessory) }
@@ -353,21 +357,24 @@ final class LauncherController: NSObject, LauncherContext, NSTableViewDataSource
         return nil
     }
 
-    private func select(_ row: Int?) {
+    /// `animated`: the highlight glides there (arrow keys, clicks); new results place it at once.
+    private func select(_ row: Int?, animated: Bool = false) {
         guard let row else {
             table.deselectAll(nil)
+            glide.sync(animated: false)
             updateFooter()
             return
         }
         table.selectRowIndexes([row], byExtendingSelection: false)
         // Keep a section header visible above the first item.
         table.scrollRowToVisible(row > 0 && firstItemRow(from: 0, step: 1) == row ? 0 : row)
+        glide.sync(animated: animated)
         updateFooter()
     }
 
     private func move(_ step: Int) {
         let start = table.selectedRow < 0 ? (step > 0 ? 0 : rows.count - 1) : table.selectedRow + step
-        if let next = firstItemRow(from: start, step: step) { select(next) }
+        if let next = firstItemRow(from: start, step: step) { select(next, animated: true) }
     }
 
     private func updateFooter() {
@@ -486,6 +493,7 @@ final class LauncherController: NSObject, LauncherContext, NSTableViewDataSource
     func debugOpenActionPanel() { toggleActionPanel() }
     var debugActionPanelOpen: Bool { !actionPanel.isHidden }
     var debugSelectedID: String? { selectedItem?.id }
+    func debugMove(_ step: Int) { move(step) }
     #endif
 
     private var rightArrowOpensActions: Bool {
@@ -509,7 +517,10 @@ final class LauncherController: NSObject, LauncherContext, NSTableViewDataSource
             self.perform(action, of: item, index: i)
         }
         actionPanelHeight.constant = actionPanel.preferredHeight
-        actionPanel.isHidden = false
+        if actionPanel.isHidden {
+            actionPanel.isHidden = false
+            Motion.fadeIn(actionPanel)
+        }
     }
 
     private func closeActionPanel() { actionPanel.isHidden = true }
@@ -517,7 +528,7 @@ final class LauncherController: NSObject, LauncherContext, NSTableViewDataSource
     @objc private func tableClicked() {
         let r = table.clickedRow
         guard r >= 0, r < rows.count, case .item(let item) = rows[r] else { return }
-        select(r)
+        select(r, animated: true)
         if let a = item.actions.first { perform(a, of: item, index: 0) }
     }
 
@@ -542,6 +553,7 @@ final class LauncherController: NSObject, LauncherContext, NSTableViewDataSource
     func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? {
         let v = ResultRowView.reused(by: tableView)
         v.tint = current.tint
+        v.drawsSelection = false
         return v
     }
 
@@ -655,6 +667,7 @@ final class LauncherController: NSObject, LauncherContext, NSTableViewDataSource
         table.delegate = self
         table.target = self
         table.action = #selector(tableClicked)
+        glide = SelectionGlide(table: table)
         scroll.documentView = table
         scroll.drawsBackground = false
         scroll.hasVerticalScroller = true
