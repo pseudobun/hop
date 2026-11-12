@@ -239,6 +239,10 @@ enum SettingsCatalog {
                 f("updates.check", "Check for updates", .toggle,
                   "Once a day, downloaded in the background; installs when hop quits, or from the launcher or hop update."),
                 f("updates.automatic", "Install right away", .toggle, "As soon as it is downloaded; hop restarts."),
+                // Only betas until 0.1.0; then: ("auto", "Automatic"), ("stable", "Stable"), ("beta", "Beta")
+                // with "Beta also gets betas, ahead of stable versions. Automatic follows the hop you run."
+                f("updates.channel", "Channel", .choice([("auto", "Beta")]),
+                  "Every version is a beta until 0.1.0; then you can pick Stable here."),
                 .info(SettingsInfo(label: "Latest release", lines: { _ in
                     guard Updater.shared.isAvailable else { return ["Builds from source don't check"] }
                     return [Updater.shared.pending.map { "hop \($0) is downloaded and ready" } ?? Updater.shared.state.text]
@@ -248,12 +252,12 @@ enum SettingsCatalog {
     }
 
     static var appearance: SettingsPage {
-        let themes = HopConfig.General.ThemeName.allCases.map { (value: $0.rawValue, label: Theme.spec($0).label) }
+        let themes = Theme.all.map { (value: $0.rawValue, label: $0.isBuiltIn ? Theme.spec($0).label : "\(Theme.spec($0).label) (custom)") }
         return SettingsPage(id: "appearance", title: "Appearance", subtitle: "Colours and fonts for every hop window.",
                             symbol: "paintpalette.fill", color: Theme.chart5, sections: [
             SettingsSection([
                 f("general.theme", "Theme", .choice(themes),
-                  "Applies at once. The Theme command in the launcher previews each one live."),
+                  "Applies at once. The Theme command in the launcher previews each one live. Your own themes are .json5 files in ~/.config/hop/themes/; the Theme command can start or import one."),
             ]),
         ])
     }

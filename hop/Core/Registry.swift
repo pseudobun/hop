@@ -10,6 +10,8 @@ final class Services {
     var permissionsMode: (() -> Mode)?
     /// Shows the app in a theme without saving it (the Theme picker's preview).
     var previewTheme: ((HopConfig.General.ThemeName) -> Void)?
+    /// Reads the custom themes again now, e.g. right after one was created or imported.
+    var reloadThemes: (() -> Void)?
     /// Opens the Settings window, on a page (`SettingsPage.id`) or the last one.
     var openSettings: ((String?) -> Void)?
     /// Hides the launcher, e.g. before pasting into the app behind it.

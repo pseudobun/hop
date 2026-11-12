@@ -3,6 +3,22 @@
 All notable changes to hop. Versions follow [Semantic Versioning](https://semver.org); entries
 come from [Conventional Commits](https://www.conventionalcommits.org) via release-please.
 
+## [0.1.0-beta.6](https://github.com/pseudobun/hop/compare/v0.1.0-beta.5...v0.1.0-beta.6) (2026-11-11)
+
+
+### ⚠ BREAKING CHANGES
+
+* remove rings from main (kept on the experimental branch) ([#14](https://github.com/pseudobun/hop/issues/14))
+
+### Performance
+
+* cut memory and main-thread work in the launcher, clipboard and background tasks ([#15](https://github.com/pseudobun/hop/issues/15)) ([5b6874a](https://github.com/pseudobun/hop/commit/5b6874a481c0164848b1c2f2152d1d0d5cdf6f1c))
+
+
+### Refactoring
+
+* remove rings from main (kept on the experimental branch) ([#14](https://github.com/pseudobun/hop/issues/14)) ([b46fab6](https://github.com/pseudobun/hop/commit/b46fab60ea1cf1c134267d6086b1e3742d03c00c))
+
 ## [0.1.0-beta.5](https://github.com/pseudobun/hop/compare/v0.1.0-beta.4...v0.1.0-beta.5) (2026-11-11)
 
 

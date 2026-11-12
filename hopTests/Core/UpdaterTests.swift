@@ -13,6 +13,16 @@ struct UpdaterTests {
         #expect(HopConfig().updates.check && !HopConfig().updates.automatic)
     }
 
+    @Test func updateChannelFollowsTheRunningVersionUnlessSet() throws {
+        let d = JSONDecoder()
+        d.allowsJSON5 = true
+        let auto = HopConfig.Updates()
+        #expect(auto.wantsBeta(running: "0.2.0-beta.3"))
+        #expect(!auto.wantsBeta(running: "0.2.0"))
+        #expect(try d.decode(HopConfig.self, from: Data(#"{ updates: { channel: "beta" } }"#.utf8)).updates.wantsBeta(running: "0.2.0"))
+        #expect(try !d.decode(HopConfig.self, from: Data(#"{ updates: { channel: "stable" } }"#.utf8)).updates.wantsBeta(running: "0.2.0-beta.3"))
+    }
+
     /// Builds from source carry no feed or key, so they never check.
     @Test func sourceBuildHasNoUpdater() {
         #expect(!Updater.isConfigured)

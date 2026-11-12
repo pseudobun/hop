@@ -108,3 +108,4 @@ log:
 examples: build
     build.noindex/Build/Products/Debug/hop.app/Contents/MacOS/hop config template > examples/config.json5
     build.noindex/Build/Products/Debug/hop.app/Contents/MacOS/hop snippets template > examples/snippets.json5
+    build.noindex/Build/Products/Debug/hop.app/Contents/MacOS/hop themes template > examples/theme.json5

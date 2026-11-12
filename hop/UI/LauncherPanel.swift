@@ -67,8 +67,9 @@ final class HUD {
     static let shared = HUD()
     private var panel: NSPanel?
     private var hideTask: Task<Void, Never>?
-    /// The theme the panel was built in: a HUD after a theme switch is built again.
-    private var panelTheme: Theme.Name?
+    /// The theme (and custom-theme revision) the panel was built in: a HUD after a theme
+    /// switch or an edit to the custom theme in use is built again.
+    private var panelTheme: (name: Theme.Name, revision: Int)?
 
     enum Tone { case success, warning, failure }
 
@@ -101,10 +102,13 @@ final class HUD {
     /// Without a tone, a checkmark is a success and any other symbol a notice.
     /// `seconds` overrides how long it stays up.
     func show(_ text: String, symbol: String = "checkmark.circle.fill", tone: Tone? = nil, seconds: Double? = nil) {
-        if panelTheme != Theme.variant { self.panel?.orderOut(nil); self.panel = nil }
+        if panelTheme?.name != Theme.variant || panelTheme?.revision != Theme.revision {
+            self.panel?.orderOut(nil)
+            self.panel = nil
+        }
         let panel = self.panel ?? makePanel()
         self.panel = panel
-        panelTheme = Theme.variant
+        panelTheme = (Theme.variant, Theme.revision)
         guard let glass = panel.contentView as? NSGlassEffectView,
               let stack = glass.contentView?.subviews.first as? NSStackView,
               let image = stack.arrangedSubviews.first as? NSImageView,

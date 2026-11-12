@@ -15,13 +15,25 @@ nonisolated struct HopConfig: Decodable, Equatable, Sendable {
         var fallbacks = ["chatgpt", "google", "github"]
         var openAtLogin = true
         var menuBarIcon = true
-        /// "og", "og-light", "modern", "solarpunk" or "cyberpunk"; see Theme.
+        /// "og", "og-light", "modern", "solarpunk", "cyberpunk" or a custom theme's file name
+        /// in `~/.config/hop/themes/`; see Theme and CustomThemes.
         var theme: ThemeName = .og
 
-        nonisolated enum ThemeName: String, Decodable, Equatable, Sendable, CaseIterable {
-            case og
-            case ogLight = "og-light"
-            case modern, solarpunk, cyberpunk
+        /// A built-in theme or a custom one (its file name without the extension).
+        nonisolated struct ThemeName: RawRepresentable, Decodable, Hashable, Sendable, ExpressibleByStringLiteral {
+            let rawValue: String
+            init(rawValue: String) { self.rawValue = rawValue }
+            init(stringLiteral value: String) { rawValue = value }
+            init(from decoder: Decoder) throws { rawValue = try decoder.singleValueContainer().decode(String.self) }
+
+            static let og: ThemeName = "og"
+            static let ogLight: ThemeName = "og-light"
+            static let modern: ThemeName = "modern"
+            static let solarpunk: ThemeName = "solarpunk"
+            static let cyberpunk: ThemeName = "cyberpunk"
+            /// The themes hop ships, in the order the picker lists them.
+            static let builtIn: [ThemeName] = [.og, .ogLight, .modern, .solarpunk, .cyberpunk]
+            var isBuiltIn: Bool { Self.builtIn.contains(self) }
         }
     }
 
@@ -31,6 +43,17 @@ nonisolated struct HopConfig: Decodable, Equatable, Sendable {
         var check = true
         /// Install as soon as it is downloaded (hop restarts by itself).
         var automatic = false
+        /// "stable", "beta" (stable versions and betas) or "auto": beta when the running hop is one.
+        var channel = "auto"
+
+        /// Whether betas are offered, for a running hop of `version`.
+        func wantsBeta(running version: String) -> Bool {
+            switch channel {
+            case "beta": return true
+            case "stable": return false
+            default: return version.split(separator: "+")[0].contains("-")
+            }
+        }
     }
 
     var general = General()
@@ -77,11 +100,12 @@ nonisolated extension HopConfig {
 }
 
 nonisolated extension HopConfig.Updates {
-    private enum Keys: String, CodingKey { case check, automatic }
+    private enum Keys: String, CodingKey { case check, automatic, channel }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: Keys.self), d = Self()
         check = try c.value(.check, d.check)
         automatic = try c.value(.automatic, d.automatic)
+        channel = try c.value(.channel, d.channel)
     }
 }
 
@@ -253,7 +277,9 @@ final class AppSettings {
         fallbacks: ["chatgpt", "google", "github"],
         openAtLogin: true,
         menuBarIcon: true,
-        // "og", "og-light", "modern", "solarpunk" or "cyberpunk"; the Theme command previews them
+        // "og", "og-light", "modern", "solarpunk", "cyberpunk" or your own:
+        // a .json5 file in themes/ beside this file (`hop themes template` prints one).
+        // The Theme command previews them all and can import or start a new one.
         theme: "og",
       },
 
@@ -265,6 +291,8 @@ final class AppSettings {
         check: true,
         // Install as soon as it is downloaded; hop restarts
         automatic: false,
+        // "stable", "beta" (betas too) or "auto" (beta when this hop is one)
+        channel: "auto",
       },
 
       // Global hotkeys for any command or app, on top of general.hotkey, notes.hotkey and

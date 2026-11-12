@@ -1,7 +1,9 @@
 name: Release
 
 # Builds, signs, notarizes and publishes one version: the GitHub release's zip, the Sparkle
-# appcast (branch `appcast`) and the Homebrew cask. release-please calls it after a release PR merges; run it by hand to (re)build a tag.
+# appcast (branch `appcast`; betas in its `beta` channel) and the Homebrew cask (`hop`, or
+# `hop@beta` for a beta). release-please calls it after a release PR merges; run it by hand to
+# (re)build a tag.
 on:
   workflow_call:
     inputs:
@@ -11,7 +13,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Tag to build, e.g. v0.1.0-beta.1 (created on main if missing)"
+        description: "Tag to build, e.g. v0.2.0 or v0.3.0-beta.1 (created on the run's branch if missing)"
         type: string
         required: true
 
@@ -122,7 +124,7 @@ jobs:
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" "$ZIP" "$ZIP.sha256" --clobber
           else
-            awk -v v="$VERSION" 'index($0, "## [" v "]") == 1 {f=1; next} /^## \[/ {f=0} f' CHANGELOG.md > "$RUNNER_TEMP/notes.md"
+            scripts/release-notes.sh "$VERSION" > "$RUNNER_TEMP/notes.md"
             flags=(); [ "$PRERELEASE" = true ] && flags+=(--prerelease)
             gh release create "$TAG" "$ZIP" "$ZIP.sha256" --title "hop $VERSION" \
               --notes-file "$RUNNER_TEMP/notes.md" --verify-tag "${flags[@]}"
@@ -139,7 +141,7 @@ jobs:
           else
             git worktree add --orphan -b appcast "$DIR"
           fi
-          awk -v v="$VERSION" 'index($0, "## [" v "]") == 1 {f=1; next} /^## \[/ {f=0} f' CHANGELOG.md > "$RUNNER_TEMP/appcast-notes.md"
+          scripts/release-notes.sh "$VERSION" > "$RUNNER_TEMP/appcast-notes.md"
           scripts/appcast.sh "$DIR/appcast.xml" "$VERSION" "$BUILD" "$URL" "$SPARKLE_SIG" "$RUNNER_TEMP/appcast-notes.md"
           xmllint --noout "$DIR/appcast.xml"
           cd "$DIR"
@@ -156,10 +158,12 @@ jobs:
           TAP="$RUNNER_TEMP/homebrew-tap"
           git clone "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/pseudobun/homebrew-tap.git" "$TAP"
           mkdir -p "$TAP/Casks"
-          sed -e "s/@VERSION@/$VERSION/" -e "s/@SHA256@/$SHA256/" packaging/hop.rb.template > "$TAP/Casks/hop.rb"
+          if [ "$PRERELEASE" = true ]; then CASK=hop@beta OTHER=hop; else CASK=hop OTHER=hop@beta; fi
+          sed -e "s/@CASK@/$CASK/" -e "s/@OTHER@/$OTHER/" -e "s/@VERSION@/$VERSION/" -e "s/@SHA256@/$SHA256/" \
+            packaging/hop.rb.template > "$TAP/Casks/$CASK.rb"
           cd "$TAP"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add Casks/hop.rb
-          git diff --cached --quiet || git commit -m "hop $VERSION"
+          git add "Casks/$CASK.rb"
+          git diff --cached --quiet || git commit -m "$CASK $VERSION"
           git push

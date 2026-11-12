@@ -17,7 +17,9 @@
     fallbacks: ["chatgpt", "google", "github"],
     openAtLogin: true,
     menuBarIcon: true,
-    // "og", "og-light", "modern", "solarpunk" or "cyberpunk"; the Theme command previews them
+    // "og", "og-light", "modern", "solarpunk", "cyberpunk" or your own:
+    // a .json5 file in themes/ beside this file (`hop themes template` prints one).
+    // The Theme command previews them all and can import or start a new one.
     theme: "og",
   },
 
@@ -29,6 +31,8 @@
     check: true,
     // Install as soon as it is downloaded; hop restarts
     automatic: false,
+    // "stable", "beta" (betas too) or "auto" (beta when this hop is one)
+    channel: "auto",
   },
 
   // Global hotkeys for any command or app, on top of general.hotkey, notes.hotkey and

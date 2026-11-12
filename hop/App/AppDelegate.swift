@@ -25,6 +25,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// The sub-mode a command hotkey last opened, so pressing it again hides the launcher.
     private weak var bindingMode: Mode?
     private var bindingKey: String?
+    private var themesWatcher: FolderWatcher?
+    /// The theme files last loaded, so a save that changes nothing doesn't rebuild every window.
+    private var themesSignature: [String: Data] = [:]
     private let activity = SystemActivity()
     private var statusItem: StatusItem?
     #if DEBUG
@@ -74,6 +77,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Theme.registerFonts()
 
         let settings = AppSettings()
+        loadCustomThemes(folder: CustomThemes.folder(beside: settings.url), announce: false)
         Theme.variant = settings.data.general.theme
         let frecency = FrecencyStore(store: JSONStore(url: AppPaths.file("frecency.json")))
         let apps = AppIndex()
@@ -105,6 +109,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // A theme previewed in the picker lasts while the launcher is up.
         launcher.onDidHide = { [weak self] in self?.preview(theme: settings.data.general.theme) }
         services.previewTheme = { [weak self] in self?.preview(theme: $0) }
+        services.reloadThemes = { [weak self] in self?.reloadCustomThemes() }
+        themesWatcher = FolderWatcher(folder: CustomThemes.folder(beside: settings.url)) { [weak self] in
+            self?.reloadCustomThemes()
+        }
         launcher.onItemPerformed = { item, index in
             if index == 0 && item.tracksFrecency { frecency.recordVisit(item.id) }
         }
@@ -289,6 +297,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Applies config changes: hotkey, plugins, login item, menu bar icon, commands.
     private func apply(_ config: HopConfig, previous: HopConfig?) {
+        if previous?.general.theme != config.general.theme, !Theme.exists(config.general.theme) {
+            HUD.shared.warn("No theme \"\(config.general.theme.rawValue)\", using OG")
+        }
         if let previous, previous.general.theme != config.general.theme {
             // After the action that saved it has finished with the launcher.
             DispatchQueue.main.async { [weak self] in self?.applyTheme(config.general.theme) }
@@ -463,8 +474,8 @@ extension AppDelegate: PluginHost {
 
     /// Views take their colours and fonts when they are built: the launcher is built again
     /// in `name`, keeping its mode, query and selection. Plugin windows follow in `applyTheme`.
-    func preview(theme name: HopConfig.General.ThemeName) {
-        guard Theme.variant != name else { return }
+    func preview(theme name: HopConfig.General.ThemeName, force: Bool = false) {
+        guard force || Theme.variant != name else { return }
         Theme.variant = name
         plugins.themeDidChange(saved: false)
         launcher.retheme()
@@ -472,12 +483,40 @@ extension AppDelegate: PluginHost {
 
     /// A saved theme: the launcher, plugin windows and root items in it, no restart.
     /// Open shelves keep theirs until closed; new ones use it.
-    func applyTheme(_ name: HopConfig.General.ThemeName) {
-        preview(theme: name)
+    func applyTheme(_ name: HopConfig.General.ThemeName, force: Bool = false) {
+        preview(theme: name, force: force)
         plugins.themeDidChange(saved: true)
         settingsWindow.retheme()
         root.rebuild()
         if launcher.isVisible { launcher.reload() } else { launcher.prepare() }
+    }
+
+    /// Reads `themes/` beside the config; problems show in the HUD when `announce`.
+    /// False when nothing changed since the last load.
+    @discardableResult
+    private func loadCustomThemes(folder: URL, announce: Bool) -> Bool {
+        let loaded = CustomThemes.load(from: folder)
+        guard loaded.signature != themesSignature else { return false }
+        themesSignature = loaded.signature
+        Theme.registerFonts(loaded.fonts)
+        Theme.setCustom(loaded.themes)
+        for issue in loaded.issues { Log.app.error("theme: \(issue, privacy: .public)") }
+        if announce, let first = loaded.issues.first { HUD.shared.warn("Theme: \(first)") }
+        return true
+    }
+
+    /// A theme file was added, edited or removed: the picker and Settings list the new set,
+    /// and when the theme in use is one of them, every window takes the edit at once.
+    func reloadCustomThemes() {
+        let settings = services.settings
+        guard loadCustomThemes(folder: CustomThemes.folder(beside: settings.url), announce: true) else { return }
+        let current = settings.data.general.theme
+        if !current.isBuiltIn {
+            applyTheme(current, force: true)
+        } else {
+            settingsWindow.retheme() // the theme list changed
+            if launcher.isVisible { launcher.reload() }
+        }
     }
 }
 
