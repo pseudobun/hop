@@ -422,7 +422,7 @@ final class SettingsController: NSObject, NSWindowDelegate, NSTableViewDataSourc
                 case .field(let field) where field.hidden: continue
                 case .field(let field): views.append(fieldRow(field, page: page, config: config))
                 case .info(let info): views.append(infoRow(info, config: config))
-                case .plugins: views += pluginRows(config: config)
+                case .plugins: views += [pluginSortRow()] + pluginRows(config: config)
                 case .installPlugin: views.append(installRow())
                 case .pluginEnabled:
                     if let plugin = page.plugin { views.append(pluginSwitchRow(plugin, config: config)) }
@@ -504,8 +504,10 @@ final class SettingsController: NSObject, NSWindowDelegate, NSTableViewDataSourc
 
     /// One row per plugin: icon, name, what it does and who made it, its page, its switch.
     private func pluginRows(config: HopConfig) -> [NSView] {
-        let all = plugins?.plugins.map(\.info) ?? BuiltinPlugins.types.map { $0.info }
-        guard !all.isEmpty else { return [] }
+        let infos = plugins?.plugins.map(\.info) ?? BuiltinPlugins.types.map { $0.info }
+        guard !infos.isEmpty else { return [] }
+        let usage = plugins?.usage
+        let all = PluginSort.load().sorted(infos) { usage?.lastUsed($0) }
         return all.map { info in
             let icon = NSImageView(image: IconCache.shared.image(for: .tile(info.symbol, info.color), size: 28) ?? NSImage())
             icon.widthAnchor.constraint(equalToConstant: 28).isActive = true
@@ -538,6 +540,49 @@ final class SettingsController: NSObject, NSWindowDelegate, NSTableViewDataSourc
             right.alignment = .centerY
             return rowStack([left, right])
         }
+    }
+
+    /// Sort by Name, Last Used or Installed, and which way; remembered per Mac.
+    private func pluginSortRow() -> NSView {
+        let sort = PluginSort.load()
+        let popup = NSPopUpButton(frame: .zero, pullsDown: false)
+        popup.controlSize = .regular
+        popup.font = Theme.sans(13)
+        for key in PluginSort.Key.allCases {
+            popup.addItem(withTitle: key.title)
+            popup.lastItem?.representedObject = key.rawValue
+        }
+        popup.selectItem(at: PluginSort.Key.allCases.firstIndex(of: sort.key) ?? 0)
+        popup.target = self
+        popup.action = #selector(pluginSortChosen(_:))
+
+        let direction = ClosureButton(title: "", action: { [weak self] in
+            var sort = PluginSort.load()
+            sort.ascending.toggle()
+            sort.save()
+            self?.showPage(keepScroll: true)
+        })
+        direction.bezelStyle = .push
+        direction.image = NSImage(systemSymbolName: sort.ascending ? "arrow.up" : "arrow.down",
+                                  accessibilityDescription: sort.ascending ? "Ascending" : "Descending")
+        direction.imagePosition = .imageOnly
+        direction.toolTip = sort.ascending ? "Ascending: A→Z, oldest first" : "Descending: Z→A, newest first"
+
+        let controls = NSStackView(views: [popup, direction])
+        controls.spacing = 8
+        controls.alignment = .centerY
+        return rowStack([textColumn("Sort by", nil), controls])
+    }
+
+    @objc private func pluginSortChosen(_ sender: NSPopUpButton) {
+        guard let raw = sender.selectedItem?.representedObject as? String, let key = PluginSort.Key(rawValue: raw) else { return }
+        var sort = PluginSort.load()
+        guard sort.key != key else { return }
+        sort.key = key
+        // Dates read best newest first.
+        sort.ascending = key == .name
+        sort.save()
+        showPage(keepScroll: true)
     }
 
     /// The green check beside a verified (built-in) plugin's name.

@@ -10,6 +10,10 @@ final class PluginManager {
     private var hotkeys: [String: (spec: String, hotkey: GlobalHotkey)] = [:]
     /// Plugin hotkeys that could not be set up, for the root's "Hotkeys need attention" row.
     private(set) var hotkeyProblems: [String] = []
+    /// Which plugin each root and Upcoming item came from, by item id, for `usage`.
+    private var owners: [String: String] = [:]
+    /// When each plugin's items last ran (Settings → Plugins sorts by it).
+    var usage: PluginUsage?
 
     init(plugins: [any HopPlugin]) {
         self.plugins = plugins
@@ -103,9 +107,25 @@ final class PluginManager {
 
     // MARK: Root search
 
-    func commands() -> [Item] { enabled.flatMap { $0.commands() } }
+    func commands() -> [Item] { owned { $0.commands() } }
     func prefixModes() -> [PrefixMode] { enabled.flatMap { $0.prefixModes() } }
-    func upcomingItems() -> [Item] { enabled.flatMap { $0.upcomingItems() } }
+    func upcomingItems() -> [Item] { owned { $0.upcomingItems() } }
+
+    /// The plugin an item from `commands()` or `upcomingItems()` belongs to.
+    func owner(of itemID: String) -> String? { owners[itemID] }
+
+    /// Records that an item ran, for the plugin it belongs to.
+    func itemPerformed(_ item: Item) {
+        if let owner = owners[item.id] { usage?.record(owner) }
+    }
+
+    private func owned(_ items: (any HopPlugin) -> [Item]) -> [Item] {
+        enabled.flatMap { plugin in
+            let made = items(plugin)
+            for item in made { owners[item.id] = plugin.info.id }
+            return made
+        }
+    }
     func pathMode() -> Mode? { enabled.lazy.compactMap { $0.pathMode() }.first }
     func appActions(_ entry: AppEntry) -> [Action] { enabled.flatMap { $0.appActions(entry) } }
 

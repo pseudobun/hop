@@ -193,10 +193,9 @@ enum SettingsCatalog {
 
     private static func choices(_ values: [String]) -> SettingsField.Kind { .choices(values) }
 
-    /// hop's own pages, then one Plugins group: the list, then each plugin's page (in category
-    /// order, so related plugins sit together), then Advanced.
+    /// hop's own pages, then one Plugins group: the list, then each plugin's page A→Z, then Advanced.
     static func groups(plugins: [SettingsPage]) -> [SettingsGroup] {
-        let pluginPages = PluginCategory.allCases.flatMap { category in plugins.filter { $0.plugin?.category == category } }
+        let pluginPages = plugins.sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
         return [
             SettingsGroup(title: "hop", pages: [general, appearance, hotkeys]),
             SettingsGroup(title: "Plugins", pages: [pluginsPage] + pluginPages),

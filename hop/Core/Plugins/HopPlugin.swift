@@ -40,6 +40,8 @@ struct PluginInfo {
     var author: String?
     /// The GitHub repository an installed plugin came from.
     var source: String?
+    /// When an installed plugin was installed; nil for built-in ones.
+    var installedAt: Date?
     /// Config key path of the plugin's own on/off switch (`["notes", "enabled"]`); nil keeps it
     /// in `plugins.disabled`.
     var enabledPath: [String]?
