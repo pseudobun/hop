@@ -1,0 +1,21 @@
+// A hop plugin in Rust: `just pack` (or ./pack.sh) builds dev.hop.hello-rust.hopplugin.zip.
+{
+  id: "dev.hop.hello-rust",
+  name: "Hello (Rust)",
+  version: "0.1.0",
+  summary: "An example plugin: a list, a callback and a HUD.",
+  author: "pseudobun",
+  hop: "0.1.0",
+  entry: "bin/hop-hello",
+  symbol: "hand.wave.fill",
+  color: "#f97316",
+  commands: [
+    { id: "greet", title: "Hello Rust", subtitle: "Greetings to copy", keywords: ["hi", "example"], prefix: "hi " },
+    { id: "time", title: "What Time Is It", kind: "instant" },
+  ],
+  preferences: [
+    { id: "name", title: "Your name", type: "text", placeholder: "Bunny", default: "friend" },
+    { id: "shout", title: "Shout", type: "toggle", default: false, help: "Greetings in capitals." },
+  ],
+  permissions: { clipboard: "write" },
+}
