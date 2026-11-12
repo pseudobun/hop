@@ -12,7 +12,8 @@ final class TranslatePlugin: BuiltinPlugin {
             SettingsSection([
                 .setting("translate.enabled", "Translate", .toggle),
                 .setting("translate.languages", "Languages", .list(placeholder: "de, en"),
-                  "Two ISO 639 codes: text in the first goes to the second, anything else to the first. Empty: your macOS language and English."),
+                  "Two ISO 639 codes: text in the first goes to the second, anything else to the first. Empty: your macOS language and English.",
+                  check: SettingsChecks.languagePair),
                 .setting("translate.model", "Model", .text(placeholder: "gpt-6.1-terra")),
                 .setting("translate.reasoning", "Reasoning effort", .text(placeholder: "none"), "\"none\", \"low\", …; empty leaves it out."),
             ]),

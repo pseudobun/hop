@@ -20,7 +20,7 @@ final class WireGuardPlugin: BuiltinPlugin {
                 .setting("wireguard.barTunnels", "Tunnels in the bar", .list(placeholder: "all"), "Names in order; empty shows every tunnel."),
                 .setting("wireguard.keys.focus", "Select in the bar", .hotkey(optional: true), "In the launcher: ←→ move, ↵ toggles, Esc goes back."),
                 .setting("wireguard.keys.disconnectAll", "Disconnect all", .hotkey(optional: true)),
-                .setting("wireguard.keys.direct", "Toggle with 1…9", .text(placeholder: "alt+cmd"), "Modifiers for 1…9 that toggle a tunnel at once; empty is off."),
+                .setting("wireguard.keys.direct", "Toggle with 1…9", .text(placeholder: "alt+cmd"), "Modifiers for 1…9 that toggle a tunnel at once; empty is off.", check: SettingsChecks.modifiers),
             ]),
         ]
     }

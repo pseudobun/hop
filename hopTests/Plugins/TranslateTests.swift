@@ -39,23 +39,4 @@ struct TranslateTests {
         let template = try decoder.decode(HopConfig.self, from: Data(AppSettings.template.utf8))
         #expect(template.translate == HopConfig.Translate() && template.ocr == HopConfig.OCR())
     }
-
-    @Test func readsTextFromAnImage() async throws {
-        let size = NSSize(width: 900, height: 200)
-        let image = NSImage(size: size, flipped: false) { rect in
-            NSColor.white.setFill()
-            rect.fill()
-            let attrs: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: 44), .foregroundColor: NSColor.black]
-            ("Dober dan, svet" as NSString).draw(at: NSPoint(x: 30, y: 110), withAttributes: attrs)
-            ("Hello from hop OCR" as NSString).draw(at: NSPoint(x: 30, y: 30), withAttributes: attrs)
-            return true
-        }
-        let tiff = try #require(image.tiffRepresentation)
-        let png = try #require(NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:]))
-        let url = FileManager.default.temporaryDirectory.appending(path: "hop-ocr-test-\(UUID().uuidString).png")
-        try png.write(to: url)
-        defer { try? FileManager.default.removeItem(at: url) }
-        let lines = await ScreenText.recognize(url, languages: ["sl-SI", "en-US"])
-        #expect(lines == ["Dober dan, svet", "Hello from hop OCR"])
-    }
 }

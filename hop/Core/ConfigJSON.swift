@@ -82,6 +82,16 @@ enum ConfigJSON {
 
     /// Writes one value and checks the config still reads; undoes the write if it doesn't.
     static func write(_ path: [String], _ raw: String, in settings: AppSettings) -> Int32 {
+        // The check Settings runs on the field, when the key has one.
+        if let field = SettingsCatalog.field(at: path), let check = field.check {
+            let decoder = JSONDecoder()
+            decoder.allowsJSON5 = true
+            let value = (try? decoder.decode([JSONValue].self, from: Data("[\(literal(raw))]".utf8)))?.first?.plain ?? raw
+            if let problem = check(value) {
+                if problem.level == .error { return CLI.Output.fail("not written: \(display(path)): \(problem.message)") }
+                print("warning: \(display(path)): \(problem.message)")
+            }
+        }
         let target = settings.url.resolvingSymlinksInPath()
         let before = try? String(contentsOf: target, encoding: .utf8)
         guard settings.update(path, to: literal(raw)) else { return CLI.Output.fail("could not write \(display(path))") }

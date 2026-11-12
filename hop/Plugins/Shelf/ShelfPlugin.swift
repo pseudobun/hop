@@ -13,9 +13,9 @@ final class ShelfPlugin: BuiltinPlugin {
                 .setting("shelf.enabled", "Shelves", .toggle),
                 .setting("shelf.shake", "Shake to open", .toggle, "Shake the pointer while dragging to open a shelf under it."),
                 .setting("shelf.shakeSensitivity", "Shake sensitivity", .choices(ShakeDetector.Sensitivity.choices), "How small a shake counts."),
-                .setting("shelf.modifier", "Hold while dragging", .text(placeholder: "shift"), "\"shift\", \"alt\", \"ctrl+alt\"; empty turns it off."),
+                .setting("shelf.modifier", "Hold while dragging", .text(placeholder: "shift"), "\"shift\", \"alt\", \"ctrl+alt\"; empty turns it off.", check: SettingsChecks.modifiers),
                 .setting("shelf.keepAfterDragOut", "Keep dragged-out items", .toggle),
-                .setting("shelf.ignoreApps", "Never open for", .list(placeholder: "com.apple.finder"), "Drags from these apps (bundle identifiers)."),
+                .setting("shelf.ignoreApps", "Never open for", .list(placeholder: "com.apple.finder"), "Drags from these apps (bundle identifiers).", check: SettingsChecks.bundleIDs),
             ]),
             SettingsSection("Hotkeys", [
                 .setting("shelf.hotkey", "New shelf", .hotkey(optional: true)),
