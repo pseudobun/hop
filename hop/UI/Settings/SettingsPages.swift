@@ -112,7 +112,19 @@ struct SettingsGroup {
 nonisolated enum SettingsValue {
     /// The value at a key path of the config (property names are the JSON keys).
     static func read(_ path: [String], in config: HopConfig) -> Any? {
-        var value: Any = config
+        guard let first = path.first else { return nil }
+        // A plugin's section, or an installed plugin's settings (`plugins.<id>.<key>`).
+        if let section = config.sections.section(first) { return read(path.dropFirst(), in: section.reflected) }
+        if first == "plugins", path.count >= 3, path[1] != "disabled" {
+            var value = config.plugins.settings[path[1]]
+            for key in path.dropFirst(2) { value = value?[key] }
+            return value?.plain
+        }
+        return read(path[...], in: config)
+    }
+
+    static func read(_ path: ArraySlice<String>, in root: Any) -> Any? {
+        var value: Any = root
         for key in path {
             guard let child = Mirror(reflecting: value).children.first(where: { $0.label == key }) else { return nil }
             value = child.value

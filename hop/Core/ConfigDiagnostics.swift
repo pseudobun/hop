@@ -30,11 +30,18 @@ nonisolated indirect enum ConfigSchema: Equatable, Sendable {
     /// A dictionary such as `hotkeys`: any key goes.
     case anyKeys
 
-    static let hop = describing(HopConfig(), path: "", samples: [
-        // Empty by default, so there is no element to look at.
-        "bookmarks": HopConfig.Bookmark(),
-        "keepass.databases": HopConfig.KeePass.Database(),
-    ])
+    static let hop: ConfigSchema = {
+        guard case .section(var fields) = describing(HopConfig(), path: "", samples: [:]) else { return .anyKeys }
+        fields["sections"] = nil
+        // Installed plugins' settings, by plugin id.
+        fields["plugins"] = .anyKeys
+        for type in PluginConfigs.types {
+            var samples: [String: Any] = [:]
+            for (path, value) in type.samples { samples[path.isEmpty ? type.key : "\(type.key).\(path)"] = value }
+            fields[type.key] = describing(type.init().reflected, path: type.key, samples: samples)
+        }
+        return .section(fields)
+    }()
 
     private static func describing(_ value: Any, path: String, samples: [String: Any]) -> ConfigSchema {
         if let choice = value as? any ConfigChoice { return .choice(type(of: choice).choices) }
