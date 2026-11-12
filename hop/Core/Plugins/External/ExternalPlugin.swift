@@ -48,6 +48,7 @@ final class ExternalPlugin: HopPlugin {
                           color: color, category: .installed, tier: .community,
                           version: manifest.version, author: manifest.author,
                           source: record.flatMap { $0.repository.hasPrefix("local") ? nil : "https://github.com/\($0.repository)" },
+                          installedAt: record?.installedAt,
                           keywords: manifest.commands.map(\.title))
         settings = Self.settingsSections(manifest)
         let id = manifest.id
