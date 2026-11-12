@@ -111,6 +111,52 @@ is mostly the window server ordering the window in (`SLSWindowIsOrderedIn`), not
 Items 5–7 do not appear in the benchmark (it doesn't copy, rescan, drag or unlock KeePass); they
 are judged from the code.
 
+## Release build at rest
+
+Measured on 2026-11-12 on olympus: Mac mini, Apple M4 Pro, 24 GB, macOS 27.2, one display
+(3320 × 2040, Screen Sharing). The installed release builds from the beta casks ran together:
+paw 0.1.0-beta.21, hop 0.1.0-beta.13 and tip 0.1.0-beta.1.
+
+Idle counters come from `proc_pid_rusage` (CPU time, `ri_pkg_idle_wkups` + `ri_interrupt_wkups`,
+`ri_phys_footprint`) over 120 s with nobody at the keyboard. CLI round trips are the median and
+p90 of 50 runs after 10 warm-up runs, process start included; starting `/usr/bin/true` costs
+1.4 ms on this machine.
+
+| | |
+|---|---|
+| Idle CPU | 0.03 % |
+| Wakeups | 11.5 per 10 s |
+| Footprint | 43.7 MB (peak 46.7 MB) |
+| Threads | 3 |
+| App bundle / binary | 9.3 MB / 3.5 MB |
+| `hop version` | 10.4 ms p50, 11.9 ms p90 |
+| `hop clip count` | 12.3 ms p50, 13.1 ms p90 |
+| `hop apps term --json` | 54.5 ms p50, 63.7 ms p90 |
+
+`just bench` on the same day (`beta`, optimised Debug build, "hop Dev" data), milliseconds of
+main-thread time, median / p90:
+
+| Scenario | ms |
+|---|---|
+| First show | 15.2 |
+| Show with a cold icon cache | 5.3 |
+| Show + hide | 0.85 / 1.13 |
+| Type "safari" (6 keys) | 10.8 / 11.8 |
+| Type "terminal" (8 keys) | 12.0 / 12.5 |
+| Type "sys set" (7 keys) | 13.7 / 13.9 |
+| Type "12*3+4" (6 keys) | 16.0 / 17.9 |
+| Type "10 km to mi" (11 keys) | 18.5 / 22.1 |
+| Clear to an empty query | 1.27 / 1.32 |
+| Move ↓↓↓↓↓ ↑↑↑↑↑ (10 keys) | 0.23 / 0.24 |
+| Clipboard: show + hide | 15.7 / 18.6 |
+| Clipboard: type "the" (4 keys) | 9.6 / 10.0 |
+| Notes: show + hide | 33.5 / 34.9 |
+| Settings: show + close | 40.3 / 43.9 |
+| Emoji: open, type "heart" | 10.8 / 16.0 |
+
+The benchmark build's footprint went from 51 MB after the first show to 80.5 MB after every
+scenario had run once, Settings and Notes included.
+
 ## Known costs
 
 - Showing Notes and Settings costs about 30 ms, mostly in the window server.
