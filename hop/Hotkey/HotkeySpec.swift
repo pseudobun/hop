@@ -43,3 +43,20 @@ nonisolated struct HotkeySpec: Hashable, Sendable {
         return m
     }()
 }
+
+extension HotkeySpec {
+    /// "alt+." → "⌥."
+    static func display(_ spec: String) -> String {
+        spec.lowercased().split(separator: "+").map { part -> String in
+            switch part.trimmingCharacters(in: .whitespaces) {
+            case "cmd", "command": "⌘"
+            case "ctrl", "control": "⌃"
+            case "alt", "opt", "option": "⌥"
+            case "shift": "⇧"
+            case "hyper": "✦"
+            case "space": "Space"
+            case let key: key.uppercased()
+            }
+        }.joined()
+    }
+}

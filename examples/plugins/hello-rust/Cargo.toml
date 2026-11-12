@@ -1,0 +1,9 @@
+[package]
+name = "hop-hello"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+hop-plugin = { path = "../../../sdk/rust/hop-plugin" }
+serde_json = "1"

@@ -6,4 +6,5 @@ nonisolated enum Log {
     static let hyper = Logger(subsystem: AppPaths.bundleID, category: "hyper")
     static let keepass = Logger(subsystem: AppPaths.bundleID, category: "keepass")
     static let wireguard = Logger(subsystem: AppPaths.bundleID, category: "wireguard")
+    static let plugin = Logger(subsystem: AppPaths.bundleID, category: "plugin")
 }

@@ -1,0 +1,12 @@
+[package]
+name = "hop-plugin"
+version = "0.1.0"
+edition = "2021"
+description = "Write hop launcher plugins in Rust: the hop plugin protocol (JSON-RPC over stdio) and its view types."
+license = "MIT"
+repository = "https://github.com/pseudobun/hop"
+keywords = ["hop", "launcher", "macos", "plugin"]
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"

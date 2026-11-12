@@ -22,3 +22,10 @@ Packages/
 
 # Local build settings (signing team, bundle id)
 Local.xcconfig
+
+# Rust (plugin SDK and examples)
+target/
+Cargo.lock
+
+# Packaged plugins
+*.hopplugin.zip

@@ -149,8 +149,7 @@ nonisolated enum Permission: CaseIterable {
     /// Permissions still missing for the features turned on in the config.
     static func missing(for config: HopConfig) -> [Permission] {
         var needed: [Permission] = [.finderAutomation, .downloads, .loginItem]
-        if config.hyperKey.enabled || config.keepass.enabled || config.clipboard.enabled
-            || (config.snippets.enabled && config.snippets.expand) { needed.insert(.accessibility, at: 0) }
+        if BuiltinPlugins.needsAccessibility(config) { needed.insert(.accessibility, at: 0) }
         if !config.general.openAtLogin { needed.removeAll { $0 == .loginItem } }
         if SpotlightHotkey.relevant(for: config) { needed.append(.spotlightShortcut) }
         return needed.filter { $0.status() != .granted }
