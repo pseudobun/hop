@@ -12,8 +12,8 @@ final class NotesPlugin: BuiltinPlugin {
             SettingsSection([
                 .setting("notes.enabled", "Notes", .toggle),
                 .setting("notes.hotkey", "Hotkey", .hotkey(optional: false), "Opens the notes window from anywhere."),
-                .setting("notes.folder", "Folder", .text(placeholder: "~/Notes"), "Folder of Markdown files; an Obsidian vault works as is."),
-                .setting("notes.newNoteFolder", "New notes go to", .text(placeholder: "Inbox"), "Relative to the folder."),
+                .setting("notes.folder", "Folder", .text(placeholder: "~/Notes"), "Folder of Markdown files; an Obsidian vault works as is.", check: SettingsChecks.folder()),
+                .setting("notes.newNoteFolder", "New notes go to", .text(placeholder: "Inbox"), "Relative to the folder.", check: SettingsChecks.relativeFolder),
                 .setting("notes.bumpUpdated", "Bump `updated:`", .toggle, "Set an existing `updated:` date in the frontmatter to today when you edit a note."),
             ]),
             SettingsSection("Template", [

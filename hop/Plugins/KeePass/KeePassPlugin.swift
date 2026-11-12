@@ -26,7 +26,7 @@ final class KeePassPlugin: BuiltinPlugin {
                 .setting("keepass.lockAfterMinutes", "Lock after", .number(min: -1, max: 1_440, unit: "min"), "-1: only on sleep or screen lock."),
             ]),
             SettingsSection("Advanced", [
-                .setting("keepass.cli", "keepassxc-cli path", .text(placeholder: "found automatically")),
+                .setting("keepass.cli", "keepassxc-cli path", .text(placeholder: "found automatically"), check: SettingsChecks.executable),
                 .setting("keepass.cliAccess", "Allow `hop kp get`", .toggle, "Lets the CLI (and agents) print passwords, TOTP codes and notes."),
             ]),
         ]

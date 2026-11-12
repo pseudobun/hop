@@ -27,19 +27,23 @@ struct SettingsField {
 
     /// Shown when the config has no value at `path` (an installed plugin's default).
     var fallback: Any?
+    /// Checks the value as it is typed (`SettingsChecks`); an error is not saved.
+    var check: SettingsCheck?
 
-    init(_ path: String, _ label: String, _ kind: Kind, help: String? = nil, hidden: Bool = false) {
-        self.init(path: path.split(separator: ".").map(String.init), label, kind, help: help, hidden: hidden)
+    init(_ path: String, _ label: String, _ kind: Kind, help: String? = nil, hidden: Bool = false, check: SettingsCheck? = nil) {
+        self.init(path: path.split(separator: ".").map(String.init), label, kind, help: help, hidden: hidden, check: check)
     }
 
     /// A key path whose keys may contain dots (`["plugins", "dev.you.plugin", "token"]`).
-    init(path: [String], _ label: String, _ kind: Kind, help: String? = nil, hidden: Bool = false, fallback: Any? = nil) {
+    init(path: [String], _ label: String, _ kind: Kind, help: String? = nil, hidden: Bool = false, fallback: Any? = nil,
+         check: SettingsCheck? = nil) {
         self.path = path
         self.label = label
         self.help = help
         self.kind = kind
         self.hidden = hidden
         self.fallback = fallback
+        self.check = check
     }
 
     var key: String { path.joined(separator: ".") }
@@ -79,8 +83,8 @@ enum SettingsRow {
 
     /// A config value with a control: `.setting("notes.folder", "Folder", .text())`.
     static func setting(_ path: String, _ label: String, _ kind: SettingsField.Kind, _ help: String? = nil,
-                        hidden: Bool = false) -> SettingsRow {
-        .field(SettingsField(path, label, kind, help: help, hidden: hidden))
+                        hidden: Bool = false, check: SettingsCheck? = nil) -> SettingsRow {
+        .field(SettingsField(path, label, kind, help: help, hidden: hidden, check: check))
     }
 }
 
@@ -182,8 +186,9 @@ nonisolated enum SettingsValue {
 // MARK: - The pages
 
 enum SettingsCatalog {
-    private static func f(_ path: String, _ label: String, _ kind: SettingsField.Kind, _ help: String? = nil) -> SettingsRow {
-        .setting(path, label, kind, help)
+    private static func f(_ path: String, _ label: String, _ kind: SettingsField.Kind, _ help: String? = nil,
+                          check: SettingsCheck? = nil) -> SettingsRow {
+        .setting(path, label, kind, help, check: check)
     }
 
     private static func choices(_ values: [String]) -> SettingsField.Kind { .choices(values) }
@@ -229,7 +234,8 @@ enum SettingsCatalog {
                 f("general.keepQueryFor", "Keep last search for", .number(min: 0, max: 86_400, unit: "s"),
                   "Reopening within this long brings back the last search, selected; 0 always starts empty."),
                 f("general.fallbacks", "Fallbacks", .list(placeholder: "chatgpt, google, github"),
-                  "Under root results and alone when nothing matches: chatgpt, google, github or a URL with {query}."),
+                  "Under root results and alone when nothing matches: chatgpt, google, github or a URL with {query}.",
+                  check: SettingsChecks.fallbacks),
             ]),
             SettingsSection("Startup", [
                 f("general.openAtLogin", "Open at login", .toggle),

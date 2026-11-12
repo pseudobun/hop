@@ -60,3 +60,15 @@ enum ScreenTextCommands {
         ]
     }
 }
+
+extension ScreenText {
+    /// Languages Vision reads on this Mac ("en-US", "sl-SI").
+    static let checkLanguages: SettingsCheck = { value in
+        let codes = value as? [String] ?? []
+        if codes.isEmpty { return .error("Enter at least one language, like en-US") }
+        let supported = Set((try? VNRecognizeTextRequest().supportedRecognitionLanguages()) ?? [])
+        guard !supported.isEmpty else { return nil }
+        let unknown = codes.filter { !supported.contains($0) }
+        return unknown.isEmpty ? nil : .error("Vision can't read \(unknown.joined(separator: ", ")); try \(supported.sorted().prefix(6).joined(separator: ", "))…")
+    }
+}

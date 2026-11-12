@@ -14,8 +14,8 @@ final class SnippetsPlugin: BuiltinPlugin {
                 .setting("snippets.enabled", "Snippets", .toggle),
                 .setting("snippets.expand", "Expand keywords", .toggle, "Type a snippet's keyword anywhere and it becomes the snippet (needs Accessibility)."),
                 .setting("snippets.expandWithinWords", "Expand within words", .toggle, "Also expand keywords typed in the middle of a word."),
-                .setting("snippets.disabledApps", "Never expand in", .list(placeholder: "com.apple.Terminal"), "Bundle identifiers, comma-separated."),
-                .setting("snippets.file", "Snippets file", .text(placeholder: "~/.config/hop/snippets.json5"), "\"Edit Snippets\" in hop opens it."),
+                .setting("snippets.disabledApps", "Never expand in", .list(placeholder: "com.apple.Terminal"), "Bundle identifiers, comma-separated.", check: SettingsChecks.bundleIDs),
+                .setting("snippets.file", "Snippets file", .text(placeholder: "~/.config/hop/snippets.json5"), "\"Edit Snippets\" in hop opens it.", check: SettingsChecks.file),
             ]),
         ]
     }

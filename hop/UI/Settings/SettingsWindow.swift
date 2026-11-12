@@ -71,6 +71,8 @@ final class SettingsController: NSObject, NSWindowDelegate, NSTableViewDataSourc
     private var gated: [NSView] = []
     private var fieldsByControl: [ObjectIdentifier: SettingsField] = [:]
     private var pluginsByControl: [ObjectIdentifier: PluginInfo] = [:]
+    /// The line under a checked field that says what is wrong with its value.
+    private var problemLabels: [String: NSTextField] = [:]
 
     private weak var plugins: PluginManager?
 
@@ -387,6 +389,7 @@ final class SettingsController: NSObject, NSWindowDelegate, NSTableViewDataSourc
         gated = []
         fieldsByControl = [:]
         pluginsByControl = [:]
+        problemLabels = [:]
         contentStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
         let page = page
         let config = settings.data
@@ -649,13 +652,13 @@ final class SettingsController: NSObject, NSWindowDelegate, NSTableViewDataSourc
             row = rowStack([textColumn(field.label, field.help), toggle])
         case .text(let placeholder):
             let text = textField(field, value: value as? String ?? "", placeholder: placeholder, width: 240)
-            row = rowStack([textColumn(field.label, field.help), text])
+            row = rowStack([checkedColumn(field, value: value as? String ?? ""), text])
         case .list(let placeholder):
             let joined = (value as? [String] ?? []).joined(separator: ", ")
             let text = textField(field, value: joined, placeholder: placeholder, width: 240)
             bindings.removeLast()
             bindings.append((field, text, { text.stringValue = ($0 as? [String] ?? []).joined(separator: ", ") }))
-            row = rowStack([textColumn(field.label, field.help), text])
+            row = rowStack([checkedColumn(field, value: value as? [String] ?? []), text])
         case .number(let min, let max, let unit):
             let number = value as? Int ?? 0
             let text = textField(field, value: String(number), placeholder: "", width: 72)
@@ -796,7 +799,9 @@ final class SettingsController: NSObject, NSWindowDelegate, NSTableViewDataSourc
         for binding in bindings {
             // Leave the field being typed in alone.
             if let editor, editor === binding.view || editor.delegate === binding.view as AnyObject { continue }
-            binding.set(SettingsValue.read(binding.field.path, in: config) ?? binding.field.fallback)
+            let value = SettingsValue.read(binding.field.path, in: config) ?? binding.field.fallback
+            binding.set(value)
+            if let check = binding.field.check, let value { showProblem(check(value), for: binding.field) }
         }
         refreshGate()
     }
@@ -853,8 +858,56 @@ final class SettingsController: NSObject, NSWindowDelegate, NSTableViewDataSourc
         commit(field, tv.string, revert: { tv.string = $0 })
     }
 
+    // MARK: Checks
+
+    /// The field's text column, with a line for what is wrong with `value` when it has a check.
+    private func checkedColumn(_ field: SettingsField, value: Any) -> NSStackView {
+        let column = textColumn(field.label, field.help)
+        guard field.check != nil else { return column }
+        let line = NSTextField(wrappingLabelWithString: "")
+        line.font = Theme.sans(12, 500)
+        line.preferredMaxLayoutWidth = Self.textWidth
+        line.widthAnchor.constraint(equalToConstant: Self.textWidth).isActive = true
+        column.addArrangedSubview(line)
+        problemLabels[field.key] = line
+        showProblem(field.check?(value), for: field)
+        return column
+    }
+
+    private func showProblem(_ problem: SettingsProblem?, for field: SettingsField) {
+        guard let line = problemLabels[field.key] else { return }
+        line.isHidden = problem == nil
+        line.stringValue = problem.map { ($0.level == .error ? "✕ " : "⚠︎ ") + $0.message } ?? ""
+        line.textColor = problem?.level == .error ? Theme.destructive : Theme.warn
+    }
+
+    /// What a text control's input means for its field.
+    private static func parsed(_ field: SettingsField, _ input: String) -> Any {
+        switch field.kind {
+        case .list: input.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+        case .number: Int(input.trimmingCharacters(in: .whitespaces)) ?? 0
+        default: input.trimmingCharacters(in: .whitespaces)
+        }
+    }
+
+    /// Checks as you type.
+    func controlTextDidChange(_ obj: Notification) {
+        guard let text = obj.object as? NSTextField, text !== search,
+              let field = fieldsByControl[ObjectIdentifier(text)], let check = field.check else { return }
+        showProblem(check(Self.parsed(field, text.stringValue)), for: field)
+    }
+
     private func commit(_ field: SettingsField, _ input: String, revert: (String) -> Void) {
         let current = SettingsValue.read(field.path, in: settings.data) ?? field.fallback
+        if let check = field.check {
+            let problem = check(Self.parsed(field, input))
+            showProblem(problem, for: field)
+            // An error stays in the field, unsaved, until it is fixed or the page is left.
+            if problem?.level == .error {
+                NSSound.beep()
+                return
+            }
+        }
         switch field.kind {
         case .secret(let service, let account):
             let value = input.trimmingCharacters(in: .whitespacesAndNewlines)

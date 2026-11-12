@@ -102,6 +102,10 @@ final class WeatherPlugin: BuiltinPlugin {
 }
 ```
 
+A field can carry a `check` (`SettingsChecks.folder()`, `.bundleIDs`, `.currency`, … or your
+own closure): Settings shows its warning or error under the field as you type and does not save
+an error; `hop config check` and `hop config set` run the same checks.
+
 Its config section is a `PluginConfig` in the same folder (`WeatherConfig.swift`), with an accessor
 on `HopConfig` so code reads `config.weather.city`:
 

@@ -11,7 +11,7 @@ final class FilesPlugin: BuiltinPlugin {
         [
             SettingsSection([
                 .setting("files.enabled", "File search", .toggle),
-                .setting("files.scopes", "Search in", .list(placeholder: "~"), "Folders, comma-separated."),
+                .setting("files.scopes", "Search in", .list(placeholder: "~"), "Folders, comma-separated.", check: SettingsChecks.folders),
                 .setting("files.exclude", "Hide paths with", .list(placeholder: "node_modules, .git"), "Folder names anywhere in a result's path."),
                 .setting("files.contentSearch", "Search file contents", .toggle, "Also find files by the text inside them."),
                 .setting("files.maxResults", "At most", .number(min: 1, max: 1_000, unit: "results")),
