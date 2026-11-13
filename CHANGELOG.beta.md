@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.0-beta.20](https://github.com/pseudobun/hop/compare/v0.1.0-beta.19...v0.1.0-beta.20) (2026-11-13)
+
+
+### Features
+
+* **ui:** make liquid glass more see-through and configurable ([#58](https://github.com/pseudobun/hop/issues/58)) ([1d133f5](https://github.com/pseudobun/hop/commit/1d133f5a02a12a7dc8c813a50693f5bd54a14337))
+
 ## [0.1.0-beta.19](https://github.com/pseudobun/hop/compare/v0.1.0-beta.18...v0.1.0-beta.19) (2026-11-13)
 
 

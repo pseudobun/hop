@@ -138,7 +138,8 @@ footprint and the other scenarios did not move.
 ## Liquid Glass
 
 With `general.glass` (the default) hop's windows are `NSGlassEffectView`s with a light veil of the
-theme's background (40 %, notes 60 %) instead of a mostly opaque one (82–86 %); the ⌘K panel is
+theme's background (since `general.glassTint`, default 20: tint 20 %, veil 10 %, notes at least
+30 %; before it 40 %, notes 60 %) instead of a mostly opaque one (82–86 %); the ⌘K panel is
 its own piece of glass. Glass is composited by the window server, so it costs no main-thread time.
 `just bench`, two runs each of `origin/beta` and this change (2026-11-13, medians, ms; the
 `Permission.missing` probe was left out of both, as it hangs on a locked screen):
