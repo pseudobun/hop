@@ -49,6 +49,11 @@ final class WireGuardPlugin: BuiltinPlugin {
         #endif
     }
 
+    func apply(_ config: HopConfig, previous: HopConfig?, enabled: Bool) {
+        guard let previous, previous.wireguard != config.wireguard else { return }
+        bar?.configDidChange()
+    }
+
     func commands() -> [Item] { WireGuardCommands.items(host!.services) }
     func themeDidChange(saved: Bool) { bar?.retheme() }
 }
