@@ -134,6 +134,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         hotkey = GlobalHotkey { [weak self] in self?.launcher.toggle() }
 
         settings.onChange = { [weak self] old, new in self?.apply(new, previous: old) }
+        settings.onStatusChange = { [weak self] in self?.configStatusDidChange() }
         settings.start()
         // Before apply: the menu bar bunny offers "Check for Updates…" only with an updater.
         Updater.shared.start(settings.data.updates)
@@ -404,6 +405,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             if launcher.isVisible { launcher.reload() }
             settingsWindow.configDidChange()
         }
+    }
+
+    /// The config's error or warnings changed but not the config: the Setup rows and Settings show it.
+    private func configStatusDidChange() {
+        if launcher.isVisible { launcher.reload() }
+        settingsWindow.configDidChange()
     }
 
     private func runSettingsAction(_ action: SettingsAction) {
