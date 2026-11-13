@@ -271,7 +271,10 @@ The Theme command lists your themes next to the built-in ones (with a live previ
 Every theme is drawn on macOS 26 Liquid Glass: the wallpaper shows through the launcher, the
 clipboard history, notes and the HUD, tinted with the theme's background, and the ⌘K action
 panel floats as its own piece of glass. `general.glass: false` (or **Liquid Glass** under
-Settings → Appearance) brings back the flat, mostly opaque look. It applies at once.
+Settings → Appearance) brings back the flat, mostly opaque look. `general.glassStyle` picks
+`"regular"` (frosted, like Spotlight) or `"clear"` (barely frosted), and `general.glassTint`
+(0–100, default 20) how much of the theme's colour tints it: low lets the wallpaper through
+as Spotlight does, high comes close to the flat look. All apply at once.
 
 ## Permissions
 

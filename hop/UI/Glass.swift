@@ -4,6 +4,29 @@ import AppKit
 /// mostly opaque dark look. Changing the setting rebuilds the windows as a theme change does.
 enum Glass {
     nonisolated(unsafe) static var enabled = true
+    /// `general.glassStyle`: frosted (Spotlight) or clear.
+    nonisolated(unsafe) static var style: NSGlassEffectView.Style = .regular
+    /// `general.glassTint` as 0…1: how much of the theme's background tints the glass.
+    nonisolated(unsafe) static var tint: CGFloat = 0.2
+
+    /// The glass settings of `general`, to tell when windows must be rebuilt.
+    static func signature(_ general: HopConfig.General) -> String {
+        general.glass ? "\(general.glassStyle):\(general.glassTint)" : "off"
+    }
+
+    /// What the windows were built with (`signature` of the applied config).
+    nonisolated(unsafe) static var current = "regular:20"
+
+    /// Takes the glass settings from the config; true when they changed.
+    @discardableResult
+    static func configure(_ general: HopConfig.General) -> Bool {
+        let next = signature(general)
+        defer { current = next }
+        enabled = general.glass
+        style = general.glassStyle == "clear" ? .clear : .regular
+        tint = CGFloat(min(max(general.glassTint, 0), 100)) / 100
+        return next != current
+    }
 
     /// A window's backdrop. Set `root` as the window's content view and build in `content`.
     /// `dense` keeps more of the theme's colour behind the content, for windows of long text
@@ -15,13 +38,15 @@ enum Glass {
         content.wantsLayer = true
         content.layer?.cornerRadius = cornerRadius
         if enabled {
-            glass.style = .regular
-            // Tinted with the theme so text keeps its contrast; the wallpaper still shows through.
-            glass.tintColor = Theme.background.withAlphaComponent(Theme.isLight ? 0.45 : 0.6)
-            // The tint alone barely darkens it; a light veil keeps muted text readable over
-            // bright wallpapers while the colours behind still come through.
-            let veil: CGFloat = dense ? 0.6 : (Theme.isLight ? 0.3 : 0.4)
-            content.layer?.backgroundColor = Theme.background.withAlphaComponent(veil).cgColor
+            glass.style = style
+            // The glass itself keeps text legible (it adapts to what is behind); the theme only
+            // tints it, as much as `general.glassTint` says.
+            glass.tintColor = Theme.background.withAlphaComponent(tint)
+            // A veil over the glass darkens (or lightens) it further at higher tints. Clear glass
+            // barely frosts, so it gets a little more; long text (notes) keeps a floor.
+            var veil = tint * (style == .clear ? 0.75 : 0.5)
+            if dense { veil = max(veil, 0.3) }
+            content.layer?.backgroundColor = veil > 0 ? Theme.background.withAlphaComponent(veil).cgColor : nil
         } else {
             // DS surfaces are dark and quiet: a mostly opaque theme background over the glass.
             glass.tintColor = Theme.background.withAlphaComponent(0.78)
@@ -32,7 +57,7 @@ enum Glass {
     }
 
     /// The HUD's tint: lighter on glass.
-    static var hudTint: NSColor { Theme.background.withAlphaComponent(enabled ? 0.55 : 0.78) }
+    static var hudTint: NSColor { Theme.background.withAlphaComponent(enabled ? max(tint, 0.15) : 0.78) }
 
     /// A floating piece of glass inside a window (the ⌘K action panel), filling `view` behind
     /// its subviews; nil without glass, where the view paints its own card.
@@ -40,9 +65,10 @@ enum Glass {
     static func backing(_ view: NSView, cornerRadius: CGFloat) -> NSGlassEffectView? {
         guard enabled else { return nil }
         let glass = NSGlassEffectView()
-        glass.style = .regular
+        glass.style = style
         glass.cornerRadius = cornerRadius
-        glass.tintColor = Theme.card.withAlphaComponent(Theme.isLight ? 0.45 : 0.6)
+        // A touch more than the window under it, so the panel reads as its own piece.
+        glass.tintColor = Theme.card.withAlphaComponent(min(tint + 0.15, 1))
         glass.frame = view.bounds
         glass.autoresizingMask = [.width, .height]
         view.addSubview(glass, positioned: .below, relativeTo: nil)
