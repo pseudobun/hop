@@ -79,7 +79,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let settings = AppSettings()
         loadCustomThemes(folder: CustomThemes.folder(beside: settings.url), announce: false)
         Theme.variant = settings.data.general.theme
-        Glass.enabled = settings.data.general.glass
+        Glass.configure(settings.data.general)
         let frecency = FrecencyStore(store: JSONStore(url: AppPaths.file("frecency.json")))
         let apps = AppIndex()
         serviceBag = Services(settings: settings, frecency: frecency, apps: apps)
@@ -340,9 +340,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if previous?.general.theme != config.general.theme, !Theme.exists(config.general.theme) {
             HUD.shared.warn("No theme \"\(config.general.theme.rawValue)\", using OG")
         }
-        if let previous, previous.general.theme != config.general.theme || previous.general.glass != config.general.glass {
-            let glassChanged = Glass.enabled != config.general.glass
-            Glass.enabled = config.general.glass
+        if let previous, previous.general.theme != config.general.theme || Glass.signature(previous.general) != Glass.signature(config.general) {
+            let glassChanged = Glass.configure(config.general)
             // After the action that saved it has finished with the launcher. A glass change
             // rebuilds the windows in the same theme.
             DispatchQueue.main.async { [weak self] in self?.applyTheme(config.general.theme, force: glassChanged) }

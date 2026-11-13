@@ -24,6 +24,11 @@
     // Liquid Glass (macOS 26) behind the launcher, clipboard, notes and HUD: the wallpaper
     // shows through, tinted with the theme. false: the flat, mostly opaque look.
     glass: true,
+    // "regular" (frosted, like Spotlight) or "clear" (barely frosted, most see-through)
+    glassStyle: "regular",
+    // How much of the theme's background tints the glass, 0–100: 0 is bare glass,
+    // 100 close to the flat look
+    glassTint: 20,
   },
 
   // New versions from GitHub (Sparkle), for builds from Homebrew or a release zip (builds

@@ -260,6 +260,10 @@ enum SettingsCatalog {
                   "Applies at once. The Theme command in the launcher previews each one live. Your own themes are .json5 files in ~/.config/hop/themes/; the Theme command can start or import one."),
                 f("general.glass", "Liquid Glass", .toggle,
                   "The wallpaper shows through the launcher, clipboard, notes and HUD, tinted with the theme. Off: the flat, mostly opaque look."),
+                f("general.glassStyle", "Glass", .choice([("regular", "Regular"), ("clear", "Clear")]),
+                  "Regular is frosted like Spotlight; Clear is barely frosted and shows the most of what is behind."),
+                f("general.glassTint", "Tint", .number(min: 0, max: 100, unit: "%"),
+                  "How much of the theme's background colours the glass. 0 is bare glass; 100 is close to the flat look. Notes keep a little more for long text."),
             ]),
         ])
     }
