@@ -69,7 +69,7 @@ final class HUD {
     private var hideTask: Task<Void, Never>?
     /// The theme (and custom-theme revision) the panel was built in: a HUD after a theme
     /// switch or an edit to the custom theme in use is built again.
-    private var panelTheme: (name: Theme.Name, revision: Int)?
+    private var panelTheme: (name: Theme.Name, revision: Int, glass: Bool)?
 
     enum Tone { case success, warning, failure }
 
@@ -102,13 +102,13 @@ final class HUD {
     /// Without a tone, a checkmark is a success and any other symbol a notice.
     /// `seconds` overrides how long it stays up.
     func show(_ text: String, symbol: String = "checkmark.circle.fill", tone: Tone? = nil, seconds: Double? = nil) {
-        if panelTheme?.name != Theme.variant || panelTheme?.revision != Theme.revision {
+        if panelTheme?.name != Theme.variant || panelTheme?.revision != Theme.revision || panelTheme?.glass != Glass.enabled {
             self.panel?.orderOut(nil)
             self.panel = nil
         }
         let panel = self.panel ?? makePanel()
         self.panel = panel
-        panelTheme = (Theme.variant, Theme.revision)
+        panelTheme = (Theme.variant, Theme.revision, Glass.enabled)
         guard let glass = panel.contentView as? NSGlassEffectView,
               let stack = glass.contentView?.subviews.first as? NSStackView,
               let image = stack.arrangedSubviews.first as? NSImageView,
@@ -129,27 +129,15 @@ final class HUD {
         if let v = screen?.visibleFrame {
             panel.setFrameOrigin(NSPoint(x: (v.midX - frame.width / 2).rounded(), y: v.minY + v.height * 0.12))
         }
-        if panel.isVisible {
-            // Still up, or fading out: back to full (an animation replaces one in flight).
-            NSAnimationContext.runAnimationGroup { ctx in
-                ctx.duration = 0.08
-                panel.animator().alphaValue = 1
-            }
-        } else {
-            Motion.orderFrontFadingIn(panel, duration: 0.15)
-        }
+        // Up already: stays; fading out: comes back from where it is.
+        Motion.present(panel, duration: 0.18)
         hideTask?.cancel()
         hideTask = Task {
             // Long enough to read: 2.2 s, plus a little for longer messages.
             let ms = seconds.map { Int($0 * 1000) } ?? min(4000, 2200 + max(0, text.count - 30) * 40)
             try? await Task.sleep(for: .milliseconds(ms))
             guard !Task.isCancelled else { return }
-            await NSAnimationContext.runAnimationGroup { ctx in
-                ctx.duration = 0.2
-                panel.animator().alphaValue = 0
-            }
-            guard !Task.isCancelled else { return }
-            panel.orderOut(nil)
+            Motion.dismiss(panel, duration: 0.2)
         }
     }
 
@@ -166,7 +154,7 @@ final class HUD {
         p.appearance = Theme.appearance
         let glass = NSGlassEffectView()
         glass.cornerRadius = 20
-        glass.tintColor = Theme.background.withAlphaComponent(0.78)
+        glass.tintColor = Glass.hudTint
         let image = NSImageView()
         image.contentTintColor = .secondaryLabelColor
         let label = NSTextField(labelWithString: "")

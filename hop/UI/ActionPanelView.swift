@@ -11,11 +11,14 @@ final class ActionPanelView: NSView, NSTableViewDataSource, NSTableViewDelegate 
     override init(frame: NSRect) {
         super.init(frame: frame)
         wantsLayer = true
-        layer?.cornerRadius = 14
-        layer?.backgroundColor = Theme.card.cgColor
-        layer?.borderColor = Theme.border.cgColor
-        layer?.borderWidth = 0.5
-        shadow = NSShadow()
+        // On glass a floating piece of glass, as macOS 26 menus; otherwise a card with a shadow.
+        if Glass.backing(self, cornerRadius: 16) == nil {
+            layer?.cornerRadius = 14
+            layer?.backgroundColor = Theme.card.cgColor
+            layer?.borderColor = Theme.border.cgColor
+            layer?.borderWidth = 0.5
+            shadow = NSShadow()
+        }
 
         let column = NSTableColumn(identifier: .init("action"))
         table.addTableColumn(column)

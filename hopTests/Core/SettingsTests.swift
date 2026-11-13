@@ -17,6 +17,13 @@ struct ConfigEditPathTests {
         #expect(try decode(out).wireguard.keys.focus == "cmd+k")
     }
 
+    @Test func glassIsOnUnlessTurnedOff() throws {
+        #expect(try decode("{}").general.glass)
+        #expect(try decode("{ general: { theme: \"modern\" } }").general.glass)
+        #expect(try !decode("{ general: { glass: false } }").general.glass)
+        #expect(ConfigDiagnostics.warnings(in: "{ general: { glass: false } }").isEmpty)
+    }
+
     @Test func addsMissingKeysAndObjects() throws {
         let text = "{\n  general: {\n    hotkey: \"alt+space\",\n  },\n}\n"
         let a = try #require(ConfigEdit.setting(["general", "openAtLogin"], to: "false", in: text))

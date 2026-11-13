@@ -79,6 +79,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let settings = AppSettings()
         loadCustomThemes(folder: CustomThemes.folder(beside: settings.url), announce: false)
         Theme.variant = settings.data.general.theme
+        Glass.enabled = settings.data.general.glass
         let frecency = FrecencyStore(store: JSONStore(url: AppPaths.file("frecency.json")))
         let apps = AppIndex()
         serviceBag = Services(settings: settings, frecency: frecency, apps: apps)
@@ -258,6 +259,43 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             let days = names.split(separator: "|", omittingEmptySubsequences: false).map { $0.split(separator: ",").map(String.init) }
             calendar?.debugBirthdays(today: days.first ?? [], tomorrow: days.count > 1 ? days[1] : [])
         }
+        // `-DebugFadeProbe <seconds idle>`: after that long idle, run the launcher hotkey's action
+        // (toggle) and print the panel's alpha every 4 ms through the entrance, then the same for
+        // the exit; three rounds. `-DebugFadeFrames <dir>` also records every display frame of
+        // each (round1-show/…), for a look at what really reaches the screen.
+        if defaults.double(forKey: "DebugFadeProbe") > 0 {
+            let idle = defaults.double(forKey: "DebugFadeProbe")
+            let framesDir = defaults.string(forKey: "DebugFadeFrames")
+            Task { @MainActor [weak self] in
+                for round in 1...3 {
+                    try? await Task.sleep(for: .seconds(idle))
+                    guard let self else { return }
+                    for phase in ["show", "hide"] {
+                        var start = CACurrentMediaTime()
+                        var samples: [String] = []
+                        let timer = Timer(timeInterval: 0.004, repeats: true) { [weak self] _ in
+                            guard let self else { return }
+                            samples.append(String(format: "%.0f:%.2f", (CACurrentMediaTime() - start) * 1000, launcher.panel.alphaValue))
+                        }
+                        RunLoop.main.add(timer, forMode: .common)
+                        if let framesDir {
+                            let rect = launcher.panel.frame.insetBy(dx: -40, dy: -40)
+                            await DebugSnapshot.recordFrames(rect, seconds: 0.45, to: "\(framesDir)/round\(round)-\(phase)") { [weak self] in
+                                samples = []
+                                start = CACurrentMediaTime()
+                                self?.launcher.toggle()
+                            }
+                        } else {
+                            launcher.toggle()
+                            try? await Task.sleep(for: .milliseconds(450))
+                        }
+                        timer.invalidate()
+                        print("round \(round) \(phase) (motion \(Motion.allowed)): " + samples.prefix(70).joined(separator: " "))
+                        fflush(stdout)
+                    }
+                }
+            }
+        }
         if defaults.bool(forKey: "DebugShowOnLaunch") {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
                 guard let self else { return }
@@ -302,9 +340,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if previous?.general.theme != config.general.theme, !Theme.exists(config.general.theme) {
             HUD.shared.warn("No theme \"\(config.general.theme.rawValue)\", using OG")
         }
-        if let previous, previous.general.theme != config.general.theme {
-            // After the action that saved it has finished with the launcher.
-            DispatchQueue.main.async { [weak self] in self?.applyTheme(config.general.theme) }
+        if let previous, previous.general.theme != config.general.theme || previous.general.glass != config.general.glass {
+            let glassChanged = Glass.enabled != config.general.glass
+            Glass.enabled = config.general.glass
+            // After the action that saved it has finished with the launcher. A glass change
+            // rebuilds the windows in the same theme.
+            DispatchQueue.main.async { [weak self] in self?.applyTheme(config.general.theme, force: glassChanged) }
         }
 
         if previous?.general.hotkey != config.general.hotkey {
