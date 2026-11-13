@@ -88,6 +88,11 @@ final class NotesController: NSObject, NSWindowDelegate, NSTableViewDataSource, 
     // Views
     private let searchField = NSTextField()
     private let table = NotesListView()
+    private lazy var glide: SelectionGlide = {
+        let g = SelectionGlide(table: table)
+        g.tint = Palette.notes
+        return g
+    }()
     private let actionPanel = ActionPanelView()
     private var actionPanelHeight: NSLayoutConstraint!
     /// Actions behind the open right-click menu, by item tag.
@@ -135,15 +140,15 @@ final class NotesController: NSObject, NSWindowDelegate, NSTableViewDataSource, 
 
     // MARK: - Show / hide
 
-    var isVisible: Bool { panel.isVisible }
+    var isVisible: Bool { panel.isVisible && !Motion.isLeaving(panel) }
 
     /// ⌥.: show, focus if visible but in the background, hide if focused.
     func toggle() {
-        if panel.isVisible && panel.isKeyWindow { hide() } else { show() }
+        if isVisible && panel.isKeyWindow { hide() } else { show() }
     }
 
     func show(newNote: Bool = false) {
-        if !panel.isVisible && UserDefaults.standard.string(forKey: "NSWindow Frame \(Self.frameName)") == nil {
+        if !isVisible && UserDefaults.standard.string(forKey: "NSWindow Frame \(Self.frameName)") == nil {
             centerOnMouseScreen()
         }
         rescan()
@@ -154,15 +159,15 @@ final class NotesController: NSObject, NSWindowDelegate, NSTableViewDataSource, 
         } else {
             reloadCurrentIfChangedOnDisk()
         }
-        panel.orderFrontRegardless()
+        Motion.present(panel)
         panel.makeKey()
         if !newNote { focusEditor() }
     }
 
     func hide() {
-        guard panel.isVisible else { return }
+        guard isVisible else { return }
         flush(force: true)
-        panel.orderOut(nil)
+        Motion.dismiss(panel)
     }
 
     /// Writes pending edits now (on quit).
@@ -174,7 +179,7 @@ final class NotesController: NSObject, NSWindowDelegate, NSTableViewDataSource, 
         current = nil
         contents = [:]
         notes = []
-        if panel.isVisible { show() }
+        if isVisible { show() }
     }
 
     private func centerOnMouseScreen() {
@@ -296,9 +301,13 @@ final class NotesController: NSObject, NSWindowDelegate, NSTableViewDataSource, 
         selectRow(for: currentPath)
     }
 
-    private func selectRow(for path: String?) {
+    /// `animated`: the highlight glides there (↑↓, clicks); a new list places it at once.
+    private func selectRow(for path: String?, animated: Bool = false) {
         selectingProgrammatically = true
-        defer { selectingProgrammatically = false }
+        defer {
+            selectingProgrammatically = false
+            glide.sync(animated: animated)
+        }
         guard let path, let i = hits.firstIndex(where: { $0.note.relativePath == path }) else {
             table.deselectAll(nil)
             return
@@ -443,7 +452,11 @@ final class NotesController: NSObject, NSWindowDelegate, NSTableViewDataSource, 
         flush(force: true)
         current = .file(note)
         UserDefaults.standard.set(note.relativePath, forKey: Self.lastNoteKey)
-        selectRow(for: note.relativePath)
+        selectRow(for: note.relativePath, animated: true)
+        // The next note fades in under its title, as the highlight glides to it in the list.
+        if isVisible {
+            for v in [titleField, previewMode ? previewScroll : editorScroll] as [NSView] { Motion.fadeIn(v, duration: 0.14) }
+        }
         guard !note.isPlaceholder else {
             setText("", caretAtBody: false)
             textView.isEditable = false
@@ -1206,6 +1219,7 @@ final class NotesController: NSObject, NSWindowDelegate, NSTableViewDataSource, 
     func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? {
         let v = ResultRowView.reused(by: tableView)
         v.tint = Palette.notes
+        v.drawsSelection = false
         v.isHovered = row == table.hoveredRow
         return v
     }
