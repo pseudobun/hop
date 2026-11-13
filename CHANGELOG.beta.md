@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.0-beta.17](https://github.com/pseudobun/hop/compare/v0.1.0-beta.16...v0.1.0-beta.17) (2026-11-13)
+
+
+### Features
+
+* **ui:** add liquid glass design and a real entrance fade ([#52](https://github.com/pseudobun/hop/issues/52)) ([58cada4](https://github.com/pseudobun/hop/commit/58cada49e61eb47fd6d17ba824c8b472ed84c937))
+
 ## [0.1.0-beta.16](https://github.com/pseudobun/hop/compare/v0.1.0-beta.15...v0.1.0-beta.16) (2026-11-12)
 
 
