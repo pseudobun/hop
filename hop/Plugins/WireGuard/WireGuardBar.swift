@@ -231,14 +231,19 @@ final class WireGuardBar: NSView, LauncherStrip {
     }
 
     private func show(_ list: [WireGuardTunnel]) {
-        if list != tunnels || stack.arrangedSubviews.isEmpty != list.isEmpty { tunnels = list; rebuild() }
+        if list != tunnels || stack.arrangedSubviews.isEmpty != list.isEmpty {
+            // Same tunnels, new states: the pills change in place and animate; otherwise rebuild.
+            let same = list.map(\.serviceID) == tunnels.map(\.serviceID) && pills.count == list.count && window != nil
+            tunnels = list
+            if same { restate() } else { rebuild() }
+        }
         hasContent = !tunnels.isEmpty
     }
 
     private func setStatus(_ status: String, of t: WireGuardTunnel) {
         guard let i = tunnels.firstIndex(where: { $0.serviceID == t.serviceID }) else { return }
         tunnels[i] = WireGuardTunnel(name: t.name, serviceID: t.serviceID, isConnected: status == "Connected", status: status)
-        rebuild()
+        if pills.count == tunnels.count { restate() } else { rebuild() }
     }
 
     private func toggle(_ t: WireGuardTunnel) {
@@ -279,17 +284,11 @@ final class WireGuardBar: NSView, LauncherStrip {
     // MARK: - Views
 
     private func rebuild() {
-        let showFlags = config().showFlags
         stack.arrangedSubviews.forEach { $0.removeFromSuperview() }
         pills = []
         for (i, t) in tunnels.enumerated() {
             let pill = WireGuardPill()
-            let direct = keys.direct.isEmpty || i >= 9 ? nil : HotkeySpec.parse("\(keys.direct)+\(i + 1)")?.display
-            pill.configure(title: showFlags ? "\(t.flag) \(t.name)" : t.name,
-                           state: t.isTransitioning ? .busy : t.isConnected ? .on : .off,
-                           key: direct, status: true)
-            pill.toolTip = "\(t.name): \(t.label)"
-            pill.onClick = { [weak self] in self?.toggle(t) }
+            configure(pill, i, t, animated: false)
             stack.addArrangedSubview(pill)
             pills.append(pill)
         }
@@ -299,9 +298,34 @@ final class WireGuardBar: NSView, LauncherStrip {
         hint.stringValue = HotkeySpec.parse(keys.focus)?.display ?? ""
         fittedWidth = -1
         needsLayout = true
+        tintIcon(animated: false)
+    }
+
+    /// New states on the same pills: colours cross-fade, a tunnel coming up pops its dot, and
+    /// the bar refits (an active tunnel is always shown).
+    private func restate() {
+        for (i, t) in tunnels.enumerated() { configure(pills[i], i, t, animated: true) }
+        tintIcon(animated: true)
+        fittedWidth = -1
+        needsLayout = true
+    }
+
+    private func configure(_ pill: WireGuardPill, _ i: Int, _ t: WireGuardTunnel, animated: Bool) {
+        let direct = keys.direct.isEmpty || i >= 9 ? nil : HotkeySpec.parse("\(keys.direct)+\(i + 1)")?.display
+        pill.configure(title: config().showFlags ? "\(t.flag) \(t.name)" : t.name,
+                       state: t.isTransitioning ? .busy : t.isConnected ? .on : .off,
+                       key: direct, status: true, animated: animated)
+        pill.toolTip = "\(t.name): \(t.label)"
+        pill.onClick = { [weak self] in self?.toggle(t) }
+    }
+
+    private func tintIcon(animated: Bool) {
         let anyOn = tunnels.contains { $0.isConnected }
         let anyBusy = tunnels.contains { $0.isTransitioning }
-        icon.contentTintColor = anyBusy ? Theme.warn : anyOn ? Theme.good : Theme.mutedForeground
+        let tint = anyBusy ? Theme.warn : anyOn ? Theme.good : Theme.mutedForeground
+        guard tint != icon.contentTintColor else { return }
+        if animated { WireGuardPill.crossfade(icon) }
+        icon.contentTintColor = tint
     }
 
     override func layout() {
@@ -338,7 +362,11 @@ final class WireGuardBar: NSView, LauncherStrip {
     private func updateSelection() {
         for (i, pill) in pills.enumerated() { pill.isSelected = selected == i }
         more.isSelected = selected == tunnels.count
-        hint.textColor = selected == nil ? Theme.mutedForeground : Theme.info
+        let tone = selected == nil ? Theme.mutedForeground : Theme.info
+        if hint.textColor != tone {
+            WireGuardPill.crossfade(hint)
+            hint.textColor = tone
+        }
     }
 
 }
@@ -357,7 +385,7 @@ final class WireGuardPill: NSView {
 
     /// Keyboard selection in the bar: an info-coloured ring.
     var isSelected = false {
-        didSet { if isSelected != oldValue { applyColors() } }
+        didSet { if isSelected != oldValue { applyColors(animated: window != nil) } }
     }
 
     override init(frame: NSRect) {
@@ -389,7 +417,9 @@ final class WireGuardPill: NSView {
 
     required init?(coder: NSCoder) { fatalError() }
 
-    func configure(title: String, state: State, key: String?, status: Bool) {
+    func configure(title: String, state: State, key: String?, status: Bool, animated: Bool = false) {
+        let animated = animated && Motion.allowed && window != nil && !isHidden
+        let previous = self.state
         self.title = title
         self.state = state
         label.stringValue = title
@@ -401,8 +431,12 @@ final class WireGuardPill: NSView {
         case .off: Theme.mutedForeground
         }
         dot.isHidden = !status // the "+N" pill has no status
-        dot.layer?.backgroundColor = (state == .off ? Theme.mutedForeground.withAlphaComponent(0.5) : tone).cgColor
-        applyColors()
+        if let dotLayer = dot.layer {
+            let color = (state == .off ? Theme.mutedForeground.withAlphaComponent(0.5) : tone).cgColor
+            Self.change(dotLayer, "backgroundColor", to: color, animated: animated && previous != state)
+        }
+        applyColors(animated: animated && previous != state)
+        if animated && state == .on && previous != .on { pop() }
         dot.layer?.removeAnimation(forKey: "pulse")
         if state == .busy {
             let pulse = CABasicAnimation(keyPath: "opacity")
@@ -415,12 +449,65 @@ final class WireGuardPill: NSView {
         }
     }
 
-    private func applyColors() {
-        label.textColor = state == .off && !isSelected ? Theme.mutedForeground : Theme.foreground
-        layer?.backgroundColor = (state == .off ? Theme.foreground.withAlphaComponent(isSelected ? 0.10 : 0.05)
-            : tone.withAlphaComponent(isSelected ? 0.22 : 0.14)).cgColor
-        layer?.borderColor = (isSelected ? Theme.info : state == .off ? Theme.border : tone.withAlphaComponent(0.35)).cgColor
-        layer?.borderWidth = isSelected ? 1.5 : 0.5
+    private func applyColors(animated: Bool = false) {
+        let animated = animated && Motion.allowed
+        let text = state == .off && !isSelected ? Theme.mutedForeground : Theme.foreground
+        if label.textColor != text {
+            if animated { Self.crossfade(label) }
+            label.textColor = text
+        }
+        guard let layer else { return }
+        Self.change(layer, "backgroundColor", to: (state == .off ? Theme.foreground.withAlphaComponent(isSelected ? 0.10 : 0.05)
+            : tone.withAlphaComponent(isSelected ? 0.22 : 0.14)).cgColor, animated: animated)
+        Self.change(layer, "borderColor", to: (isSelected ? Theme.info : state == .off ? Theme.border
+            : tone.withAlphaComponent(0.35)).cgColor, animated: animated)
+        Self.change(layer, "borderWidth", to: isSelected ? 1.5 : 0.5, animated: animated)
+    }
+
+    // MARK: - Motion
+
+    /// How long a pill takes to change colour: as long as the selection glide, on the same curve.
+    private static let duration: CFTimeInterval = 0.18
+
+    /// Sets a layer property, animating from what is on screen now (so quick changes chain).
+    private static func change(_ layer: CALayer, _ key: String, to value: Any, animated: Bool) {
+        let from = animated ? (layer.presentation() ?? layer).value(forKeyPath: key) : nil
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        layer.setValue(value, forKeyPath: key)
+        CATransaction.commit()
+        guard let from else { return }
+        let a = CABasicAnimation(keyPath: key)
+        a.fromValue = from
+        a.toValue = value
+        a.duration = duration
+        a.timingFunction = Motion.glideTiming
+        layer.add(a, forKey: key)
+    }
+
+    /// Cross-fades a view's next redraw (a text or tint colour, which has no animatable property).
+    static func crossfade(_ view: NSView) {
+        guard Motion.allowed, view.window != nil, let layer = view.layer else { return }
+        let fade = CATransition()
+        fade.type = .fade
+        fade.duration = duration
+        fade.timingFunction = Motion.glideTiming
+        layer.add(fade, forKey: "crossfade")
+    }
+
+    /// A tunnel came up: its dot springs in from small, as windows settle into place.
+    private func pop() {
+        guard let layer = dot.layer else { return }
+        let b = layer.bounds
+        var t = CATransform3DMakeTranslation(b.width / 2, b.height / 2, 0)
+        t = CATransform3DScale(t, 0.4, 0.4, 1)
+        t = CATransform3DTranslate(t, -b.width / 2, -b.height / 2, 0)
+        let spring = CASpringAnimation(perceptualDuration: 0.3, bounce: 0.35)
+        spring.keyPath = "transform"
+        spring.fromValue = NSValue(caTransform3D: t)
+        spring.toValue = NSValue(caTransform3D: CATransform3DIdentity)
+        spring.duration = spring.settlingDuration
+        layer.add(spring, forKey: "pop")
     }
 
     override func mouseDown(with event: NSEvent) {}
