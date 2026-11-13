@@ -3,6 +3,35 @@
 All notable changes to hop. Versions follow [Semantic Versioning](https://semver.org); entries
 come from [Conventional Commits](https://www.conventionalcommits.org) via release-please.
 
+## [0.1.0](https://github.com/pseudobun/hop/compare/v0.1.0-beta.6...v0.1.0) (2026-11-13)
+
+
+### Features
+
+* add custom themes from json5 files ([#18](https://github.com/pseudobun/hop/issues/18)) ([95d36df](https://github.com/pseudobun/hop/commit/95d36df6080c7bf04b3932661b0013e6761156cd))
+* **settings:** check field values as you type and refuse ones that are wrong ([#32](https://github.com/pseudobun/hop/issues/32)) ([b997fc7](https://github.com/pseudobun/hop/commit/b997fc7fe150f5b463a44707199f93f4a2d49310))
+* **settings:** one Plugins group, verified checks and a sortable plugin list ([#36](https://github.com/pseudobun/hop/issues/36)) ([a9a4967](https://github.com/pseudobun/hop/commit/a9a496779f2cbfbe3c1ecd7d430f4de3790bb513))
+* split hop into core and plugins, with installable plugins and SDKs ([#25](https://github.com/pseudobun/hop/issues/25)) ([d29d658](https://github.com/pseudobun/hop/commit/d29d658fd5f095b0721ecdcdfc3e9def4595d385))
+* **ui:** add liquid glass design and a real entrance fade ([#52](https://github.com/pseudobun/hop/issues/52)) ([58cada4](https://github.com/pseudobun/hop/commit/58cada49e61eb47fd6d17ba824c8b472ed84c937))
+* **ui:** animate wireguard switching and notes navigation ([#55](https://github.com/pseudobun/hop/issues/55)) ([1d7d04b](https://github.com/pseudobun/hop/commit/1d7d04b9a165b517edb12b0cdb75e1d21e48ee2f))
+* **ui:** fade the launcher in and glide the selection between rows ([#42](https://github.com/pseudobun/hop/issues/42)) ([de8edbb](https://github.com/pseudobun/hop/commit/de8edbbfb7769f9e9103655663489d66b2bd851b))
+* **ui:** make liquid glass more see-through and configurable ([#58](https://github.com/pseudobun/hop/issues/58)) ([1d133f5](https://github.com/pseudobun/hop/commit/1d133f5a02a12a7dc8c813a50693f5bd54a14337))
+* **updates:** add a beta channel and release betas from a beta branch ([#20](https://github.com/pseudobun/hop/issues/20)) ([6a8e9fb](https://github.com/pseudobun/hop/commit/6a8e9fb8038feb4d800fd175a7eec823cece8eb8))
+* **updates:** add Update hop and Update Channel commands to the launcher ([#30](https://github.com/pseudobun/hop/issues/30)) ([1c36a00](https://github.com/pseudobun/hop/commit/1c36a002e9dc3546f1d613e3fa50033fa38f2abe))
+
+
+### Bug Fixes
+
+* apply config changes live and bring settings to front ([#59](https://github.com/pseudobun/hop/issues/59)) ([569f8e5](https://github.com/pseudobun/hop/commit/569f8e567b2e45ab272cb0117b3c71464c0ac841))
+* **cask:** name the conflicting cask with its tap ([#46](https://github.com/pseudobun/hop/issues/46)) ([18a4680](https://github.com/pseudobun/hop/commit/18a4680a067a8927aeb6baa272de7dc0a6adf558))
+* **cask:** name the conflicting cask with its tap ([#47](https://github.com/pseudobun/hop/issues/47)) ([51a5ac0](https://github.com/pseudobun/hop/commit/51a5ac0910e9b51bd32a3fb0d7cc583e058eb3bd))
+* **cask:** use the current depends_on macos syntax ([e4ca387](https://github.com/pseudobun/hop/commit/e4ca3876bebadaaf02dd671561f3fa6a6b76c620))
+* **cask:** use the current depends_on macos syntax ([#28](https://github.com/pseudobun/hop/issues/28)) ([cd2bde2](https://github.com/pseudobun/hop/commit/cd2bde2cfaf89084b809a566bcbb79f851e27f4b))
+* **login:** keep dev builds out of login items ([#39](https://github.com/pseudobun/hop/issues/39)) ([e9bc463](https://github.com/pseudobun/hop/commit/e9bc46394d47f364d22e27879eea07a0b18466c3))
+* **settings:** offer only the beta channel until a stable version exists ([#22](https://github.com/pseudobun/hop/issues/22)) ([d56a5f6](https://github.com/pseudobun/hop/commit/d56a5f65a8af23d8b5f250bcf6e963e1353001be))
+* **settings:** offer only the beta channel until a stable version exists ([#24](https://github.com/pseudobun/hop/issues/24)) ([26407e4](https://github.com/pseudobun/hop/commit/26407e41e3d1f78273ca90b7b20a64db8c093f92))
+* **ui:** fade the launcher in instead of popping it up ([#49](https://github.com/pseudobun/hop/issues/49)) ([de18cff](https://github.com/pseudobun/hop/commit/de18cffb95de99c8db972395891d0afd0ed2696f))
+
 ## [0.1.0-beta.6](https://github.com/pseudobun/hop/compare/v0.1.0-beta.5...v0.1.0-beta.6) (2026-11-11)
 
 
