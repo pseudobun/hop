@@ -6,6 +6,18 @@
     <description>hop releases</description>
     <language>en</language>
     <item>
+      <title>hop 0.1.0-beta.20</title>
+      <pubDate>Fri, 13 Nov 2026 20:56:07 +0000</pubDate>
+      <sparkle:version>166</sparkle:version>
+      <sparkle:shortVersionString>0.1.0-beta.20</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
+      <description><![CDATA[<style>body{font:13px -apple-system,sans-serif;margin:12px 14px;color:#222}h3{font-size:13px;margin:12px 0 4px}ul{padding-left:18px;margin:4px 0}li{margin:2px 0}code{font:12px ui-monospace,monospace}a{color:#0a64d0}@media(prefers-color-scheme:dark){body{color:#ddd}a{color:#6ab0ff}}</style><h3>Features</h3>
+<ul>
+<li><b>ui:</b> make liquid glass more see-through and configurable (<a href="https://github.com/pseudobun/hop/issues/58">#58</a>) (<a href="https://github.com/pseudobun/hop/commit/1d133f5a02a12a7dc8c813a50693f5bd54a14337">1d133f5</a>)</li>
+</ul><p><a href="https://github.com/pseudobun/hop/releases/tag/v0.1.0-beta.20">Release on GitHub</a></p>]]></description>
+      <enclosure url="https://github.com/pseudobun/hop/releases/download/v0.1.0-beta.20/hop-0.1.0-beta.20-macos.zip" type="application/octet-stream" sparkle:edSignature="WNdLivPWVWYdXbbuARP4WxpyaGSQ4fNE3W+kXolXWwH1k+pkMAvIE0HyhA6D6sDnSRVq6/4QYyJ4Y82glsvNDw==" length="5221060"/>
+    </item>
+    <item>
       <title>hop 0.1.0-beta.19</title>
       <pubDate>Fri, 13 Nov 2026 17:30:33 +0000</pubDate>
       <sparkle:version>164</sparkle:version>
