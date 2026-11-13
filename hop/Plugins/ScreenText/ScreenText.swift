@@ -31,6 +31,7 @@ nonisolated enum ScreenText {
 
     /// Capture, read and copy; the HUD says how it went.
     static func copyFromScreen(languages: [String]) async {
+        await MainActor.run { Motion.finishExits() } // the launcher fading out would be in the picture
         guard let url = await capture() else { return }
         defer { try? FileManager.default.removeItem(at: url) }
         let lines = await recognize(url, languages: languages)

@@ -2,6 +2,7 @@
 import AppKit
 import os
 import ScreenCaptureKit
+import VideoToolbox
 
 /// Debug-only: writes a PNG of one of hop's own windows. Capturing the current
 /// process's windows needs no Screen Recording permission.
@@ -81,6 +82,70 @@ enum DebugSnapshot {
             try rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: path))
         } catch {
             Log.app.error("DebugSnapshot failed: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    /// Records the screen region `rect` (AppKit coordinates) with only hop's windows composited,
+    /// every display frame for `seconds` after `action` runs, as numbered PNGs in `dir`: what an
+    /// entrance or exit really looks like, frame by frame.
+    static func recordFrames(_ rect: NSRect, seconds: Double, to dir: String, action: @escaping () -> Void) async {
+        do {
+            let own = try await SCShareableContent.currentProcess
+            var displays = own.displays
+            if displays.isEmpty { displays = (try? await SCShareableContent.current)?.displays ?? [] }
+            guard let display = displays.first else { return }
+            let filter = SCContentFilter(display: display, including: own.windows)
+            let config = SCStreamConfiguration()
+            let screenHeight = NSScreen.main?.frame.height ?? CGFloat(display.height)
+            config.sourceRect = CGRect(x: rect.minX, y: screenHeight - rect.maxY, width: rect.width, height: rect.height)
+            config.width = Int(rect.width)
+            config.height = Int(rect.height)
+            config.minimumFrameInterval = CMTime(value: 1, timescale: 120)
+            config.showsCursor = false
+            config.queueDepth = 8
+            let sink = FrameSink()
+            let stream = SCStream(filter: filter, configuration: config, delegate: nil)
+            try stream.addStreamOutput(sink, type: .screen, sampleHandlerQueue: sink.queue)
+            try await stream.startCapture()
+            try? await Task.sleep(for: .milliseconds(300))
+            sink.start = CACurrentMediaTime()
+            action()
+            try? await Task.sleep(for: .seconds(seconds))
+            try await stream.stopCapture()
+            try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+            for (i, frame) in sink.frames.enumerated() {
+                let rep = NSBitmapImageRep(cgImage: frame.image)
+                let name = String(format: "%@/%02d-%03dms.png", dir, i, Int((frame.time - sink.start) * 1000))
+                try? rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: name))
+            }
+        } catch {
+            Log.app.error("DebugSnapshot frames failed: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    private nonisolated final class FrameSink: NSObject, SCStreamOutput, @unchecked Sendable {
+        let queue = DispatchQueue(label: "hop.debug.frames")
+        private let lock = NSLock()
+        private var stored: [(time: CFTimeInterval, image: CGImage)] = []
+        var start: CFTimeInterval = .infinity
+        var frames: [(time: CFTimeInterval, image: CGImage)] { lock.withLock { stored } }
+
+        func stream(_ stream: SCStream, didOutputSampleBuffer buffer: CMSampleBuffer, of type: SCStreamOutputType) {
+            guard type == .screen, let pixels = buffer.imageBuffer else { return }
+            // Only complete frames (idle ones repeat the last).
+            if let info = (CMSampleBufferGetSampleAttachmentsArray(buffer, createIfNecessary: false) as? [[SCStreamFrameInfo: Any]])?.first,
+               let raw = info[.status] as? Int, SCFrameStatus(rawValue: raw) != .complete { return }
+            let now = CACurrentMediaTime()
+            guard now >= start else { return }
+            var image: CGImage?
+            VTCreateCGImageFromCVPixelBuffer(pixels, options: nil, imageOut: &image)
+            // A copy: the stream reuses a handful of buffers and stops while we hold them.
+            guard let image, let ctx = CGContext(data: nil, width: image.width, height: image.height, bitsPerComponent: 8,
+                                                 bytesPerRow: 0, space: CGColorSpace(name: CGColorSpace.sRGB)!,
+                                                 bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue)
+            else { return }
+            ctx.draw(image, in: CGRect(x: 0, y: 0, width: image.width, height: image.height))
+            if let copy = ctx.makeImage() { lock.withLock { stored.append((now, copy)) } }
         }
     }
 }
