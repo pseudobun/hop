@@ -6,6 +6,18 @@
     <description>hop releases</description>
     <language>en</language>
     <item>
+      <title>hop 0.1.0-beta.18</title>
+      <pubDate>Fri, 13 Nov 2026 15:23:40 +0000</pubDate>
+      <sparkle:version>162</sparkle:version>
+      <sparkle:shortVersionString>0.1.0-beta.18</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
+      <description><![CDATA[<style>body{font:13px -apple-system,sans-serif;margin:12px 14px;color:#222}h3{font-size:13px;margin:12px 0 4px}ul{padding-left:18px;margin:4px 0}li{margin:2px 0}code{font:12px ui-monospace,monospace}a{color:#0a64d0}@media(prefers-color-scheme:dark){body{color:#ddd}a{color:#6ab0ff}}</style><h3>Features</h3>
+<ul>
+<li><b>ui:</b> animate wireguard switching and notes navigation (<a href="https://github.com/pseudobun/hop/issues/55">#55</a>) (<a href="https://github.com/pseudobun/hop/commit/1d7d04b9a165b517edb12b0cdb75e1d21e48ee2f">1d7d04b</a>)</li>
+</ul><p><a href="https://github.com/pseudobun/hop/releases/tag/v0.1.0-beta.18">Release on GitHub</a></p>]]></description>
+      <enclosure url="https://github.com/pseudobun/hop/releases/download/v0.1.0-beta.18/hop-0.1.0-beta.18-macos.zip" type="application/octet-stream" sparkle:edSignature="C0b9luIrZmWVAlUx9yvFu4l4I7iDiNCU6BXEhM9jQaNlbABIl50rk9XgGB4Qwa/+2RRF/ZR/Z2IkdMatn7eYBQ==" length="5216590"/>
+    </item>
+    <item>
       <title>hop 0.1.0-beta.17</title>
       <pubDate>Fri, 13 Nov 2026 00:20:16 +0000</pubDate>
       <sparkle:version>160</sparkle:version>
