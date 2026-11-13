@@ -597,15 +597,7 @@ final class LauncherController: NSObject, LauncherContext, NSTableViewDataSource
 
     private func buildViews() {
         panel.appearance = Theme.appearance
-        let glass = NSGlassEffectView()
-        glass.cornerRadius = panel.frameCornerRadius
-        glass.tintColor = Theme.background.withAlphaComponent(0.78)
-        let content = NSView()
-        // DS surfaces are dark and quiet: a mostly opaque #0c0c09 over the glass.
-        content.wantsLayer = true
-        content.layer?.backgroundColor = Theme.background.withAlphaComponent(0.82).cgColor
-        content.layer?.cornerRadius = panel.frameCornerRadius
-        glass.contentView = content
+        let (glass, content) = Glass.surface(cornerRadius: panel.frameCornerRadius)
         panel.contentView = glass
 
         for f in [searchField, secureField] {

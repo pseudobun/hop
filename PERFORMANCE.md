@@ -135,6 +135,27 @@ rows no longer redraw their own selection. Measured with `just bench` (2026-11-1
 cost 0.2 ms of main-thread time in all; show + hide went from about 0.8 to 0.95 ms; typing,
 footprint and the other scenarios did not move.
 
+## Liquid Glass
+
+With `general.glass` (the default) hop's windows are `NSGlassEffectView`s with a light veil of the
+theme's background (40 %, notes 60 %) instead of a mostly opaque one (82–86 %); the ⌘K panel is
+its own piece of glass. Glass is composited by the window server, so it costs no main-thread time.
+`just bench`, two runs each of `origin/beta` and this change (2026-11-13, medians, ms; the
+`Permission.missing` probe was left out of both, as it hangs on a locked screen):
+
+| Scenario | before | after |
+|---|---|---|
+| show + hide | 0.53 / 0.95 | 0.38 / 0.43 |
+| type "10 km to mi" (11 keys) | 16.68 / 16.80 | 16.64 / 16.77 |
+| move ↓↓↓↓↓ ↑↑↑↑↑ | 0.22 / 0.22 | 0.21 / 0.22 |
+| clipboard show + hide | 5.92 / 5.97 | 4.96 / 4.96 |
+| notes show + hide | 14.04 / 13.97 | 19.18 / 14.29 |
+| emoji: open, type "heart" | 11.01 / 11.08 | 2.70 / 2.62 |
+| footprint | 67.5 / 67.4 MB | 67.8 / 67.6 MB |
+
+The rest did not move; "first show" is one sample and swings 7–33 ms on both. The faster hides
+are the exit fade: `orderOut` now runs when the fade ends, off the measured call.
+
 ## Release build at rest
 
 Measured on 2026-11-12 on olympus: Mac mini, Apple M4 Pro, 24 GB, macOS 27.2, one display

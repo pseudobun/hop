@@ -795,14 +795,7 @@ final class ClipboardController: NSObject, NSWindowDelegate, NSTableViewDataSour
     // MARK: - Layout
 
     private func buildViews() {
-        let glass = NSGlassEffectView()
-        glass.cornerRadius = panel.frameCornerRadius
-        glass.tintColor = Theme.background.withAlphaComponent(0.78)
-        let content = NSView()
-        content.wantsLayer = true
-        content.layer?.backgroundColor = Theme.background.withAlphaComponent(0.86).cgColor
-        content.layer?.cornerRadius = panel.frameCornerRadius
-        glass.contentView = content
+        let (glass, content) = Glass.surface(cornerRadius: panel.frameCornerRadius)
         panel.contentView = glass
 
         searchField.isBordered = false

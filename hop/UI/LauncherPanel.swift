@@ -69,7 +69,7 @@ final class HUD {
     private var hideTask: Task<Void, Never>?
     /// The theme (and custom-theme revision) the panel was built in: a HUD after a theme
     /// switch or an edit to the custom theme in use is built again.
-    private var panelTheme: (name: Theme.Name, revision: Int)?
+    private var panelTheme: (name: Theme.Name, revision: Int, glass: Bool)?
 
     enum Tone { case success, warning, failure }
 
@@ -102,13 +102,13 @@ final class HUD {
     /// Without a tone, a checkmark is a success and any other symbol a notice.
     /// `seconds` overrides how long it stays up.
     func show(_ text: String, symbol: String = "checkmark.circle.fill", tone: Tone? = nil, seconds: Double? = nil) {
-        if panelTheme?.name != Theme.variant || panelTheme?.revision != Theme.revision {
+        if panelTheme?.name != Theme.variant || panelTheme?.revision != Theme.revision || panelTheme?.glass != Glass.enabled {
             self.panel?.orderOut(nil)
             self.panel = nil
         }
         let panel = self.panel ?? makePanel()
         self.panel = panel
-        panelTheme = (Theme.variant, Theme.revision)
+        panelTheme = (Theme.variant, Theme.revision, Glass.enabled)
         guard let glass = panel.contentView as? NSGlassEffectView,
               let stack = glass.contentView?.subviews.first as? NSStackView,
               let image = stack.arrangedSubviews.first as? NSImageView,
@@ -154,7 +154,7 @@ final class HUD {
         p.appearance = Theme.appearance
         let glass = NSGlassEffectView()
         glass.cornerRadius = 20
-        glass.tintColor = Theme.background.withAlphaComponent(0.78)
+        glass.tintColor = Glass.hudTint
         let image = NSImageView()
         image.contentTintColor = .secondaryLabelColor
         let label = NSTextField(labelWithString: "")

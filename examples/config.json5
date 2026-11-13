@@ -21,6 +21,9 @@
     // a .json5 file in themes/ beside this file (`hop themes template` prints one).
     // The Theme command previews them all and can import or start a new one.
     theme: "og",
+    // Liquid Glass (macOS 26) behind the launcher, clipboard, notes and HUD: the wallpaper
+    // shows through, tinted with the theme. false: the flat, mostly opaque look.
+    glass: true,
   },
 
   // New versions from GitHub (Sparkle), for builds from Homebrew or a release zip (builds

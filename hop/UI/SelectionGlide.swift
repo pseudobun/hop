@@ -73,7 +73,9 @@ final class SelectionGlide {
             root.isGeometryFlipped = true
             layer = root
             wantsLayer = true
-            bar.cornerRadius = 8
+            // On glass rounder and continuous, concentric with the window's corners.
+            bar.cornerRadius = Glass.enabled ? 10 : 8
+            bar.cornerCurve = Glass.enabled ? .continuous : .circular
             bar.borderWidth = 0.5
             bar.isHidden = true
             root.addSublayer(bar)
@@ -93,8 +95,14 @@ final class SelectionGlide {
         func paint(_ tone: NSColor) {
             CATransaction.begin()
             CATransaction.setDisableActions(true)
-            bar.backgroundColor = tone.withAlphaComponent(0.14).cgColor
-            bar.borderColor = tone.withAlphaComponent(0.28).cgColor
+            if Glass.enabled {
+                // A brighter, lit pill that reads on any wallpaper behind the glass.
+                bar.backgroundColor = tone.withAlphaComponent(0.22).cgColor
+                bar.borderColor = NSColor.white.withAlphaComponent(0.16).cgColor
+            } else {
+                bar.backgroundColor = tone.withAlphaComponent(0.14).cgColor
+                bar.borderColor = tone.withAlphaComponent(0.28).cgColor
+            }
             CATransaction.commit()
         }
     }
