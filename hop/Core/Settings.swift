@@ -20,6 +20,11 @@ nonisolated struct HopConfig: Decodable, Equatable, Sendable {
         var theme: ThemeName = .og
         /// macOS 26 Liquid Glass behind every hop window; false: the flat, mostly opaque look.
         var glass = true
+        /// The glass material: "regular" (frosted, like Spotlight) or "clear" (barely frosted).
+        var glassStyle = "regular"
+        /// How much of the theme's background tints the glass, 0–100 %. Low: the wallpaper shows
+        /// through as in Spotlight; high: close to the flat look.
+        var glassTint = 20
 
         /// A built-in theme or a custom one (its file name without the extension).
         nonisolated struct ThemeName: RawRepresentable, Decodable, Hashable, Sendable, ExpressibleByStringLiteral {
@@ -112,7 +117,7 @@ nonisolated extension HopConfig.Updates {
 }
 
 nonisolated extension HopConfig.General {
-    private enum Keys: String, CodingKey { case hotkey, sensitivity, popToRootSeconds, keepQueryFor, fallbacks, openAtLogin, menuBarIcon, theme, glass }
+    private enum Keys: String, CodingKey { case hotkey, sensitivity, popToRootSeconds, keepQueryFor, fallbacks, openAtLogin, menuBarIcon, theme, glass, glassStyle, glassTint }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: Keys.self), d = Self()
         hotkey = try c.value(.hotkey, d.hotkey)
@@ -124,6 +129,8 @@ nonisolated extension HopConfig.General {
         menuBarIcon = try c.value(.menuBarIcon, d.menuBarIcon)
         theme = try c.value(.theme, d.theme)
         glass = try c.value(.glass, d.glass)
+        glassStyle = try c.value(.glassStyle, d.glassStyle)
+        glassTint = min(max(try c.value(.glassTint, d.glassTint), 0), 100)
     }
 }
 
@@ -298,6 +305,11 @@ final class AppSettings {
         // Liquid Glass (macOS 26) behind the launcher, clipboard, notes and HUD: the wallpaper
         // shows through, tinted with the theme. false: the flat, mostly opaque look.
         glass: true,
+        // "regular" (frosted, like Spotlight) or "clear" (barely frosted, most see-through)
+        glassStyle: "regular",
+        // How much of the theme's background tints the glass, 0–100: 0 is bare glass,
+        // 100 close to the flat look
+        glassTint: 20,
       },
 
       // New versions from GitHub (Sparkle), for builds from Homebrew or a release zip (builds

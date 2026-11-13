@@ -24,6 +24,15 @@ struct ConfigEditPathTests {
         #expect(ConfigDiagnostics.warnings(in: "{ general: { glass: false } }").isEmpty)
     }
 
+    @Test func glassStyleAndTint() throws {
+        let d = try decode("{}").general
+        #expect(d.glassStyle == "regular" && d.glassTint == 20)
+        let g = try decode("{ general: { glassStyle: \"clear\", glassTint: 150 } }").general
+        #expect(g.glassStyle == "clear" && g.glassTint == 100)
+        #expect(try decode("{ general: { glassTint: -5 } }").general.glassTint == 0)
+        #expect(ConfigDiagnostics.warnings(in: "{ general: { glassStyle: \"clear\", glassTint: 40 } }").isEmpty)
+    }
+
     @Test func addsMissingKeysAndObjects() throws {
         let text = "{\n  general: {\n    hotkey: \"alt+space\",\n  },\n}\n"
         let a = try #require(ConfigEdit.setting(["general", "openAtLogin"], to: "false", in: text))
