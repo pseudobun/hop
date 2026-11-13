@@ -22,10 +22,15 @@ nonisolated enum ConfigEnv {
         return out
     }
 
+    /// The `.env` next to `config` (next to the file it points to, when it is a symlink).
+    static func file(beside config: URL) -> URL {
+        config.resolvingSymlinksInPath().deletingLastPathComponent().appending(path: ".env")
+    }
+
     /// The `.env` next to `config` merged over the process environment.
     static func load(beside config: URL) -> [String: String] {
         var env = ProcessInfo.processInfo.environment
-        let file = config.resolvingSymlinksInPath().deletingLastPathComponent().appending(path: ".env")
+        let file = Self.file(beside: config)
         if let text = try? String(contentsOf: file, encoding: .utf8) {
             env.merge(parse(text)) { _, new in new }
         }

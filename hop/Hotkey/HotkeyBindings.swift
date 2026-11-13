@@ -9,10 +9,15 @@ final class HotkeyBindings {
     private(set) var problems: [String] = []
     var run: ((String) -> Void)?
 
-    /// Re-registers every binding. `reserved` are hop's own hotkeys (launcher, notes, clipboard).
-    func apply(_ map: [String: String], reserved: [(owner: String, hotkey: String)]) {
+    /// Lets go of every binding, so hop's own hotkeys can take a combo a binding had.
+    func release() {
         bound.forEach { $0.unregister() }
         bound = []
+    }
+
+    /// Re-registers every binding. `reserved` are hop's own hotkeys (launcher, notes, clipboard).
+    func apply(_ map: [String: String], reserved: [(owner: String, hotkey: String)]) {
+        release()
         problems = []
         var used: [HotkeySpec: String] = [:]
         for r in reserved { if let s = HotkeySpec.parse(r.hotkey) { used[s] = r.owner } }

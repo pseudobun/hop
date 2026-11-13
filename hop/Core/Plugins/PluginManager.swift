@@ -68,7 +68,9 @@ final class PluginManager {
         registerHotkeys(config)
     }
 
-    private func registerHotkeys(_ config: HopConfig) {
+    /// Lets go of hotkeys no longer wanted and registers the missing ones, retrying any that
+    /// failed before.
+    func registerHotkeys(_ config: HopConfig) {
         var wanted: [String: PluginHotkey] = [:]
         for plugin in enabled {
             for hotkey in plugin.hotkeys(config) where !hotkey.spec.isEmpty {

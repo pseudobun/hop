@@ -16,12 +16,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var serviceBag: Services!
     private var root: RootMode!
     private var launcherController: LauncherController!
-    private var hotkey: GlobalHotkey!
+    private var hotkey: GlobalHotkey?
+    /// What `hotkey` is registered for, and why `general.hotkey` could not be (Setup row).
+    private var hotkeySpec: HotkeySpec?
+    private var hotkeyProblem: String?
     private var plugins: PluginManager!
     private var settingsWindow: SettingsController!
     private let bindings = HotkeyBindings()
-    /// The `hotkeys` map and reserved hotkeys last handed to `bindings`.
-    private var appliedBindings: (map: [String: String], reserved: [String])?
     /// The sub-mode a command hotkey last opened, so pressing it again hides the launcher.
     private weak var bindingMode: Mode?
     private var bindingKey: String?
@@ -91,7 +92,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             Registry.commands(services)
         }
         root.plugins = plugins
-        root.hotkeyProblems = { [weak self] in (self?.bindings.problems ?? []) + (self?.plugins.hotkeyProblems ?? []) }
+        root.hotkeyProblems = { [weak self] in
+            guard let self else { return [] }
+            return (hotkeyProblem.map { [$0] } ?? []) + bindings.problems + plugins.hotkeyProblems
+        }
         bindings.run = { [weak self] key in self?.runBinding(key) }
         let makePermissions: () -> Mode = { PermissionsMode { settings.data } }
         root.permissionsMode = makePermissions
@@ -131,9 +135,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             if self?.launcher.isVisible == true { self?.launcher.reload() }
         }
         RunningApps.shared.start()
-        hotkey = GlobalHotkey { [weak self] in self?.launcher.toggle() }
 
         settings.onChange = { [weak self] old, new in self?.apply(new, previous: old) }
+        settings.onStatusChange = { [weak self] in self?.configStatusDidChange() }
         settings.start()
         // Before apply: the menu bar bunny offers "Check for Updates…" only with an updater.
         Updater.shared.start(settings.data.updates)
@@ -348,26 +352,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             DispatchQueue.main.async { [weak self] in self?.applyTheme(config.general.theme, force: glassChanged) }
         }
 
-        if previous?.general.hotkey != config.general.hotkey {
-            let spec = HotkeySpec.parse(config.general.hotkey) ?? HotkeySpec.parse("cmd+space")!
-            if HotkeySpec.parse(config.general.hotkey) == nil {
-                Log.app.error("Invalid hotkey \(config.general.hotkey, privacy: .public), using cmd+space")
-            }
-            if !hotkey.register(keyCode: spec.keyCode, modifiers: spec.modifiers) {
-                Log.app.error("Could not register hotkey \(config.general.hotkey, privacy: .public)")
-            }
-        }
-
+        // Hotkeys in an order that lets a combo move between owners in one save: the `hotkeys`
+        // bindings let go of theirs, plugins take theirs, then the launcher's, then the bindings
+        // again. Each step retries what failed before (another app may have let go meanwhile).
+        bindings.release()
         plugins.apply(config, previous: previous)
         if previous?.plugins.install != config.plugins.install { syncPlugins() }
-
-        let reserved = [(owner: "the hop hotkey", hotkey: config.general.hotkey)] + plugins.reservedHotkeys(config)
-        let signature = reserved.map { "\($0.owner)=\($0.hotkey)" }
-        if appliedBindings?.map != config.hotkeys || appliedBindings?.reserved != signature {
-            appliedBindings = (config.hotkeys, signature)
-            bindings.apply(config.hotkeys, reserved: reserved)
-            for p in bindings.problems { Log.app.error("hotkeys: \(p, privacy: .public)") }
+        if applyLauncherHotkey(config.general.hotkey), !plugins.hotkeyProblems.isEmpty {
+            plugins.registerHotkeys(config) // the old launcher combo is free now
         }
+        let reserved = [(owner: "the hop hotkey", hotkey: config.general.hotkey)] + plugins.reservedHotkeys(config)
+        bindings.apply(config.hotkeys, reserved: reserved)
+        for p in bindings.problems { Log.app.error("hotkeys: \(p, privacy: .public)") }
 
         Updater.shared.apply(config.updates)
 
@@ -404,6 +400,40 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             if launcher.isVisible { launcher.reload() }
             settingsWindow.configDidChange()
         }
+    }
+
+    /// Registers `general.hotkey` (cmd+space when it is not a hotkey) unless it already is. The
+    /// new combo is taken before the old one is let go, so a combo another app holds leaves the
+    /// launcher on the old one, with a Setup row. True when the old combo was let go.
+    @discardableResult
+    private func applyLauncherHotkey(_ text: String) -> Bool {
+        let parsed = HotkeySpec.parse(text)
+        let spec = parsed ?? HotkeySpec.parse("cmd+space")!
+        let invalid = parsed == nil ? "general.hotkey: \"\(text)\" is not a hotkey, using cmd+space" : nil
+        if let invalid { Log.app.error("\(invalid, privacy: .public)") }
+        guard spec != hotkeySpec || hotkey == nil else {
+            hotkeyProblem = invalid
+            return false
+        }
+        let next = GlobalHotkey { [weak self] in self?.launcher.toggle() }
+        guard next.register(keyCode: spec.keyCode, modifiers: spec.modifiers) else {
+            Log.app.error("Could not register hotkey \(text, privacy: .public)")
+            hotkeyProblem = "general.hotkey: \(parsed == nil ? "cmd+space" : text) is taken by another app or macOS"
+                + (hotkey == nil ? "" : ", the launcher keeps its old hotkey")
+            return false
+        }
+        let released = hotkey != nil
+        hotkey?.unregister()
+        hotkey = next
+        hotkeySpec = spec
+        hotkeyProblem = invalid
+        return released
+    }
+
+    /// The config's error or warnings changed but not the config: the Setup rows and Settings show it.
+    private func configStatusDidChange() {
+        if launcher.isVisible { launcher.reload() }
+        settingsWindow.configDidChange()
     }
 
     private func runSettingsAction(_ action: SettingsAction) {

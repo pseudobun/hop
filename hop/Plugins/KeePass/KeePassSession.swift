@@ -102,6 +102,8 @@ final class KeePassManager {
     private let settings: AppSettings
     private var sessions: [String: KeePassSession] = [:]
     private var observers: [NSObjectProtocol] = []
+    /// `autoLock` and `lockAfterMinutes` the lock timers were last set for.
+    private var lockSettings: (autoLock: Bool, minutes: Int)?
     var onChange: (() -> Void)?
 
     init(settings: AppSettings) {
@@ -145,6 +147,25 @@ final class KeePassManager {
     }
 
     func lockAll() { sessions.values.forEach { $0.lock() } }
+
+    /// The config changed. Turned off, every database locks; a database no longer listed locks
+    /// and is forgotten (no unlocked session outlives its config). New lock settings restart the
+    /// timers of unlocked databases, or cancel them when autoLock is off.
+    func apply(_ config: HopConfig.KeePass, enabled: Bool) {
+        let listed = Set(config.allDatabases.map(\.expandedPath))
+        for (path, session) in sessions where !enabled || !listed.contains(path) {
+            session.lock()
+            if !listed.contains(path) { sessions[path] = nil }
+        }
+        let lock = (autoLock: config.autoLock, minutes: config.lockAfterMinutes)
+        if let old = lockSettings, old != lock {
+            for session in sessions.values where session.state == .unlocked { session.touch() }
+        }
+        lockSettings = lock
+    }
+
+    /// Unlocked databases, by path.
+    var unlockedPaths: Set<String> { Set(sessions.filter { $0.value.state == .unlocked }.keys) }
 
     private func autoLockAll() {
         if settings.data.keepass.autoLock { lockAll() }

@@ -108,8 +108,18 @@ final class SettingsController: NSObject, NSWindowDelegate, NSTableViewDataSourc
         }
         reloadSidebar()
         showPage()
-        NSApp.activate()
+        bringToFront()
+    }
+
+    /// hop is an accessory app and its launcher never activates it, so the app in front never
+    /// yields: cooperative `NSApp.activate()` is refused and the window opens (or stays) behind
+    /// it. Activating regardless and ordering the window in regardless brings it up every time,
+    /// also when it is already open behind other windows.
+    private func bringToFront() {
+        if window.isMiniaturized { window.deminiaturize(nil) }
+        NSApp.activate(ignoringOtherApps: true)
         window.makeKeyAndOrderFront(nil)
+        window.orderFrontRegardless()
     }
 
     func toggle() {
@@ -136,7 +146,7 @@ final class SettingsController: NSObject, NSWindowDelegate, NSTableViewDataSourc
         if wasVisible {
             reloadSidebar()
             showPage()
-            window.makeKeyAndOrderFront(nil)
+            bringToFront()
         }
     }
 

@@ -164,8 +164,12 @@ final class AppSettings {
     private(set) var warnings: [ConfigIssue] = []
 
     @ObservationIgnored var onChange: ((HopConfig, HopConfig) -> Void)?
+    /// `error` or `warnings` changed while the config itself did not (a broken save, its fix,
+    /// a typo): what shows them (the launcher's Setup rows, Settings) refreshes.
+    @ObservationIgnored var onStatusChange: (() -> Void)?
     @ObservationIgnored let url: URL
     @ObservationIgnored private var watcher: FileWatcher?
+    @ObservationIgnored private var envWatcher: FileWatcher?
     /// The problem last shown in the HUD, so a save that changes nothing stays quiet.
     @ObservationIgnored private var announced: ConfigIssue?
 
@@ -182,23 +186,25 @@ final class AppSettings {
         load()
     }
 
-    /// Creates the template if needed, loads it and starts watching its directory
-    /// (editors save by replacing the file).
+    /// Creates the template if needed, loads it (a problem in it shows in the HUD, so hop does not
+    /// run on defaults without a word) and starts watching it and its `.env`.
     func start() {
         if !FileManager.default.fileExists(atPath: url.path) { writeTemplate() }
-        load()
+        load(announce: true)
         watch()
     }
 
     /// `announce` (after a save) shows a new error or warning in the HUD right away.
     func load(announce: Bool = false) {
-        let old = data
-        defer { if announce { announceProblem() } }
+        let old = data, oldError = error, oldWarnings = warnings
+        defer {
+            if announce { announceProblem() }
+            if old != data { onChange?(old, data) } else if oldError != error || oldWarnings != warnings { onStatusChange?() }
+        }
         guard let raw = try? Data(contentsOf: url) else {
-            data = HopConfig()
-            error = nil
-            warnings = []
-            if old != data { onChange?(old, data) }
+            // Gone for a moment (an editor or a dotfiles sync replacing it): keep the last good
+            // config rather than turning every setting back to its default.
+            Log.app.error("config: \(self.url.path, privacy: .public) can't be read, keeping the last config")
             return
         }
         let text = String(decoding: raw, as: UTF8.self)
@@ -214,9 +220,8 @@ final class AppSettings {
             self.error = ConfigDiagnostics.issue(for: error, in: text)
             warnings = []
             Log.app.error("config: \(self.error?.message ?? "", privacy: .public)")
-            return // keep the last good config
+            // `data` stays: the last good config keeps applying.
         }
-        if old != data { onChange?(old, data) }
     }
 
     /// Writes one value into the file (comments and layout kept) and loads it, so it applies
@@ -249,6 +254,12 @@ final class AppSettings {
     private func watch() {
         watcher?.stop()
         watcher = FileWatcher(url: url) { [weak self] in self?.load(announce: true) }
+        // `${NAME}` values come from `.env`, often a symlink into dotfiles: watch the file it
+        // points to (and that folder, for when it is replaced or created).
+        envWatcher?.stop()
+        envWatcher = FileWatcher(url: ConfigEnv.file(beside: url).resolvingSymlinksInPath()) { [weak self] in
+            self?.load(announce: true)
+        }
     }
 
     private func writeTemplate() {
