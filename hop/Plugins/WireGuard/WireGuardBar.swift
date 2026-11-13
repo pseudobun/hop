@@ -157,6 +157,20 @@ final class WireGuardBar: NSView, LauncherStrip {
         selected = nil
     }
 
+    /// `wireguard` changed in the config: turned off (or the bar is), the bar empties and stops
+    /// polling at once; otherwise the pills take the new flags and key labels, and a bar turned
+    /// on while the launcher is open starts polling.
+    func configDidChange() {
+        guard config().enabled && config().bar else {
+            stop()
+            selected = nil
+            show([])
+            return
+        }
+        rebuild()
+        if poll == nil, window?.isVisible == true { launcherDidShow() }
+    }
+
     private func stop() {
         poll?.cancel()
         poll = nil

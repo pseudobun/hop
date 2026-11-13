@@ -43,6 +43,10 @@ final class KeePassPlugin: BuiltinPlugin {
         manager = KeePassManager(settings: host.settings)
     }
 
+    func apply(_ config: HopConfig, previous: HopConfig?, enabled: Bool) {
+        manager?.apply(config.keepass, enabled: enabled)
+    }
+
     func mode() -> Mode {
         KeePassMode(manager: manager, pins: pins, sensitivity: host!.settings.data.general.sensitivity,
                     openConfig: { [weak host] in host?.openConfig() })

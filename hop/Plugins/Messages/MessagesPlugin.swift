@@ -35,8 +35,9 @@ final class MessagesPlugin: BuiltinPlugin {
     func commands() -> [Item] { MessagesCommands.items(host!.services) }
 
     func hotkeys(_ config: HopConfig) -> [PluginHotkey] {
-        let minutes = config.messages.latestMinutes
-        return [PluginHotkey(owner: "messages.pasteHotkey", spec: config.messages.pasteHotkey) { [weak self] in
+        [PluginHotkey(owner: "messages.pasteHotkey", spec: config.messages.pasteHotkey) { [weak self] in
+            // Read when pressed: the hotkey stays registered while only latestMinutes changes.
+            let minutes = self?.host?.settings.data.messages.latestMinutes ?? config.messages.latestMinutes
             Task {
                 let result = await MessagesCommands.pasteLatest(within: minutes) { self?.host?.launcher.hide() }
                 result.showHUD()
