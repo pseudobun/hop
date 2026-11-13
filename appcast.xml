@@ -6,6 +6,18 @@
     <description>hop releases</description>
     <language>en</language>
     <item>
+      <title>hop 0.1.0-beta.17</title>
+      <pubDate>Fri, 13 Nov 2026 00:20:16 +0000</pubDate>
+      <sparkle:version>160</sparkle:version>
+      <sparkle:shortVersionString>0.1.0-beta.17</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
+      <description><![CDATA[<style>body{font:13px -apple-system,sans-serif;margin:12px 14px;color:#222}h3{font-size:13px;margin:12px 0 4px}ul{padding-left:18px;margin:4px 0}li{margin:2px 0}code{font:12px ui-monospace,monospace}a{color:#0a64d0}@media(prefers-color-scheme:dark){body{color:#ddd}a{color:#6ab0ff}}</style><h3>Features</h3>
+<ul>
+<li><b>ui:</b> add liquid glass design and a real entrance fade (<a href="https://github.com/pseudobun/hop/issues/52">#52</a>) (<a href="https://github.com/pseudobun/hop/commit/58cada49e61eb47fd6d17ba824c8b472ed84c937">58cada4</a>)</li>
+</ul><p><a href="https://github.com/pseudobun/hop/releases/tag/v0.1.0-beta.17">Release on GitHub</a></p>]]></description>
+      <enclosure url="https://github.com/pseudobun/hop/releases/download/v0.1.0-beta.17/hop-0.1.0-beta.17-macos.zip" type="application/octet-stream" sparkle:edSignature="95hpWcay2uNHc2E8hz+APl51vyjFQZmvV9xOZ2Xd9W5I0Q+yuf5gDamDVBJlFcbeaD1P9XHwmfkKHtk9n4i8Dw==" length="5213145"/>
+    </item>
+    <item>
       <title>hop 0.1.0-beta.16</title>
       <pubDate>Thu, 12 Nov 2026 18:53:15 +0000</pubDate>
       <sparkle:version>158</sparkle:version>
