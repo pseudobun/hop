@@ -18,6 +18,8 @@ nonisolated struct HopConfig: Decodable, Equatable, Sendable {
         /// "og", "og-light", "modern", "solarpunk", "cyberpunk" or a custom theme's file name
         /// in `~/.config/hop/themes/`; see Theme and CustomThemes.
         var theme: ThemeName = .og
+        /// macOS 26 Liquid Glass behind every hop window; false: the flat, mostly opaque look.
+        var glass = true
 
         /// A built-in theme or a custom one (its file name without the extension).
         nonisolated struct ThemeName: RawRepresentable, Decodable, Hashable, Sendable, ExpressibleByStringLiteral {
@@ -110,7 +112,7 @@ nonisolated extension HopConfig.Updates {
 }
 
 nonisolated extension HopConfig.General {
-    private enum Keys: String, CodingKey { case hotkey, sensitivity, popToRootSeconds, keepQueryFor, fallbacks, openAtLogin, menuBarIcon, theme }
+    private enum Keys: String, CodingKey { case hotkey, sensitivity, popToRootSeconds, keepQueryFor, fallbacks, openAtLogin, menuBarIcon, theme, glass }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: Keys.self), d = Self()
         hotkey = try c.value(.hotkey, d.hotkey)
@@ -121,6 +123,7 @@ nonisolated extension HopConfig.General {
         openAtLogin = try c.value(.openAtLogin, d.openAtLogin)
         menuBarIcon = try c.value(.menuBarIcon, d.menuBarIcon)
         theme = try c.value(.theme, d.theme)
+        glass = try c.value(.glass, d.glass)
     }
 }
 
@@ -281,6 +284,9 @@ final class AppSettings {
         // a .json5 file in themes/ beside this file (`hop themes template` prints one).
         // The Theme command previews them all and can import or start a new one.
         theme: "og",
+        // Liquid Glass (macOS 26) behind the launcher, clipboard, notes and HUD: the wallpaper
+        // shows through, tinted with the theme. false: the flat, mostly opaque look.
+        glass: true,
       },
 
       // New versions from GitHub (Sparkle), for builds from Homebrew or a release zip (builds

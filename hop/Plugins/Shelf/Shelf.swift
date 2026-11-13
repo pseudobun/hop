@@ -140,11 +140,9 @@ final class Shelf: NSObject, NSWindowDelegate, NSDraggingSource {
     // MARK: - Layout
 
     private func build() {
-        let glass = NSGlassEffectView()
-        glass.cornerRadius = panel.frameCornerRadius
-        glass.tintColor = Theme.background.withAlphaComponent(0.78)
+        let (glass, surface) = Glass.surface(cornerRadius: panel.frameCornerRadius)
         dropView.wantsLayer = true
-        dropView.layer?.backgroundColor = Theme.background.withAlphaComponent(0.86).cgColor
+        dropView.layer?.backgroundColor = surface.layer?.backgroundColor
         dropView.layer?.cornerRadius = panel.frameCornerRadius
         dropView.layer?.borderColor = Theme.info.cgColor
         dropView.shelf = self

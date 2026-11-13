@@ -268,6 +268,11 @@ hop ships OG, OG Light, Modern, Solarpunk and Cyberpunk; you can add your own. A
 
 The Theme command lists your themes next to the built-in ones (with a live preview), and can start a new one from the current theme (**New Theme**), import theme files and their fonts (**Import Theme…**, `.json5`, `.ttf`, `.otf`), or open the folder. Font files anywhere in the folder are loaded for hop only. Saving a theme file applies it at once. [`examples/theme.json5`](examples/theme.json5) lists every key; `hop themes template [base]` prints one, `hop themes` lists them all and `hop themes check` reports problems.
 
+Every theme is drawn on macOS 26 Liquid Glass: the wallpaper shows through the launcher, the
+clipboard history, notes and the HUD, tinted with the theme's background, and the ⌘K action
+panel floats as its own piece of glass. `general.glass: false` (or **Liquid Glass** under
+Settings → Appearance) brings back the flat, mostly opaque look. It applies at once.
+
 ## Permissions
 
 Run **hop Permissions** (it opens by itself on first launch); ↵ shows each macOS prompt, **Grant All** asks for all of them.

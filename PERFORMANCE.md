@@ -113,15 +113,48 @@ are judged from the code.
 
 ## Motion
 
-The launcher and the clipboard history fade in (180 ms), the ⌘K action panel fades in (100 ms)
-and the HUD fades in. The selected row's highlight glides to the next row on ↑↓ and clicks
-(160 ms); new results place it at once. Reduce Motion turns all of it off.
+The launcher, the clipboard history and the HUD come in as Spotlight does: a fade (200 ms,
+CSS `ease`; HUD 180 ms) while the content settles from 96.5 % to full size (a soft spring,
+about 240 ms). They leave the same way, quicker: a 130 ms fade while shrinking to 98.5 % (HUD
+200 ms). The ⌘K action panel fades in (100 ms). The selected row's highlight glides to the next
+row on ↑↓ and clicks (160 ms); new results place it at once. Reduce Motion turns all of it off.
+
+The fade is the window's alpha (so glass, content and window shadow fade together), stepped
+once per display frame by `Motion`'s `WindowFade` and timed from the first frame the window is
+on screen. AppKit's `animator().alphaValue` starts its clock when called instead, and after a
+hotkey press the first frame lands about 40 ms later (the show's layout and drawing), so the fade
+began at 22 % and was at 61 % two frames on: sampled from the window server, it read as a pop.
+Now every step (7 %, 22 %, 41 %, 58 % …) reaches the screen; `-DebugFadeProbe 5
+-DebugFadeFrames <dir>` prints the alpha per frame and records the frames. A window on its way
+out still has the keyboard, so anything that sends ⌘V or captures the screen first calls
+`Motion.finishExits()`. Scale animations run on the render server.
 
 None of it draws: the highlight is one `CALayer` in a layer-hosting view under the rows
 (`SelectionGlide`), so a move changes one layer's frame and the render server animates it, and
-rows no longer redraw their own selection. Window fades are the window server's. Measured with
-`just bench` (2026-11-12): ten ↑↓ moves cost 0.2 ms of main-thread time in all; show + hide went
-from about 0.8 to 0.95 ms; typing, footprint and the other scenarios did not move.
+rows no longer redraw their own selection. Measured with `just bench` (2026-11-12): ten ↑↓ moves
+cost 0.2 ms of main-thread time in all; show + hide went from about 0.8 to 0.95 ms; typing,
+footprint and the other scenarios did not move.
+
+## Liquid Glass
+
+With `general.glass` (the default) hop's windows are `NSGlassEffectView`s with a light veil of the
+theme's background (40 %, notes 60 %) instead of a mostly opaque one (82–86 %); the ⌘K panel is
+its own piece of glass. Glass is composited by the window server, so it costs no main-thread time.
+`just bench`, two runs each of `origin/beta` and this change (2026-11-13, medians, ms; the
+`Permission.missing` probe was left out of both, as it hangs on a locked screen):
+
+| Scenario | before | after |
+|---|---|---|
+| show + hide | 0.53 / 0.95 | 0.38 / 0.43 |
+| type "10 km to mi" (11 keys) | 16.68 / 16.80 | 16.64 / 16.77 |
+| move ↓↓↓↓↓ ↑↑↑↑↑ | 0.22 / 0.22 | 0.21 / 0.22 |
+| clipboard show + hide | 5.92 / 5.97 | 4.96 / 4.96 |
+| notes show + hide | 14.04 / 13.97 | 19.18 / 14.29 |
+| emoji: open, type "heart" | 11.01 / 11.08 | 2.70 / 2.62 |
+| footprint | 67.5 / 67.4 MB | 67.8 / 67.6 MB |
+
+The rest did not move; "first show" is one sample and swings 7–33 ms on both. The faster hides
+are the exit fade: `orderOut` now runs when the fade ends, off the measured call.
 
 ## Release build at rest
 

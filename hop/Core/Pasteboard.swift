@@ -39,6 +39,8 @@ enum Pasteboard {
         pb.setString("", forType: PasteboardType.transient)
         if concealed { pb.setString("", forType: PasteboardType.concealed) }
         let ours = pb.changeCount
+        // A launcher fading out still has the keyboard: ⌘V would land in it.
+        Motion.finishExits()
 
         try? await Task.sleep(for: .milliseconds(60))
         postCommandV()

@@ -258,6 +258,8 @@ enum SettingsCatalog {
             SettingsSection([
                 f("general.theme", "Theme", .choice(themes),
                   "Applies at once. The Theme command in the launcher previews each one live. Your own themes are .json5 files in ~/.config/hop/themes/; the Theme command can start or import one."),
+                f("general.glass", "Liquid Glass", .toggle,
+                  "The wallpaper shows through the launcher, clipboard, notes and HUD, tinted with the theme. Off: the flat, mostly opaque look."),
             ]),
         ])
     }
