@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.0-beta.18](https://github.com/pseudobun/hop/compare/v0.1.0-beta.17...v0.1.0-beta.18) (2026-11-13)
+
+
+### Features
+
+* **ui:** animate wireguard switching and notes navigation ([#55](https://github.com/pseudobun/hop/issues/55)) ([1d7d04b](https://github.com/pseudobun/hop/commit/1d7d04b9a165b517edb12b0cdb75e1d21e48ee2f))
+
 ## [0.1.0-beta.17](https://github.com/pseudobun/hop/compare/v0.1.0-beta.16...v0.1.0-beta.17) (2026-11-13)
 
 
