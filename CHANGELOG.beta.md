@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.0-beta.19](https://github.com/pseudobun/hop/compare/v0.1.0-beta.18...v0.1.0-beta.19) (2026-11-13)
+
+
+### Bug Fixes
+
+* apply config changes live and bring settings to front ([#59](https://github.com/pseudobun/hop/issues/59)) ([569f8e5](https://github.com/pseudobun/hop/commit/569f8e567b2e45ab272cb0117b3c71464c0ac841))
+
 ## [0.1.0-beta.18](https://github.com/pseudobun/hop/compare/v0.1.0-beta.17...v0.1.0-beta.18) (2026-11-13)
 
 
