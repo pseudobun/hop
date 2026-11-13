@@ -26,7 +26,9 @@ final class ExternalPlugin: HopPlugin {
     private weak var host: PluginHost?
     /// Open views, newest last, so a `render` reaches the one it belongs to.
     private var modes: [WeakMode] = []
-    private var timers: [Timer] = []
+    /// Background commands' timers; `timersOff` until `apply` starts them for an enabled plugin.
+    private(set) var timers: [Timer] = []
+    private var timersOff = true
     private var lastSettings: JSONValue?
     /// Sent with `rootItems`: extra root commands and Upcoming items.
     private var rootItems: [PluginProtocol.Item] = []
@@ -120,16 +122,21 @@ final class ExternalPlugin: HopPlugin {
     }
 
     func apply(_ config: HopConfig, previous: HopConfig?, enabled: Bool) {
-        timers.forEach { $0.invalidate() }
-        timers = []
         let current = config.plugins.settings[manifest.id]
+        let changed = current != lastSettings
         // New settings reach the program through `initialize`: start it again next time.
-        if previous != nil, current != lastSettings { process.stop() }
+        if previous != nil, changed { process.stop() }
         lastSettings = current
         guard enabled else {
+            stopTimers()
             process.stop()
             return
         }
+        // Saves that leave this plugin alone keep its timers, or frequent saves would keep
+        // pushing its background commands back.
+        guard timersOff || changed else { return }
+        stopTimers()
+        timersOff = false
         for command in manifest.commands where command.kind == .background {
             guard let seconds = PluginManifest.seconds(command.interval) else { continue }
             let timer = Timer(timeInterval: seconds, repeats: true) { [weak self] _ in
@@ -142,9 +149,14 @@ final class ExternalPlugin: HopPlugin {
     }
 
     func stop() {
+        stopTimers()
+        process?.stop()
+    }
+
+    private func stopTimers() {
         timers.forEach { $0.invalidate() }
         timers = []
-        process?.stop()
+        timersOff = true
     }
 
     func setAway(_ away: Bool) {

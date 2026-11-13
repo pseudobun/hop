@@ -74,16 +74,18 @@ final class EmojiMode: Mode {
     private let skinTone: SkinTone
     /// OpenAI model and reasoning effort for phrases the index can't place; nil is off.
     private let ai: (model: String, reasoning: String)?
-    /// Model picks per query, as index entries; kept for the session.
-    private static var aiCache: [String: [Int]] = [:]
+    /// Model picks per query, as index entries; kept for the session, for `aiCacheModel`.
+    private(set) static var aiCache: [String: [Int]] = [:]
+    /// The model and reasoning effort `aiCache` and `warned` are for: another one starts over.
+    private static var aiCacheModel: String?
     private var aiTask: Task<Void, Never>?
     /// The query `aiTask` is for, and whether its request is out (shown as a placeholder).
     private var aiQuery: String?
     private var aiWaiting = false
     /// Queries sent to the model by hand (⌘↵), though the index matched something.
     private var forcedAI: Set<String> = []
-    /// One HUD per launch for a failing API (bad key, retired model), not one per keystroke.
-    private static var warned = false
+    /// One HUD per model for a failing API (bad key, retired model), not one per keystroke.
+    private(set) static var warned = false
     private weak var context: LauncherContext?
     private var index: EmojiIndex?
     /// Shared across pushes: built once per launch, at first use.
@@ -94,7 +96,25 @@ final class EmojiMode: Mode {
         self.skinTone = skinTone
         self.ai = ai
         self.index = index ?? Self.cached
+        if let ai { Self.useModel(ai.model, reasoning: ai.reasoning) }
     }
+
+    /// Picks and the failure HUD belong to one model: `emoji.aiModel` or `aiReasoning` changed,
+    /// so the next query asks the new one and a failure of it shows.
+    static func useModel(_ model: String, reasoning: String) {
+        let key = "\(model)|\(reasoning)"
+        guard aiCacheModel != key else { return }
+        aiCacheModel = key
+        aiCache = [:]
+        warned = false
+    }
+
+    #if DEBUG
+    static func debugSeedAI(_ query: String, _ picks: [Int], warned: Bool) {
+        aiCache[aiKey(query)] = picks
+        self.warned = warned
+    }
+    #endif
 
     func didEnter(_ context: LauncherContext) {
         self.context = context
