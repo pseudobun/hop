@@ -6,6 +6,18 @@
     <description>hop releases</description>
     <language>en</language>
     <item>
+      <title>hop 0.1.0-beta.21</title>
+      <pubDate>Sat, 14 Nov 2026 12:31:28 +0000</pubDate>
+      <sparkle:version>168</sparkle:version>
+      <sparkle:shortVersionString>0.1.0-beta.21</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
+      <description><![CDATA[<style>body{font:13px -apple-system,sans-serif;margin:12px 14px;color:#222}h3{font-size:13px;margin:12px 0 4px}ul{padding-left:18px;margin:4px 0}li{margin:2px 0}code{font:12px ui-monospace,monospace}a{color:#0a64d0}@media(prefers-color-scheme:dark){body{color:#ddd}a{color:#6ab0ff}}</style><h3>Features</h3>
+<ul>
+<li><b>settings:</b> add an app picker to app list fields (<a href="https://github.com/pseudobun/hop/issues/64">#64</a>) (<a href="https://github.com/pseudobun/hop/commit/3278dc1c3007484f288a29995387dee0aa54344e">3278dc1</a>)</li>
+</ul><p><a href="https://github.com/pseudobun/hop/releases/tag/v0.1.0-beta.21">Release on GitHub</a></p>]]></description>
+      <enclosure url="https://github.com/pseudobun/hop/releases/download/v0.1.0-beta.21/hop-0.1.0-beta.21-macos.zip" type="application/octet-stream" sparkle:edSignature="UafiS438I5oLjeNXjJv89Tg9RJsZ9S35j7QuMAe2Z2q9qyCdMAEU59z7+gIaR8Fy4rfs3nqXK/ZGDMy8ce3DAQ==" length="5243332"/>
+    </item>
+    <item>
       <title>hop 0.1.0-beta.20</title>
       <pubDate>Fri, 13 Nov 2026 20:56:07 +0000</pubDate>
       <sparkle:version>166</sparkle:version>
