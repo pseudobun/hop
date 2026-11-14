@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.0-beta.21](https://github.com/pseudobun/hop/compare/v0.1.0-beta.20...v0.1.0-beta.21) (2026-11-14)
+
+
+### Features
+
+* **settings:** add an app picker to app list fields ([#64](https://github.com/pseudobun/hop/issues/64)) ([3278dc1](https://github.com/pseudobun/hop/commit/3278dc1c3007484f288a29995387dee0aa54344e))
+
 ## [0.1.0-beta.20](https://github.com/pseudobun/hop/compare/v0.1.0-beta.19...v0.1.0-beta.20) (2026-11-13)
 
 
