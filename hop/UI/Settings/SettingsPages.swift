@@ -29,9 +29,14 @@ struct SettingsField {
     var fallback: Any?
     /// Checks the value as it is typed (`SettingsChecks`); an error is not saved.
     var check: SettingsCheck?
+    /// A `.text` or `.list` of apps: an app picker beside the field fills in what the setting
+    /// matches on (a name or a bundle identifier). Typing still works.
+    var apps: AppPicker.Emit?
 
-    init(_ path: String, _ label: String, _ kind: Kind, help: String? = nil, hidden: Bool = false, check: SettingsCheck? = nil) {
+    init(_ path: String, _ label: String, _ kind: Kind, help: String? = nil, hidden: Bool = false, check: SettingsCheck? = nil,
+         apps: AppPicker.Emit? = nil) {
         self.init(path: path.split(separator: ".").map(String.init), label, kind, help: help, hidden: hidden, check: check)
+        self.apps = apps
     }
 
     /// A key path whose keys may contain dots (`["plugins", "dev.you.plugin", "token"]`).
@@ -82,9 +87,10 @@ enum SettingsRow {
     case pluginEnabled
 
     /// A config value with a control: `.setting("notes.folder", "Folder", .text())`.
+    /// `apps`: an app picker beside the field (`.bundleID` for lists of bundle identifiers).
     static func setting(_ path: String, _ label: String, _ kind: SettingsField.Kind, _ help: String? = nil,
-                        hidden: Bool = false, check: SettingsCheck? = nil) -> SettingsRow {
-        .field(SettingsField(path, label, kind, help: help, hidden: hidden, check: check))
+                        hidden: Bool = false, check: SettingsCheck? = nil, apps: AppPicker.Emit? = nil) -> SettingsRow {
+        .field(SettingsField(path, label, kind, help: help, hidden: hidden, check: check, apps: apps))
     }
 }
 

@@ -726,13 +726,13 @@ final class SettingsController: NSObject, NSWindowDelegate, NSTableViewDataSourc
             row = rowStack([textColumn(field.label, field.help), toggle])
         case .text(let placeholder):
             let text = textField(field, value: value as? String ?? "", placeholder: placeholder, width: 240)
-            row = rowStack([checkedColumn(field, value: value as? String ?? ""), text])
+            row = rowStack([checkedColumn(field, value: value as? String ?? ""), appField(text, field: field, multiple: false)])
         case .list(let placeholder):
             let joined = (value as? [String] ?? []).joined(separator: ", ")
             let text = textField(field, value: joined, placeholder: placeholder, width: 240)
             bindings.removeLast()
             bindings.append((field, text, { text.stringValue = ($0 as? [String] ?? []).joined(separator: ", ") }))
-            row = rowStack([checkedColumn(field, value: value as? [String] ?? []), text])
+            row = rowStack([checkedColumn(field, value: value as? [String] ?? []), appField(text, field: field, multiple: true)])
         case .number(let min, let max, let unit):
             let number = value as? Int ?? 0
             let text = textField(field, value: String(number), placeholder: "", width: 72)
@@ -857,6 +857,25 @@ final class SettingsController: NSObject, NSWindowDelegate, NSTableViewDataSourc
         fieldsByControl[ObjectIdentifier(text)] = field
         bindings.append((field, text, { text.stringValue = $0 as? String ?? "" }))
         return text
+    }
+
+    /// `text` with an app picker beside it when the field holds apps (`SettingsField.apps`), else
+    /// `text` alone. A pick replaces the field's text (`multiple`: adds to its comma-separated
+    /// list) and commits it like a finished edit. Typing still works.
+    private func appField(_ text: NSTextField, field: SettingsField, multiple: Bool) -> NSView {
+        guard let emit = field.apps else { return text }
+        let pick = AppPicker.button { [weak self] b in
+            let current = text.stringValue.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+            AppPicker.show(from: b, multiple: multiple, emit: emit, exclude: multiple ? Set(current) : []) { apps in
+                let values = apps.compactMap(emit.value)
+                guard let first = values.first else { return }
+                text.stringValue = (multiple ? current + values : [first]).joined(separator: ", ")
+                self?.commit(field, text.stringValue, revert: { text.stringValue = $0 })
+            }
+        }
+        let stack = NSStackView(views: [text, pick])
+        stack.spacing = 8
+        return stack
     }
 
     private func button(_ title: String, _ action: @escaping () -> Void) -> NSButton {
