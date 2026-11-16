@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.0-beta.22](https://github.com/pseudobun/hop/compare/v0.1.0-beta.21...v0.1.0-beta.22) (2026-11-16)
+
+
+### Features
+
+* **emoji:** add remove from recently used to the picker ([#67](https://github.com/pseudobun/hop/issues/67)) ([2fa6be1](https://github.com/pseudobun/hop/commit/2fa6be180c0458f5377c8183f0aed1006bd91755))
+
 ## [0.1.0-beta.21](https://github.com/pseudobun/hop/compare/v0.1.0-beta.20...v0.1.0-beta.21) (2026-11-14)
 
 
