@@ -69,7 +69,7 @@ struct EmojiTests {
         #expect(SkinTone(config: "🏿") == .dark && SkinTone(config: "3") == .medium && SkinTone(config: "x") == .none)
     }
 
-    @Test func modeAppliesToneAndOrdersRecent() throws {
+    @Test func modeAppliesToneAndOrdersRecent() async throws {
         let url = FileManager.default.temporaryDirectory.appending(path: "hop-emoji-\(UUID().uuidString).json")
         defer { try? FileManager.default.removeItem(at: url) }
         let usage = EmojiUsage(store: JSONStore(url: url))
@@ -90,6 +90,16 @@ struct EmojiTests {
             if case .emoji(let e) = item.icon { e } else { "" }
         }
         #expect(glyphs == ["🎉", "🔥", "👍🏽"])
+        // Used emoji offer removal from the recent list; unused ones don't.
+        let remove = try #require(browse[0].items[0].actions.first { $0.title == "Remove from Recently Used" })
+        let unused = try #require(browse.dropFirst(2).flatMap(\.items).first { item in
+            if case .emoji(let e) = item.icon { !["🎉", "🔥", "👍🏽"].contains(e) } else { false }
+        })
+        #expect(!unused.actions.contains { $0.title == "Remove from Recently Used" })
+        _ = await remove.perform()
+        #expect(usage.recent(9) == ["🔥", "👍"])
+        #expect(EmojiUsage(store: JSONStore(url: url)).recent(9) == ["🔥", "👍"])
+        usage.record("🎉", now: t.addingTimeInterval(30))
         // Use lifts an emoji among equals: 👍 and 👎 match "thumbs" alike.
         #expect(mode.sections(for: "thumbs")[0].items.first?.title == "Thumbs up")
         for _ in 0..<3 { usage.record("👎") }
