@@ -6,6 +6,18 @@
     <description>hop releases</description>
     <language>en</language>
     <item>
+      <title>hop 0.1.0-beta.22</title>
+      <pubDate>Mon, 16 Nov 2026 15:57:40 +0000</pubDate>
+      <sparkle:version>170</sparkle:version>
+      <sparkle:shortVersionString>0.1.0-beta.22</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
+      <description><![CDATA[<style>body{font:13px -apple-system,sans-serif;margin:12px 14px;color:#222}h3{font-size:13px;margin:12px 0 4px}ul{padding-left:18px;margin:4px 0}li{margin:2px 0}code{font:12px ui-monospace,monospace}a{color:#0a64d0}@media(prefers-color-scheme:dark){body{color:#ddd}a{color:#6ab0ff}}</style><h3>Features</h3>
+<ul>
+<li><b>emoji:</b> add remove from recently used to the picker (<a href="https://github.com/pseudobun/hop/issues/67">#67</a>) (<a href="https://github.com/pseudobun/hop/commit/2fa6be180c0458f5377c8183f0aed1006bd91755">2fa6be1</a>)</li>
+</ul><p><a href="https://github.com/pseudobun/hop/releases/tag/v0.1.0-beta.22">Release on GitHub</a></p>]]></description>
+      <enclosure url="https://github.com/pseudobun/hop/releases/download/v0.1.0-beta.22/hop-0.1.0-beta.22-macos.zip" type="application/octet-stream" sparkle:edSignature="gNmQmuxr5MQd3foRdb/MQa4F8Dt53rLd05Faz/DRYJX0k/dnqMcsGVfp2GWHoH930hqlVBdZrVdoO0oODzF+AQ==" length="5244359"/>
+    </item>
+    <item>
       <title>hop 0.1.0-beta.21</title>
       <pubDate>Sat, 14 Nov 2026 12:31:28 +0000</pubDate>
       <sparkle:version>168</sparkle:version>
