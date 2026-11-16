@@ -46,6 +46,12 @@ final class EmojiUsage {
         store.save(entries)
     }
 
+    /// Forgets an emoji: off Recently and Frequently Used, no lift in search.
+    func remove(_ emoji: String) {
+        guard entries.removeValue(forKey: emoji) != nil else { return }
+        store.save(entries)
+    }
+
     func score(_ emoji: String, now: Date = Date()) -> Double {
         entries[emoji].map { Frecency.score(anchor: $0.anchor, at: now.timeIntervalSince1970) } ?? 1
     }
@@ -239,6 +245,13 @@ final class EmojiMode: Mode {
         if entry.takesSkinTone {
             actions.append(Action(title: "Choose Skin Tone", symbol: "hand.raised", shortcut: .cmd("t")) {
                 .push(EmojiToneMode(index: index, entry: i, usage: usage, selected: tone))
+            })
+        }
+        if usage.entries[base] != nil {
+            actions.append(Action(title: "Remove from Recently Used", symbol: "clock.badge.xmark",
+                                  shortcut: KeyCombo(key: .character("x"), modifiers: .control), style: .destructive) {
+                usage.remove(base)
+                return .reload
             })
         }
         return Item(id: id, title: name, subtitle: entry.keywords.prefix(5).joined(separator: " · "), icon: .emoji(emoji),
