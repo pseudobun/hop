@@ -87,6 +87,24 @@ struct MarkdownEditingTests {
         #expect(MarkdownEditing.toggleTask("  milk") == "  - [ ] milk")
     }
 
+    @Test func findsTaskBoxes() {
+        #expect(MarkdownEditing.taskBox("- [ ] milk")?.location == 2)
+        #expect(MarkdownEditing.taskBox("  - [x] done")?.done == true)
+        #expect(MarkdownEditing.taskBox("- milk") == nil)
+        #expect(MarkdownEditing.taskBox("[ ] not a list") == nil)
+    }
+
+    @Test func pastesURLsOverTextAsLinks() {
+        #expect(MarkdownEditing.link(text: "hop", pasted: "https://github.com/pseudobun/hop\n") == "[hop](https://github.com/pseudobun/hop)")
+        #expect(MarkdownEditing.link(text: "wiki", pasted: "https://en.wikipedia.org/wiki/A_(b)") == "[wiki](<https://en.wikipedia.org/wiki/A_(b)>)")
+        #expect(MarkdownEditing.link(text: "mail", pasted: "mailto:a@b.c") == "[mail](mailto:a@b.c)")
+        #expect(MarkdownEditing.link(text: "hop", pasted: "just text") == nil)
+        #expect(MarkdownEditing.link(text: "hop", pasted: "a:b") == nil)
+        #expect(MarkdownEditing.link(text: "https://old.example", pasted: "https://new.example") == nil)
+        #expect(MarkdownEditing.link(text: "two\nlines", pasted: "https://x.y") == nil)
+        #expect(MarkdownEditing.link(text: "  ", pasted: "https://x.y") == nil)
+    }
+
     @Test func togglesWraps() {
         #expect(MarkdownEditing.toggleWrap("x", marker: "**") == "**x**")
         #expect(MarkdownEditing.toggleWrap("**x**", marker: "**") == "x")
@@ -178,6 +196,13 @@ struct NoteStoreTests {
         #expect(NoteStore.resolve(link: "acme corp|AC", in: notes)?.title == "Acme Corp")
         #expect(NoteStore.resolve(link: "Machines/atlas.md", in: notes)?.title == "atlas")
         #expect(NoteStore.resolve(link: "nas", in: notes) == nil)
+    }
+
+    @Test func renamesWikiLinks() {
+        let text = "[[Old]] [[old|alias]] ![[Infra/Old#Top]] [[Old.md]] [[Older]] [[Old Two]] Old"
+        #expect(NoteStore.renamingLinks(text, from: "Old", to: "New $1")
+            == "[[New $1]] [[New $1|alias]] ![[Infra/New $1#Top]] [[New $1.md]] [[Older]] [[Old Two]] Old")
+        #expect(NoteStore.renamingLinks("[[a.b]] [[axb]]", from: "a.b", to: "c") == "[[c]] [[axb]]")
     }
 
     @Test func shortAges() {
