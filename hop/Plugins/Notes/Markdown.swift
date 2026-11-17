@@ -193,6 +193,32 @@ nonisolated enum MarkdownEditing {
         return indent + "- [ ] " + line.dropFirst(indent.count)
     }
 
+    /// UTF-16 offset of the `[` of the line's task box and whether it is ticked; nil when
+    /// the line is not a task.
+    static func taskBox(_ line: String) -> (location: Int, done: Bool)? {
+        for s in MarkdownStyler.spans(line) {
+            if case .task(let done) = s.span { return (s.range.location, done) }
+        }
+        return nil
+    }
+
+    /// Pasting a URL over selected text: `[text](url)`; nil when the paste is not a lone
+    /// URL or the selection is not plain one-line text.
+    static func link(text: String, pasted: String) -> String? {
+        let url = pasted.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard isURL(url), !isURL(text.trimmingCharacters(in: .whitespaces)),
+              !text.trimmingCharacters(in: .whitespaces).isEmpty, !text.contains(where: \.isNewline)
+        else { return nil }
+        let target = url.contains(")") || url.contains("(") ? "<\(url)>" : url
+        return "[\(text)](\(target))"
+    }
+
+    /// `scheme://…` or `mailto:…`, without spaces.
+    private static func isURL(_ s: String) -> Bool {
+        guard !s.isEmpty, !s.contains(where: \.isWhitespace), let scheme = URL(string: s)?.scheme?.lowercased() else { return false }
+        return s.lowercased().hasPrefix(scheme + "://") || scheme == "mailto"
+    }
+
     /// Wraps `selected` in `marker`, or unwraps it when it already is.
     static func toggleWrap(_ selected: String, marker: String) -> String {
         if selected.count >= marker.count * 2, selected.hasPrefix(marker), selected.hasSuffix(marker) {

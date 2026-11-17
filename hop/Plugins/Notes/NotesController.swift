@@ -80,6 +80,8 @@ final class NotesController: NSObject, NSWindowDelegate, NSTableViewDataSource, 
     private var forward: [String] = []
     /// The note open before the current search started; it enters history when the search is done.
     private var searchOrigin: String?
+    /// The note whose title is being edited (renamed when the edit ends).
+    private var titleEditPath: String?
 
     private static let frameName = "hop.notes"
     private static let lastNoteKey = "NotesLastNote"
@@ -166,6 +168,7 @@ final class NotesController: NSObject, NSWindowDelegate, NSTableViewDataSource, 
 
     func hide() {
         guard isVisible else { return }
+        commitTitleEdit()
         flush(force: true)
         Motion.dismiss(panel)
     }
@@ -224,11 +227,11 @@ final class NotesController: NSObject, NSWindowDelegate, NSTableViewDataSource, 
         case .search:
             let open: [(String, String)] = hits.isEmpty && !query.isEmpty ? [("Create", "↵")] : [("Open", "↵"), ("Move", "↑↓")]
             return open + [("New note", "⇧↵"), (query.isEmpty ? "Back" : "Clear", "esc")]
-        case .title: return [("Start writing", "↵"), ("Close", "esc")]
+        case .title: return currentNote == nil ? [("Start writing", "↵"), ("Close", "esc")] : [("Rename", "↵"), ("Cancel", "esc")]
         case .find: return [("Next", "⌘G"), ("Previous", "⇧⌘G"), ("Close", "esc")]
         case .edit: return [("Notes", "⌘P"), ("Actions", "⌘K"), ("Preview", "⌘E"), ("New", "⌘N"), ("Find", "⌘F"), ("Task", "⌘L"),
-                            ("Link", "⌥↵"), ("Pin", "⌘D"), ("Back", "⌘["), ("Next", "⌥⌘↓")]
-        case .preview: return [("Notes", "⌘P"), ("Actions", "⌘K"), ("Edit", "⌘E"), ("Scroll", "↑↓"), ("Find", "⌘F"), ("New", "⌘N"),
+                            ("Done", "⌘↵"), ("Link", "⌥↵"), ("Pin", "⌘D"), ("Back", "⌘["), ("Next", "⌥⌘↓")]
+        case .preview: return [("Notes", "⌘P"), ("Actions", "⌘K"), ("Edit", "⌘E"), ("Scroll", "↑↓"), ("Done", "⌘↵"), ("Find", "⌘F"), ("New", "⌘N"),
                                ("Pin", "⌘D"), ("Back", "⌘["), ("Next", "⌥⌘↓")]
         case .empty: return [("New", "⌘N"), ("Notes", "⌘P")]
         }
@@ -442,6 +445,7 @@ final class NotesController: NSObject, NSWindowDelegate, NSTableViewDataSource, 
     }
 
     private func open(_ note: NoteFile, record: Bool = true) {
+        commitTitleEdit()
         closeActionPanel()
         if currentPath == note.relativePath { return }
         if !matchTerms.isEmpty {
@@ -832,6 +836,7 @@ final class NotesController: NSObject, NSWindowDelegate, NSTableViewDataSource, 
     /// A new note lives only in the editor until it has a title or text; then it is
     /// written to `newNoteFolder`.
     private func startDraft(title: String, confirmed: Bool = false) {
+        commitTitleEdit()
         flush(force: true)
         if previewMode { setPreview(false, focus: false) }
         current = .draft
@@ -975,8 +980,9 @@ final class NotesController: NSObject, NSWindowDelegate, NSTableViewDataSource, 
         case .file(let note):
             let folder = note.folder.isEmpty ? root.lastPathComponent : note.folder.replacingOccurrences(of: "/", with: " / ")
             folderLabel.attributedStringValue = Theme.labelString(folder, color: Palette.notes)
-            titleField.isEditable = false
-            titleField.stringValue = note.title
+            titleField.isEditable = true
+            titleField.placeholderString = note.title
+            if titleEditPath != note.relativePath { titleField.stringValue = note.title }
             let edited = loadedModified.map { "Edited " + Self.relative.localizedString(for: $0, relativeTo: Date()) } ?? ""
             metaLabel.stringValue = meta ?? (previewMode ? edited + " · Preview, ⌘E to edit" : edited)
         case nil:
@@ -1018,6 +1024,7 @@ final class NotesController: NSObject, NSWindowDelegate, NSTableViewDataSource, 
     // MARK: - Keys
 
     private var editorFocused: Bool { panel.firstResponder === textView }
+    private var titleFocused: Bool { titleField.currentEditor() != nil && panel.firstResponder === titleField.currentEditor() }
     private var searchFocused: Bool { searchField.currentEditor() != nil && panel.firstResponder === searchField.currentEditor() }
 
     /// Focuses the note: the editor, or the preview in reading mode.
@@ -1072,8 +1079,13 @@ final class NotesController: NSObject, NSWindowDelegate, NSTableViewDataSource, 
             run(a)
             return true
         }
-        if event.keyCode == 53 && mods.isEmpty { // Esc steps back: find bar, search text, search, window
-            if findBarVisible {
+        if event.keyCode == 53 && mods.isEmpty { // Esc steps back: title edit, find bar, search text, search, window
+            if titleFocused, currentNote != nil {
+                titleEditPath = nil
+                titleField.abortEditing()
+                updateHeader()
+                focusEditor()
+            } else if findBarVisible {
                 finderAction(.hideFindInterface)
                 focusEditor()
             } else if searchFocused && !query.isEmpty {
@@ -1096,6 +1108,11 @@ final class NotesController: NSObject, NSWindowDelegate, NSTableViewDataSource, 
             startDraft(title: title, confirmed: !title.isEmpty)
             return true
         }
+        if isReturn && mods == .command && previewFocused { // tick the tasks on the selected lines
+            textView.toggleDone(preview.selectedTaskSources())
+            return true
+        }
+        if isReturn && editorFocused && mods == .command && textView.toggleDoneOnSelectedLines() { return true }
         if isReturn && editorFocused && (mods == .option || mods == .command) { // follow the link at the caret
             if let target = textView.linkAtCaret() { openLink(target) }
             return true
@@ -1190,6 +1207,15 @@ final class NotesController: NSObject, NSWindowDelegate, NSTableViewDataSource, 
             default: return false
             }
         }
+        if control === titleField, currentNote != nil {
+            switch selector {
+            case #selector(NSResponder.insertNewline(_:)), #selector(NSResponder.insertTab(_:)):
+                commitTitleEdit()
+                focusEditor()
+                return true
+            default: return false
+            }
+        }
         if control === titleField {
             switch selector {
             case #selector(NSResponder.insertNewline(_:)), #selector(NSResponder.insertTab(_:)):
@@ -1204,10 +1230,92 @@ final class NotesController: NSObject, NSWindowDelegate, NSTableViewDataSource, 
     }
 
     func controlTextDidChange(_ obj: Notification) {
+        if obj.object as? NSTextField === titleField, let path = currentPath { titleEditPath = path }
         guard obj.object as? NSTextField === searchField else { return }
         refilter()
         updateFooter()
         if !query.isEmpty, let first = hits.first { preview(first) }
+    }
+
+    func controlTextDidEndEditing(_ obj: Notification) {
+        if obj.object as? NSTextField === titleField { commitTitleEdit() }
+    }
+
+    // MARK: - Rename
+
+    /// Renames the note whose title was edited, if the title changed.
+    private func commitTitleEdit() {
+        guard let path = titleEditPath else { return }
+        titleEditPath = nil
+        guard let note = currentNote, note.relativePath == path else { return }
+        rename(note, to: titleField.stringValue)
+    }
+
+    /// Renames the file in its folder, updates `title:` and every wiki link to it (as
+    /// Obsidian does), and keeps its pin and history.
+    private func rename(_ note: NoteFile, to typed: String) {
+        let trimmed = typed.trimmingCharacters(in: .whitespacesAndNewlines)
+        let name = NoteStore.fileName(for: trimmed)
+        guard !trimmed.isEmpty, name != note.title else { updateHeader(); return }
+        flush(force: true)
+        let dir = note.url.deletingLastPathComponent()
+        let caseOnly = name.lowercased() == note.title.lowercased()
+        let target = caseOnly ? dir.appending(path: name + ".md")
+            : NoteStore.uniqueURL(in: dir, title: name, taken: Set(notes.filter { $0.relativePath != note.relativePath }.map { $0.title.lowercased() }))
+        var url = note.url
+        var values = URLResourceValues()
+        values.name = target.lastPathComponent
+        do {
+            try url.setResourceValues(values)
+        } catch {
+            updateHeader()
+            HUD.shared.show("Could not rename “\(note.title)”", symbol: "exclamationmark.triangle.fill")
+            return
+        }
+        let newTitle = (target.lastPathComponent as NSString).deletingPathExtension
+        let newPath = ((note.relativePath as NSString).deletingLastPathComponent as NSString).appendingPathComponent(target.lastPathComponent)
+
+        // Links elsewhere follow, unless another note shares the old name (they may mean that one).
+        var relinked = 0
+        let shared = notes.contains { $0.relativePath != note.relativePath && $0.title.caseInsensitiveCompare(note.title) == .orderedSame }
+        if !shared {
+            for other in notes where other.relativePath != note.relativePath && !other.isPlaceholder {
+                guard let text = NoteStore.read(other.url) else { continue }
+                let updated = NoteStore.renamingLinks(text, from: note.title, to: newTitle)
+                guard updated != text, (try? NoteStore.write(updated, to: other.url)) != nil else { continue }
+                contents[other.relativePath] = nil
+                relinked += 1
+            }
+        }
+
+        pins.rename(note.relativePath, to: newPath, in: root)
+        back = back.map { $0 == note.relativePath ? newPath : $0 }
+        forward = forward.map { $0 == note.relativePath ? newPath : $0 }
+        contents[note.relativePath] = nil
+        UserDefaults.standard.set(newPath, forKey: Self.lastNoteKey)
+        let renamed = NoteFile(url: dir.appending(path: target.lastPathComponent), relativePath: newPath,
+                               modified: NoteStore.modificationDate(target) ?? Date())
+        current = .file(renamed)
+
+        // `title:` in the frontmatter and links to itself.
+        let text = textView.string
+        var updated = NoteStore.setTitle(text, newTitle)
+        if !shared { updated = NoteStore.renamingLinks(updated, from: note.title, to: newTitle) }
+        if updated != text {
+            let selection = textView.selectedRange()
+            textView.string = updated
+            textView.restyle()
+            let length = (updated as NSString).length
+            textView.setSelectedRange(NSRange(location: min(selection.location, length), length: 0))
+            dirty = true
+            flush(force: true)
+            if previewMode { preview.show(updated) }
+        }
+        loadedModified = NoteStore.modificationDate(target)
+        rescan()
+        updateHeader()
+        HUD.shared.show(relinked > 0 ? "Renamed to “\(newTitle)” · \(relinked) linking note\(relinked == 1 ? "" : "s") updated"
+                                     : "Renamed to “\(newTitle)”", symbol: "pencil")
     }
 
     // MARK: - Table
