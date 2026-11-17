@@ -83,6 +83,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Glass.configure(settings.data.general)
         Motion.configure(settings.data.general)
         ShadowedSurface.configure(settings.data.general)
+        BackdropBlur.configure(settings.data.general)
         let frecency = FrecencyStore(store: JSONStore(url: AppPaths.file("frecency.json")))
         let apps = AppIndex()
         serviceBag = Services(settings: settings, frecency: frecency, apps: apps)
@@ -345,6 +346,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func apply(_ config: HopConfig, previous: HopConfig?) {
         Motion.configure(config.general)
         ShadowedSurface.configure(config.general)
+        BackdropBlur.configure(config.general)
         if previous?.general.theme != config.general.theme, !Theme.exists(config.general.theme) {
             HUD.shared.warn("No theme \"\(config.general.theme.rawValue)\", using OG")
         }
