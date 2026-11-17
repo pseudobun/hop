@@ -25,6 +25,13 @@ nonisolated struct HopConfig: Decodable, Equatable, Sendable {
         /// How much of the theme's background tints the glass, 0–100 %. Low: the wallpaper shows
         /// through as in Spotlight; high: close to the flat look.
         var glassTint = 20
+        /// How long hop's windows take to fade in and out, in milliseconds; 0 = at once.
+        var openDuration = 150
+        var closeDuration = 120
+        /// The size (%) a window grows from as it opens; 100 = fade only.
+        var openScale = 98
+        /// How dark the launcher's shadow is, 0–100; 0 = none.
+        var shadow = 30
 
         /// A built-in theme or a custom one (its file name without the extension).
         nonisolated struct ThemeName: RawRepresentable, Decodable, Hashable, Sendable, ExpressibleByStringLiteral {
@@ -117,7 +124,7 @@ nonisolated extension HopConfig.Updates {
 }
 
 nonisolated extension HopConfig.General {
-    private enum Keys: String, CodingKey { case hotkey, sensitivity, popToRootSeconds, keepQueryFor, fallbacks, openAtLogin, menuBarIcon, theme, glass, glassStyle, glassTint }
+    private enum Keys: String, CodingKey { case hotkey, sensitivity, popToRootSeconds, keepQueryFor, fallbacks, openAtLogin, menuBarIcon, theme, glass, glassStyle, glassTint, openDuration, closeDuration, openScale, shadow }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: Keys.self), d = Self()
         hotkey = try c.value(.hotkey, d.hotkey)
@@ -131,6 +138,10 @@ nonisolated extension HopConfig.General {
         glass = try c.value(.glass, d.glass)
         glassStyle = try c.value(.glassStyle, d.glassStyle)
         glassTint = min(max(try c.value(.glassTint, d.glassTint), 0), 100)
+        openDuration = min(max(try c.value(.openDuration, d.openDuration), 0), 1000)
+        closeDuration = min(max(try c.value(.closeDuration, d.closeDuration), 0), 1000)
+        openScale = min(max(try c.value(.openScale, d.openScale), 80), 100)
+        shadow = min(max(try c.value(.shadow, d.shadow), 0), 100)
     }
 }
 
@@ -310,6 +321,13 @@ final class AppSettings {
         // How much of the theme's background tints the glass, 0–100: 0 is bare glass,
         // 100 close to the flat look
         glassTint: 20,
+        // How long windows take to fade in and out, in milliseconds (0: at once)
+        openDuration: 150,
+        closeDuration: 120,
+        // The size (%) a window grows from as it opens; 100 fades only
+        openScale: 98,
+        // How dark the launcher's shadow is, 0–100 (0: none)
+        shadow: 30,
       },
 
       // New versions from GitHub (Sparkle), for builds from Homebrew or a release zip (builds

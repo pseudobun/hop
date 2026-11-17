@@ -33,6 +33,14 @@ struct ConfigEditPathTests {
         #expect(ConfigDiagnostics.warnings(in: "{ general: { glassStyle: \"clear\", glassTint: 40 } }").isEmpty)
     }
 
+    @Test func motionAndShadow() throws {
+        let d = try decode("{}").general
+        #expect(d.openDuration == 150 && d.closeDuration == 120 && d.openScale == 98 && d.shadow == 30)
+        let g = try decode("{ general: { openDuration: 5000, closeDuration: -1, openScale: 50, shadow: 120 } }").general
+        #expect(g.openDuration == 1000 && g.closeDuration == 0 && g.openScale == 80 && g.shadow == 100)
+        #expect(ConfigDiagnostics.warnings(in: "{ general: { openDuration: 100, closeDuration: 80, openScale: 100, shadow: 0 } }").isEmpty)
+    }
+
     @Test func addsMissingKeysAndObjects() throws {
         let text = "{\n  general: {\n    hotkey: \"alt+space\",\n  },\n}\n"
         let a = try #require(ConfigEdit.setting(["general", "openAtLogin"], to: "false", in: text))

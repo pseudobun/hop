@@ -10,9 +10,19 @@ enum Motion {
     /// Fast start, long soft landing (as tip's workspace highlight).
     static let glideTiming = CAMediaTimingFunction(controlPoints: 0.22, 1, 0.36, 1)
 
-    /// The scale a window grows from on the way in, and shrinks to on the way out.
-    static let entranceScale: CGFloat = 0.965
-    static let exitScale: CGFloat = 0.985
+    /// The scale a window grows from on the way in (`general.openScale`), and shrinks to on the
+    /// way out.
+    nonisolated(unsafe) static var entranceScale: CGFloat = 0.98
+    static var exitScale: CGFloat { 1 - (1 - entranceScale) / 2 }
+    /// `general.openDuration` / `general.closeDuration`, in seconds.
+    nonisolated(unsafe) static var openDuration: TimeInterval = 0.15
+    nonisolated(unsafe) static var closeDuration: TimeInterval = 0.12
+
+    static func configure(_ general: HopConfig.General) {
+        openDuration = TimeInterval(general.openDuration) / 1000
+        closeDuration = TimeInterval(general.closeDuration) / 1000
+        entranceScale = CGFloat(general.openScale) / 100
+    }
 
     /// Orders a window in as Spotlight does: it fades in while its content settles from slightly
     /// small to full size. A window still fading out comes back from where it is; one already up
@@ -23,39 +33,40 @@ enum Motion {
     /// frame reaches the screen only after the caller's layout and drawing (about 40 ms after a
     /// hotkey press): the fade then began at 20–40 % opacity and read as a pop. This one starts
     /// with the first display frame, so every step of it is seen.
-    static func present(_ window: NSWindow, duration: TimeInterval = 0.2) {
+    static func present(_ window: NSWindow, duration: TimeInterval = Motion.openDuration) {
         let returning = WindowFade.running(window)?.isExit == true
         if window.isVisible && !returning {
             window.orderFrontRegardless()
             return
         }
         WindowFade.running(window)?.cancel()
+        (window.contentView as? ShadowedSurface)?.refreshShadow()
         let layer = window.contentView?.layer
-        guard allowed else {
+        guard allowed, duration > 0 else {
             layer?.removeAnimation(forKey: "exit")
             window.alphaValue = 1
             window.orderFrontRegardless()
             return
         }
         if returning {
-            settle(layer, from: currentScale(layer))
+            settle(layer, from: currentScale(layer), duration: duration)
             WindowFade(window, to: 1, duration: duration * 0.6, curve: .entrance).start()
             return
         }
         window.alphaValue = 0
         window.orderFrontRegardless()
         // Added before this run-loop turn's commit, so it starts with the first frame.
-        settle(layer, from: entranceScale)
+        settle(layer, from: entranceScale, duration: duration)
         WindowFade(window, to: 1, duration: duration, curve: .entrance).start()
     }
 
     /// Fades a window out (shrinking it a little) and orders it out, then calls `done`.
     /// `present` during the fade brings it back; `finishExits` cuts it short.
-    static func dismiss(_ window: NSWindow, duration: TimeInterval = 0.13, done: (() -> Void)? = nil) {
+    static func dismiss(_ window: NSWindow, duration: TimeInterval = Motion.closeDuration, done: (() -> Void)? = nil) {
         guard window.isVisible, WindowFade.running(window)?.isExit != true else { return }
         WindowFade.running(window)?.cancel()
         let layer = window.contentView?.layer
-        guard allowed else {
+        guard allowed, duration > 0 else {
             window.orderOut(nil)
             window.alphaValue = 1
             done?()
@@ -104,10 +115,12 @@ enum Motion {
     // MARK: - Scale
 
     /// A soft spring from `scale` to the layer's own size, on the render server.
-    private static func settle(_ layer: CALayer?, from scale: CGFloat) {
+    private static func settle(_ layer: CALayer?, from scale: CGFloat, duration: TimeInterval) {
         guard let layer else { return }
         layer.removeAnimation(forKey: "exit")
-        let spring = CASpringAnimation(perceptualDuration: 0.24, bounce: 0.08)
+        guard scale < 1 else { layer.removeAnimation(forKey: "settle"); return }
+        // A little longer than the fade, so the size lands softly after the window is opaque.
+        let spring = CASpringAnimation(perceptualDuration: duration * 1.2 + 0.02, bounce: 0.05)
         spring.keyPath = "transform"
         spring.fromValue = NSValue(caTransform3D: scaled(layer, scale))
         spring.toValue = NSValue(caTransform3D: CATransform3DIdentity)

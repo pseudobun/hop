@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.0-beta.24](https://github.com/pseudobun/hop/compare/v0.1.0-beta.23...v0.1.0-beta.24) (2026-11-17)
+
+
+### Features
+
+* **ui:** soften the launcher shadow and make motion configurable ([#73](https://github.com/pseudobun/hop/issues/73)) ([6314968](https://github.com/pseudobun/hop/commit/6314968a45c334966ef171013fdc514ff5d07e63))
+
 ## [0.1.0-beta.23](https://github.com/pseudobun/hop/compare/v0.1.0-beta.22...v0.1.0-beta.23) (2026-11-17)
 
 
