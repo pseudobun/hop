@@ -33,6 +33,11 @@ nonisolated indirect enum ConfigSchema: Equatable, Sendable {
     static let hop: ConfigSchema = {
         guard case .section(var fields) = describing(HopConfig(), path: "", samples: [:]) else { return .anyKeys }
         fields["sections"] = nil
+        // Retired: the first background blur's strength (0.1.0-beta.25).
+        if case .section(var general)? = fields["general"] {
+            general["backgroundBlurRadius"] = .value
+            fields["general"] = .section(general)
+        }
         // Installed plugins' settings, by plugin id.
         fields["plugins"] = .anyKeys
         for type in PluginConfigs.types {

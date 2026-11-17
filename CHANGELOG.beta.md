@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.0-beta.26](https://github.com/pseudobun/hop/compare/v0.1.0-beta.25...v0.1.0-beta.26) (2026-11-17)
+
+
+### Bug Fixes
+
+* **ui:** fade the background blur instead of turning it on at each open ([#79](https://github.com/pseudobun/hop/issues/79)) ([6dbff6f](https://github.com/pseudobun/hop/commit/6dbff6f93ef4a38aeaa1de2b3fd3695724ca5368))
+
 ## [0.1.0-beta.25](https://github.com/pseudobun/hop/compare/v0.1.0-beta.24...v0.1.0-beta.25) (2026-11-17)
 
 
