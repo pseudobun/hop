@@ -29,6 +29,13 @@
     // How much of the theme's background tints the glass, 0–100: 0 is bare glass,
     // 100 close to the flat look
     glassTint: 20,
+    // How long windows take to fade in and out, in milliseconds (0: at once)
+    openDuration: 150,
+    closeDuration: 120,
+    // The size (%) a window grows from as it opens; 100 fades only
+    openScale: 98,
+    // How dark the launcher's shadow is, 0–100 (0: none)
+    shadow: 30,
   },
 
   // New versions from GitHub (Sparkle), for builds from Homebrew or a release zip (builds

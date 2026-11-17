@@ -81,6 +81,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         loadCustomThemes(folder: CustomThemes.folder(beside: settings.url), announce: false)
         Theme.variant = settings.data.general.theme
         Glass.configure(settings.data.general)
+        Motion.configure(settings.data.general)
+        ShadowedSurface.configure(settings.data.general)
         let frecency = FrecencyStore(store: JSONStore(url: AppPaths.file("frecency.json")))
         let apps = AppIndex()
         serviceBag = Services(settings: settings, frecency: frecency, apps: apps)
@@ -341,6 +343,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Applies config changes: hotkey, plugins, login item, menu bar icon, commands.
     private func apply(_ config: HopConfig, previous: HopConfig?) {
+        Motion.configure(config.general)
+        ShadowedSurface.configure(config.general)
         if previous?.general.theme != config.general.theme, !Theme.exists(config.general.theme) {
             HUD.shared.warn("No theme \"\(config.general.theme.rawValue)\", using OG")
         }

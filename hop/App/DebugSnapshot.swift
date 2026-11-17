@@ -23,7 +23,8 @@ enum DebugSnapshot {
     /// Draws a window's view tree without the window server (no Screen Recording needed);
     /// glass has no backdrop here, so a flat colour stands in for the desktop.
     static func render(_ window: NSWindow, to path: String) {
-        guard let root = window.contentView else { return }
+        guard var root = window.contentView else { return }
+        if let host = root as? ShadowedSurface { root = host.surface }
         let view = (root as? NSGlassEffectView)?.contentView ?? root
         guard let layer = view.layer,
               let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: Int(view.bounds.width * 2), pixelsHigh: Int(view.bounds.height * 2),

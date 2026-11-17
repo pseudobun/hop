@@ -198,7 +198,7 @@ final class LauncherController: NSObject, LauncherContext, NSTableViewDataSource
         if let initial { activeField.stringValue = initial }
         // Reopening soon after comes back to the same query and row (selected below, so typing replaces it).
         refresh(keepSelection: initial == nil)
-        panel.positionOnMouseScreen()
+        panel.positionOnMouseScreen(margin: LauncherPanel.margin)
         Motion.present(panel)
         strip?.launcherDidShow()
         #if DEBUG
@@ -597,8 +597,10 @@ final class LauncherController: NSObject, LauncherContext, NSTableViewDataSource
 
     private func buildViews() {
         panel.appearance = Theme.appearance
-        let (glass, content) = Glass.surface(cornerRadius: panel.frameCornerRadius)
-        panel.contentView = glass
+        let (glass, content) = Glass.surface(cornerRadius: LauncherPanel.cornerRadius)
+        let host = ShadowedSurface(glass, cornerRadius: LauncherPanel.cornerRadius, size: panel.frame.size)
+        host.onOutsideClick = { [weak self] in self?.hide() }
+        panel.contentView = host
 
         for f in [searchField, secureField] {
             f.isBordered = false
