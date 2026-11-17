@@ -282,8 +282,8 @@ over `general.openDuration` ms (default 150) while growing from `general.openSca
 are under Settings → Appearance too.
 
 `general.backgroundBlur: true` (off by default) blurs everything behind the launcher while it
-is open; the blur grows in and eases off with the launcher. `general.backgroundBlurRadius`
-(1–100, default 20) sets how strongly.
+is open, with the system's blur (as Spotlight's); it fades in and out with the launcher.
+`general.backgroundDim` (0–100, default 20) darkens it too.
 
 ## Permissions
 
