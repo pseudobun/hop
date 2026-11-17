@@ -97,6 +97,12 @@ final class NotesPins {
         set(list, in: root)
     }
 
+    /// A renamed note keeps its place among the pins.
+    func rename(_ path: String, to newPath: String, in root: URL) {
+        let list = paths(in: root)
+        if list.contains(path) { set(list.map { $0 == path ? newPath : $0 }, in: root) }
+    }
+
     func remove(_ path: String, in root: URL) {
         let list = paths(in: root)
         if list.contains(path) { set(list.filter { $0 != path }, in: root) }
@@ -347,6 +353,18 @@ nonisolated enum NoteStore {
         if name.lowercased().hasSuffix(".md") { name = String(name.dropLast(3)) }
         guard !name.isEmpty else { return nil }
         return notes.first { $0.title == name } ?? notes.first { $0.title.caseInsensitiveCompare(name) == .orderedSame }
+    }
+
+    /// Points wiki links and embeds at `old` to `new`: `[[old]]`, `[[old|alias]]`,
+    /// `[[folder/old#Heading]]`, `![[old]]` (case-insensitive, like Obsidian).
+    static func renamingLinks(_ text: String, from old: String, to new: String) -> String {
+        guard !old.isEmpty, text.range(of: old, options: .caseInsensitive) != nil,
+              let regex = try? NSRegularExpression(
+                pattern: #"(\[\[(?:[^\]|#^\n]*/)?)"# + NSRegularExpression.escapedPattern(for: old) + #"(\.md)?(?=[\]|#^])"#,
+                options: .caseInsensitive) else { return text }
+        let ns = text as NSString
+        return regex.stringByReplacingMatches(in: text, range: NSRange(location: 0, length: ns.length),
+                                              withTemplate: "$1" + NSRegularExpression.escapedTemplate(for: new) + "$2")
     }
 
     // MARK: Frontmatter and templates

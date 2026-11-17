@@ -66,6 +66,59 @@ final class NotesTextView: NSTextView {
         return false
     }
 
+    /// `[` over a selection wraps it (`[text]`) and keeps it selected, so a second `[`
+    /// makes a wiki link.
+    override func insertText(_ string: Any, replacementRange: NSRange) {
+        let typed = (string as? String) ?? (string as? NSAttributedString)?.string
+        let sel = selectedRange()
+        if typed == "[", replacementRange.location == NSNotFound, sel.length > 0, !hasMarkedText() {
+            let inner = (self.string as NSString).substring(with: sel)
+            super.insertText("[" + inner + "]", replacementRange: sel)
+            setSelectedRange(NSRange(location: sel.location + 1, length: sel.length))
+            return
+        }
+        super.insertText(string, replacementRange: replacementRange)
+    }
+
+    /// A URL pasted over selected text makes a Markdown link of it.
+    override func paste(_ sender: Any?) {
+        let sel = selectedRange()
+        if sel.length > 0, let pasted = NSPasteboard.general.string(forType: .string),
+           let link = MarkdownEditing.link(text: (string as NSString).substring(with: sel), pasted: pasted) {
+            insertText(link, replacementRange: sel)
+            return
+        }
+        super.paste(sender)
+    }
+
+    /// ⌘↵: ticks the tasks on the selected lines (unticks them when all are done);
+    /// false when none of the lines is a task.
+    func toggleDoneOnSelectedLines() -> Bool {
+        let ns = string as NSString
+        var boxes: [Int] = []
+        ns.enumerateSubstrings(in: ns.lineRange(for: selectedRange()), options: [.byLines]) { line, range, _, _ in
+            if let line, let box = MarkdownEditing.taskBox(line) { boxes.append(range.location + box.location) }
+        }
+        return toggleDone(boxes)
+    }
+
+    /// Ticks the task boxes whose `[` is at `locations`, or unticks them when all are done.
+    @discardableResult
+    func toggleDone(_ locations: [Int]) -> Bool {
+        guard let storage = textStorage else { return false }
+        let ns = storage.string as NSString
+        let inner = locations.map { NSRange(location: $0 + 1, length: 1) }.filter { $0.upperBound <= ns.length }
+        guard !inner.isEmpty else { return false }
+        let tick = inner.contains { ns.substring(with: $0) == " " }
+        let mark = tick ? "x" : " "
+        guard shouldChangeText(inRanges: inner.map { NSValue(range: $0) }, replacementStrings: inner.map { _ in mark }) else { return true }
+        storage.beginEditing()
+        for r in inner.sorted(by: { $0.location > $1.location }) { storage.replaceCharacters(in: r, with: mark) }
+        storage.endEditing()
+        didChangeText()
+        return true
+    }
+
     override func doCommand(by selector: Selector) {
         if selector == #selector(insertNewline(_:)), continueList() { return }
         super.doCommand(by: selector)
@@ -277,9 +330,26 @@ final class NotesPreviewView: NSTextView {
     /// Renders `source` and keeps the scroll position.
     func show(_ source: String) {
         let visible = enclosingScrollView?.contentView.bounds.origin
+        let selection = selectedRange()
         textStorage?.setAttributedString(Self.render(source))
+        let length = textStorage?.length ?? 0
+        if selection.upperBound <= length { setSelectedRange(selection) }
         if let visible { scroll(visible) }
         window?.invalidateCursorRects(for: self)
+    }
+
+    /// Note locations of the task boxes on the selected lines (the caret's line when
+    /// nothing is selected).
+    func selectedTaskSources() -> [Int] {
+        guard let storage = textStorage, storage.length > 0 else { return [] }
+        let sel = selectedRange()
+        guard sel.location != NSNotFound, sel.location <= storage.length else { return [] }
+        let lines = (storage.string as NSString).paragraphRange(for: NSRange(location: min(sel.location, storage.length), length: min(sel.length, storage.length - min(sel.location, storage.length))))
+        var out: [Int] = []
+        storage.enumerateAttribute(.hopTaskSource, in: lines) { value, _, _ in
+            if let source = value as? Int, out.last != source { out.append(source) }
+        }
+        return out
     }
 
     static func render(_ source: String) -> NSAttributedString {
@@ -403,7 +473,11 @@ final class NotesShortcutsView: NSView {
                 ("⌘E", "Edit / preview"),
                 ("⌘F", "Find in note"),
                 ("⌘L", "Toggle task"),
+                ("⌘↵", "Tick the task (edit and preview)"),
                 ("⌘B  ⌘I", "Bold / italic"),
+                ("[", "Wrap the selection in brackets"),
+                ("⌘V", "URL over a selection: Markdown link"),
+                ("Title", "Click to rename the note"),
                 ("⌘D", "Pin / unpin (pinned stay on top)"),
                 ("⇧⌘⌫", "Move the note to the Trash"),
                 ("⇧⌘O", "Open in Obsidian"),
