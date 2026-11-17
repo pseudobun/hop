@@ -6,6 +6,18 @@
     <description>hop releases</description>
     <language>en</language>
     <item>
+      <title>hop 0.1.0-beta.23</title>
+      <pubDate>Tue, 17 Nov 2026 10:07:55 +0000</pubDate>
+      <sparkle:version>172</sparkle:version>
+      <sparkle:shortVersionString>0.1.0-beta.23</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
+      <description><![CDATA[<style>body{font:13px -apple-system,sans-serif;margin:12px 14px;color:#222}h3{font-size:13px;margin:12px 0 4px}ul{padding-left:18px;margin:4px 0}li{margin:2px 0}code{font:12px ui-monospace,monospace}a{color:#0a64d0}@media(prefers-color-scheme:dark){body{color:#ddd}a{color:#6ab0ff}}</style><h3>Features</h3>
+<ul>
+<li><b>notes:</b> add task ticking, bracket wrap, link paste and rename (<a href="https://github.com/pseudobun/hop/issues/70">#70</a>) (<a href="https://github.com/pseudobun/hop/commit/56d68caf8aceb56805b477bdade40489cb5f0a67">56d68ca</a>)</li>
+</ul><p><a href="https://github.com/pseudobun/hop/releases/tag/v0.1.0-beta.23">Release on GitHub</a></p>]]></description>
+      <enclosure url="https://github.com/pseudobun/hop/releases/download/v0.1.0-beta.23/hop-0.1.0-beta.23-macos.zip" type="application/octet-stream" sparkle:edSignature="qDf4We2lQ/+YjLnLorPCts8svwcsUs85kkxX02xU4t3wExoK+drTr03AwWU2VdvToWt2rvJTLcn77g5Wg7TfCQ==" length="5256105"/>
+    </item>
+    <item>
       <title>hop 0.1.0-beta.22</title>
       <pubDate>Mon, 16 Nov 2026 15:57:40 +0000</pubDate>
       <sparkle:version>170</sparkle:version>
@@ -247,18 +259,6 @@
 <li><b>updates:</b> update silently and offer hop's and paw's updates in the launcher (<a href="https://github.com/pseudobun/hop/issues/5">#5</a>) (<a href="https://github.com/pseudobun/hop/commit/ad710a7129f66c05813595ebb3eab5b930f1a5fd">ad710a7</a>)</li>
 </ul><p><a href="https://github.com/pseudobun/hop/releases/tag/v0.1.0-beta.3">Release on GitHub</a></p>]]></description>
       <enclosure url="https://github.com/pseudobun/hop/releases/download/v0.1.0-beta.3/hop-0.1.0-beta.3-macos.zip" type="application/octet-stream" sparkle:edSignature="in1VKjBztrnGsBqwVVJvC+NWECkvp41FnQ0LEn6jAzdEEynYEqSgS/favpn03ZnFxxwLXy+KYVxB+adkpnL6CQ==" length="4937239"/>
-    </item>
-    <item>
-      <title>hop 0.1.0-beta.2</title>
-      <pubDate>Tue, 10 Nov 2026 19:35:10 +0000</pubDate>
-      <sparkle:version>116</sparkle:version>
-      <sparkle:shortVersionString>0.1.0-beta.2</sparkle:shortVersionString>
-      <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
-      <description><![CDATA[<style>body{font:13px -apple-system,sans-serif;margin:12px 14px;color:#222}h3{font-size:13px;margin:12px 0 4px}ul{padding-left:18px;margin:4px 0}li{margin:2px 0}code{font:12px ui-monospace,monospace}a{color:#0a64d0}@media(prefers-color-scheme:dark){body{color:#ddd}a{color:#6ab0ff}}</style><h3>Features</h3>
-<ul>
-<li><b>updates:</b> install updates with Sparkle, as paw does (<a href="https://github.com/pseudobun/hop/issues/3">#3</a>) (<a href="https://github.com/pseudobun/hop/commit/1d2b0e2f24637a8f835e7d6e3c52d38eca932fe6">1d2b0e2</a>)</li>
-</ul><p><a href="https://github.com/pseudobun/hop/releases/tag/v0.1.0-beta.2">Release on GitHub</a></p>]]></description>
-      <enclosure url="https://github.com/pseudobun/hop/releases/download/v0.1.0-beta.2/hop-0.1.0-beta.2-macos.zip" type="application/octet-stream" sparkle:edSignature="zQC6xSc+OU2RCPbwUMicoBtUAC4HgKAWaq3pa0dzeJlEu3l/a0BTqs3FU5p+SbVyW14wuhkVa2CAkR9mSq0gAQ==" length="4925981"/>
     </item>
   </channel>
 </rss>
