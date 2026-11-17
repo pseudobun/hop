@@ -274,8 +274,8 @@ enum SettingsCatalog {
                   "How dark the launcher's shadow is. 0 is none."),
                 f("general.backgroundBlur", "Blur background", .toggle,
                   "Blurs everything behind the launcher while it is open."),
-                f("general.backgroundBlurRadius", "Blur strength", .number(min: 1, max: 100, unit: "pt"),
-                  "How strongly the background is blurred."),
+                f("general.backgroundDim", "Dim background", .number(min: 0, max: 100, unit: "%"),
+                  "How much the blurred background is darkened. 0 blurs only."),
             ]),
             SettingsSection("Motion", [
                 f("general.openDuration", "Open", .number(min: 0, max: 1000, unit: "ms"),
