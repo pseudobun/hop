@@ -41,6 +41,15 @@ struct ConfigEditPathTests {
         #expect(ConfigDiagnostics.warnings(in: "{ general: { openDuration: 100, closeDuration: 80, openScale: 100, shadow: 0 } }").isEmpty)
     }
 
+    @Test func backgroundBlur() throws {
+        let d = try decode("{}").general
+        #expect(!d.backgroundBlur && d.backgroundBlurRadius == 20)
+        let g = try decode("{ general: { backgroundBlur: true, backgroundBlurRadius: 500 } }").general
+        #expect(g.backgroundBlur && g.backgroundBlurRadius == 100)
+        #expect(try decode("{ general: { backgroundBlurRadius: 0 } }").general.backgroundBlurRadius == 1)
+        #expect(ConfigDiagnostics.warnings(in: "{ general: { backgroundBlur: true, backgroundBlurRadius: 30 } }").isEmpty)
+    }
+
     @Test func addsMissingKeysAndObjects() throws {
         let text = "{\n  general: {\n    hotkey: \"alt+space\",\n  },\n}\n"
         let a = try #require(ConfigEdit.setting(["general", "openAtLogin"], to: "false", in: text))
