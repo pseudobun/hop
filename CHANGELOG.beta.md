@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.0-beta.23](https://github.com/pseudobun/hop/compare/v0.1.0-beta.22...v0.1.0-beta.23) (2026-11-17)
+
+
+### Features
+
+* **notes:** add task ticking, bracket wrap, link paste and rename ([#70](https://github.com/pseudobun/hop/issues/70)) ([56d68ca](https://github.com/pseudobun/hop/commit/56d68caf8aceb56805b477bdade40489cb5f0a67))
+
 ## [0.1.0-beta.22](https://github.com/pseudobun/hop/compare/v0.1.0-beta.21...v0.1.0-beta.22) (2026-11-16)
 
 
