@@ -34,8 +34,8 @@ nonisolated struct HopConfig: Decodable, Equatable, Sendable {
         var shadow = 30
         /// Blurs everything behind the launcher while it is up.
         var backgroundBlur = false
-        /// How strongly, 1–100 (the window server's blur radius in points).
-        var backgroundBlurRadius = 20
+        /// How much the blurred background is darkened, 0–100 %.
+        var backgroundDim = 20
 
         /// A built-in theme or a custom one (its file name without the extension).
         nonisolated struct ThemeName: RawRepresentable, Decodable, Hashable, Sendable, ExpressibleByStringLiteral {
@@ -128,7 +128,7 @@ nonisolated extension HopConfig.Updates {
 }
 
 nonisolated extension HopConfig.General {
-    private enum Keys: String, CodingKey { case hotkey, sensitivity, popToRootSeconds, keepQueryFor, fallbacks, openAtLogin, menuBarIcon, theme, glass, glassStyle, glassTint, openDuration, closeDuration, openScale, shadow, backgroundBlur, backgroundBlurRadius }
+    private enum Keys: String, CodingKey { case hotkey, sensitivity, popToRootSeconds, keepQueryFor, fallbacks, openAtLogin, menuBarIcon, theme, glass, glassStyle, glassTint, openDuration, closeDuration, openScale, shadow, backgroundBlur, backgroundDim }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: Keys.self), d = Self()
         hotkey = try c.value(.hotkey, d.hotkey)
@@ -147,7 +147,7 @@ nonisolated extension HopConfig.General {
         openScale = min(max(try c.value(.openScale, d.openScale), 80), 100)
         shadow = min(max(try c.value(.shadow, d.shadow), 0), 100)
         backgroundBlur = try c.value(.backgroundBlur, d.backgroundBlur)
-        backgroundBlurRadius = min(max(try c.value(.backgroundBlurRadius, d.backgroundBlurRadius), 1), 100)
+        backgroundDim = min(max(try c.value(.backgroundDim, d.backgroundDim), 0), 100)
     }
 }
 
@@ -334,9 +334,9 @@ final class AppSettings {
         openScale: 98,
         // How dark the launcher's shadow is, 0–100 (0: none)
         shadow: 30,
-        // Blur everything behind the launcher while it is up, and how strongly (1–100)
+        // Blur everything behind the launcher while it is up, and darken it (0–100)
         backgroundBlur: false,
-        backgroundBlurRadius: 20,
+        backgroundDim: 20,
       },
 
       // New versions from GitHub (Sparkle), for builds from Homebrew or a release zip (builds

@@ -43,11 +43,13 @@ struct ConfigEditPathTests {
 
     @Test func backgroundBlur() throws {
         let d = try decode("{}").general
-        #expect(!d.backgroundBlur && d.backgroundBlurRadius == 20)
-        let g = try decode("{ general: { backgroundBlur: true, backgroundBlurRadius: 500 } }").general
-        #expect(g.backgroundBlur && g.backgroundBlurRadius == 100)
-        #expect(try decode("{ general: { backgroundBlurRadius: 0 } }").general.backgroundBlurRadius == 1)
-        #expect(ConfigDiagnostics.warnings(in: "{ general: { backgroundBlur: true, backgroundBlurRadius: 30 } }").isEmpty)
+        #expect(!d.backgroundBlur && d.backgroundDim == 20)
+        let g = try decode("{ general: { backgroundBlur: true, backgroundDim: 500 } }").general
+        #expect(g.backgroundBlur && g.backgroundDim == 100)
+        #expect(try decode("{ general: { backgroundDim: -5 } }").general.backgroundDim == 0)
+        #expect(ConfigDiagnostics.warnings(in: "{ general: { backgroundBlur: true, backgroundDim: 30 } }").isEmpty)
+        // The first beta's strength key: still read without a warning, no longer used.
+        #expect(ConfigDiagnostics.warnings(in: "{ general: { backgroundBlurRadius: 30 } }").isEmpty)
     }
 
     @Test func addsMissingKeysAndObjects() throws {
