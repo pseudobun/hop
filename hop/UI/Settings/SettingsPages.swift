@@ -270,6 +270,16 @@ enum SettingsCatalog {
                   "Regular is frosted like Spotlight; Clear is barely frosted and shows the most of what is behind."),
                 f("general.glassTint", "Tint", .number(min: 0, max: 100, unit: "%"),
                   "How much of the theme's background colours the glass. 0 is bare glass; 100 is close to the flat look. Notes keep a little more for long text."),
+                f("general.shadow", "Shadow", .number(min: 0, max: 100, unit: "%"),
+                  "How dark the launcher's shadow is. 0 is none."),
+            ]),
+            SettingsSection("Motion", [
+                f("general.openDuration", "Open", .number(min: 0, max: 1000, unit: "ms"),
+                  "How long the launcher, clipboard and notes take to fade in. 0 shows them at once."),
+                f("general.closeDuration", "Close", .number(min: 0, max: 1000, unit: "ms"),
+                  "How long they take to fade out. 0 hides them at once."),
+                f("general.openScale", "Grow from", .number(min: 80, max: 100, unit: "%"),
+                  "The size a window starts at as it opens. 100 fades only."),
             ]),
         ])
     }
