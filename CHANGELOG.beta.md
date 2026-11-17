@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.0-beta.25](https://github.com/pseudobun/hop/compare/v0.1.0-beta.24...v0.1.0-beta.25) (2026-11-17)
+
+
+### Features
+
+* **ui:** add an optional animated background blur behind the launcher ([#76](https://github.com/pseudobun/hop/issues/76)) ([c214b9b](https://github.com/pseudobun/hop/commit/c214b9bd5522df990f39716cafb79a961e5a50e0))
+
 ## [0.1.0-beta.24](https://github.com/pseudobun/hop/compare/v0.1.0-beta.23...v0.1.0-beta.24) (2026-11-17)
 
 
