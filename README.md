@@ -276,6 +276,11 @@ Settings → Appearance) brings back the flat, mostly opaque look. `general.glas
 (0–100, default 20) how much of the theme's colour tints it: low lets the wallpaper through
 as Spotlight does, high comes close to the flat look. All apply at once.
 
+`general.shadow` (0–100, default 30) sets how dark the launcher's shadow is. Windows fade in
+over `general.openDuration` ms (default 150) while growing from `general.openScale` % (default
+98; 100 fades only) and out over `general.closeDuration` ms (default 120); 0 is instant. These
+are under Settings → Appearance too.
+
 ## Permissions
 
 Run **hop Permissions** (it opens by itself on first launch); ↵ shows each macOS prompt, **Grant All** asks for all of them.
