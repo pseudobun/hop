@@ -281,10 +281,6 @@ over `general.openDuration` ms (default 150) while growing from `general.openSca
 98; 100 fades only) and out over `general.closeDuration` ms (default 120); 0 is instant. These
 are under Settings → Appearance too.
 
-`general.backgroundBlur: true` (off by default) blurs everything behind the launcher while it
-is open, with the system's blur (as Spotlight's); it fades in and out with the launcher.
-`general.backgroundDim` (0–100, default 20) darkens it too.
-
 ## Permissions
 
 Run **hop Permissions** (it opens by itself on first launch); ↵ shows each macOS prompt, **Grant All** asks for all of them.
