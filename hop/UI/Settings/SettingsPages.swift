@@ -272,10 +272,6 @@ enum SettingsCatalog {
                   "How much of the theme's background colours the glass. 0 is bare glass; 100 is close to the flat look. Notes keep a little more for long text."),
                 f("general.shadow", "Shadow", .number(min: 0, max: 100, unit: "%"),
                   "How dark the launcher's shadow is. 0 is none."),
-                f("general.backgroundBlur", "Blur background", .toggle,
-                  "Blurs everything behind the launcher while it is open."),
-                f("general.backgroundDim", "Dim background", .number(min: 0, max: 100, unit: "%"),
-                  "How much the blurred background is darkened. 0 blurs only."),
             ]),
             SettingsSection("Motion", [
                 f("general.openDuration", "Open", .number(min: 0, max: 1000, unit: "ms"),
