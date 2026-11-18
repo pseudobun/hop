@@ -36,9 +36,6 @@
     openScale: 98,
     // How dark the launcher's shadow is, 0–100 (0: none)
     shadow: 30,
-    // Blur everything behind the launcher while it is up, and darken it (0–100)
-    backgroundBlur: false,
-    backgroundDim: 20,
   },
 
   // New versions from GitHub (Sparkle), for builds from Homebrew or a release zip (builds

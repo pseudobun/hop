@@ -199,7 +199,6 @@ final class LauncherController: NSObject, LauncherContext, NSTableViewDataSource
         // Reopening soon after comes back to the same query and row (selected below, so typing replaces it).
         refresh(keepSelection: initial == nil)
         panel.positionOnMouseScreen(margin: LauncherPanel.margin)
-        BackdropBlur.show(on: panel.screen, below: panel, duration: Motion.openDuration)
         Motion.present(panel)
         strip?.launcherDidShow()
         #if DEBUG
@@ -235,7 +234,6 @@ final class LauncherController: NSObject, LauncherContext, NSTableViewDataSource
         guard isVisible else { return }
         closeActionPanel()
         Motion.dismiss(panel)
-        BackdropBlur.hide()
         strip?.launcherDidHide()
         lastHidden = Date()
         onDidHide?()

@@ -101,9 +101,6 @@ enum Motion {
     /// or a screen capture: a window on its way out still has the keyboard and is still on screen.
     static func finishExits() { WindowFade.finishExits() }
 
-    /// y of a CSS cubic-bezier timing curve `(x1, y1, x2, y2)` at x.
-    static func bezier(_ points: (Double, Double, Double, Double), _ x: Double) -> Double { WindowFade.solve(points, x) }
-
     /// Fades a layer-backed view in by its layer's opacity.
     static func fadeIn(_ view: NSView, duration: CFTimeInterval = 0.1) {
         guard allowed, let layer = view.layer else { return }
