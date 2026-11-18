@@ -41,15 +41,9 @@ struct ConfigEditPathTests {
         #expect(ConfigDiagnostics.warnings(in: "{ general: { openDuration: 100, closeDuration: 80, openScale: 100, shadow: 0 } }").isEmpty)
     }
 
-    @Test func backgroundBlur() throws {
-        let d = try decode("{}").general
-        #expect(!d.backgroundBlur && d.backgroundDim == 20)
-        let g = try decode("{ general: { backgroundBlur: true, backgroundDim: 500 } }").general
-        #expect(g.backgroundBlur && g.backgroundDim == 100)
-        #expect(try decode("{ general: { backgroundDim: -5 } }").general.backgroundDim == 0)
-        #expect(ConfigDiagnostics.warnings(in: "{ general: { backgroundBlur: true, backgroundDim: 30 } }").isEmpty)
-        // The first beta's strength key: still read without a warning, no longer used.
-        #expect(ConfigDiagnostics.warnings(in: "{ general: { backgroundBlurRadius: 30 } }").isEmpty)
+    @Test func retiredBackgroundBlurKeys() {
+        // Removed in 0.1.0-beta.27: old configs keep them without a warning.
+        #expect(ConfigDiagnostics.warnings(in: "{ general: { backgroundBlur: true, backgroundDim: 30, backgroundBlurRadius: 20 } }").isEmpty)
     }
 
     @Test func addsMissingKeysAndObjects() throws {

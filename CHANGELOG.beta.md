@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.0-beta.27](https://github.com/pseudobun/hop/compare/v0.1.0-beta.26...v0.1.0-beta.27) (2026-11-18)
+
+
+### Bug Fixes
+
+* **ui:** remove the background blur ([#82](https://github.com/pseudobun/hop/issues/82)) ([90a09c8](https://github.com/pseudobun/hop/commit/90a09c8edf3fee1aecd870aab393d02a611b0ed0))
+
 ## [0.1.0-beta.26](https://github.com/pseudobun/hop/compare/v0.1.0-beta.25...v0.1.0-beta.26) (2026-11-17)
 
 
