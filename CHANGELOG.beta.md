@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.0-beta.28](https://github.com/pseudobun/hop/compare/v0.1.0-beta.27...v0.1.0-beta.28) (2026-11-25)
+
+
+### Features
+
+* **emoji:** remember the skin tone of recently used emoji ([#85](https://github.com/pseudobun/hop/issues/85)) ([6986c96](https://github.com/pseudobun/hop/commit/6986c96ad01abcb352838128824f70dbb9476b6a))
+
 ## [0.1.0-beta.27](https://github.com/pseudobun/hop/compare/v0.1.0-beta.26...v0.1.0-beta.27) (2026-11-18)
 
 
