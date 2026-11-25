@@ -122,6 +122,26 @@ struct EmojiTests {
         #expect(tones.sections(for: "dark")[0].items.map(\.subtitle) == ["Medium-Dark", "Dark"])
     }
 
+    @Test func recentKeepsTheToneItWasUsedIn() async throws {
+        let url = FileManager.default.temporaryDirectory.appending(path: "hop-emoji-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: url) }
+        let usage = EmojiUsage(store: JSONStore(url: url))
+        let tones = EmojiToneMode(index: Self.index, entry: Self.index.entry(for: "👍")!, usage: usage, selected: .medium)
+        let dark = try #require(tones.sections(for: "dark")[0].items.last)
+        _ = await try #require(dark.actions.first { $0.title == "Copy Emoji" }).perform()
+        #expect(EmojiUsage(store: JSONStore(url: url)).tone("👍") == .dark)
+
+        let mode = EmojiMode(usage: usage, skinTone: .medium, index: Self.index)
+        let browse = mode.sections(for: "")
+        let glyph = { (item: Item) -> String in if case .emoji(let e) = item.icon { e } else { "" } }
+        #expect(browse[0].items.map(glyph) == ["👍🏿"])
+        // Elsewhere the configured tone stays.
+        #expect(mode.sections(for: "thumbs up")[0].items.map(glyph).first == "👍🏽")
+        // Pasting it again from Recently Used keeps the tone.
+        _ = await try #require(browse[0].items[0].actions.first { $0.title == "Copy Emoji" }).perform()
+        #expect(usage.tone("👍") == .dark)
+    }
+
     @Test func configDefaults() throws {
         let decoder = JSONDecoder()
         decoder.allowsJSON5 = true
