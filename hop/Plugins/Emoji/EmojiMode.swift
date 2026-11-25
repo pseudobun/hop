@@ -21,12 +21,14 @@ enum EmojiCommands {
 }
 
 /// Which emoji were used and how often, as Raycast frecency anchors (`emoji-usage.json`
-/// in Application Support); keyed by the emoji without a skin tone.
+/// in Application Support); keyed by the emoji without a skin tone, which is kept per emoji.
 final class EmojiUsage {
     struct Entry: Codable {
         var anchor: Double
         var count: Int
         var lastUsed: Date
+        /// Skin tone it was last used in (`SkinTone.rawValue`); nil for emoji that take none.
+        var tone: Int?
     }
 
     static let shared = EmojiUsage(store: JSONStore(url: AppPaths.file("emoji-usage.json")))
@@ -39,11 +41,16 @@ final class EmojiUsage {
         entries = store.load() ?? [:]
     }
 
-    func record(_ emoji: String, now: Date = Date()) {
+    func record(_ emoji: String, tone: SkinTone? = nil, now: Date = Date()) {
         let old = entries[emoji]
         entries[emoji] = Entry(anchor: Frecency.visit(anchor: old?.anchor, at: now.timeIntervalSince1970),
-                               count: (old?.count ?? 0) + 1, lastUsed: now)
+                               count: (old?.count ?? 0) + 1, lastUsed: now, tone: tone?.rawValue)
         store.save(entries)
+    }
+
+    /// The skin tone `emoji` was last used in, if it was recorded with one.
+    func tone(_ emoji: String) -> SkinTone? {
+        entries[emoji]?.tone.flatMap(SkinTone.init(rawValue:))
     }
 
     /// Forgets an emoji: off Recently and Frequently Used, no lift in search.
@@ -225,9 +232,9 @@ final class EmojiMode: Mode {
         let lookup = { (emoji: String) in index.entry(for: emoji) }
         var sections = [
             ResultSection(title: "Recently Used", items: usage.recent(Self.columns).compactMap(lookup)
-                .map { item(index, $0, id: "emoji.recent.\($0)") }),
+                .map { item(index, $0, id: "emoji.recent.\($0)", usedTone: true) }),
             ResultSection(title: "Frequently Used", items: usage.frequent(Self.columns).compactMap(lookup)
-                .map { item(index, $0, id: "emoji.frequent.\($0)") }),
+                .map { item(index, $0, id: "emoji.frequent.\($0)", usedTone: true) }),
         ]
         var byGroup = [[Item]](repeating: [], count: index.groups.count)
         for i in index.entries.indices { byGroup[index.entries[i].group].append(item(index, i, id: "emoji.\(i)")) }
@@ -236,12 +243,17 @@ final class EmojiMode: Mode {
     }
 
     /// One cell: ↵ pastes into the app behind hop, ⌘C copies, ⌘T picks a skin tone.
-    func item(_ index: EmojiIndex, _ i: Int, id: String) -> Item {
+    /// `usedTone`: in the tone it was last used in (Recently and Frequently Used), else the configured one.
+    func item(_ index: EmojiIndex, _ i: Int, id: String, usedTone: Bool = false) -> Item {
         let entry = index.entries[i]
-        let emoji = index.applying(skinTone, to: entry)
+        let usage = usage, base = entry.emoji
+        let tone = usedTone ? usage.tone(base) ?? skinTone : skinTone
+        let emoji = index.applying(tone, to: entry)
         let name = entry.name.prefix(1).uppercased() + entry.name.dropFirst()
-        let usage = usage, base = entry.emoji, tone = skinTone
-        var actions = Self.actions(emoji, name: name, record: { usage.record(base) }) { [weak self] in self?.context?.dismiss() }
+        let recorded = entry.takesSkinTone ? tone : nil
+        var actions = Self.actions(emoji, name: name, record: { usage.record(base, tone: recorded) }) { [weak self] in
+            self?.context?.dismiss()
+        }
         if entry.takesSkinTone {
             actions.append(Action(title: "Choose Skin Tone", symbol: "hand.raised", shortcut: .cmd("t")) {
                 .push(EmojiToneMode(index: index, entry: i, usage: usage, selected: tone))
@@ -328,7 +340,7 @@ final class EmojiToneMode: Mode {
             let emoji = index.applying(tone, to: e)
             let name = tone == .none ? base : "\(base): \(tone.label.lowercased()) skin tone"
             return Item(id: "emoji.tone.\(tone.rawValue)", title: name, subtitle: tone.label, icon: .emoji(emoji),
-                        actions: EmojiMode.actions(emoji, name: name, record: { usage.record(e.emoji) }) { [weak self] in
+                        actions: EmojiMode.actions(emoji, name: name, record: { usage.record(e.emoji, tone: e.takesSkinTone ? tone : nil) }) { [weak self] in
                             self?.context?.dismiss()
                         }, tracksFrecency: false)
         }
