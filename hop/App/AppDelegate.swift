@@ -314,6 +314,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 if defaults.string(forKey: "DebugPush") == "permissions" { launcher.push(makePermissions()) }
                 if defaults.string(forKey: "DebugPush") == "emoji" { launcher.push(EmojiCommands.mode(services)) }
                 if defaults.string(forKey: "DebugPush") == "theme" { launcher.push(ThemeMode(services: services)) }
+                if defaults.string(forKey: "DebugPush") == "expressvpn" {
+                    let e = settings.data.expressvpn
+                    launcher.push(ExpressVPNMode(showFlags: e.showFlags, favorites: e.favorites, sensitivity: settings.data.general.sensitivity))
+                }
                 if let page = defaults.string(forKey: "DebugSettings") {
                     settingsWindow.show(page: page)
                     if let path = defaults.string(forKey: "DebugSnapshotPath") {
