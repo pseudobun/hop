@@ -86,6 +86,14 @@
     },
   },
 
+  // ExpressVPN through expressvpnctl (comes with ExpressVPN.app); off: plugins.disabled
+  expressvpn: {
+    // Flag next to each region
+    showFlags: true,
+    // Regions on top of the list, in order; `hop vpn regions` lists them, e.g. ["slovenia", "uk-london"]
+    favorites: [],
+  },
+
   keepass: {
     enabled: false,
     // One entry per database; switch between them with ⌘D in hop.

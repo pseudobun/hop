@@ -121,6 +121,7 @@ struct PluginCLITests {
         #expect(owner("notes") == "notes")
         #expect(owner("kp") == "keepass")
         #expect(owner("wg") == "wireguard")
+        #expect(owner("vpn") == "expressvpn")
         #expect(owner("clip") == "clipboard")
         #expect(owner("calc") == "calculator")
         #expect(owner("tr") == "translate" && owner("translate") == "translate")

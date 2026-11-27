@@ -7,7 +7,7 @@ nonisolated enum BuiltinPlugins {
         HyperKeyPlugin.self, ClipboardPlugin.self, SnippetsPlugin.self,
         NotesPlugin.self, FilesPlugin.self, ShelfPlugin.self, CalculatorPlugin.self,
         EmojiPlugin.self, TranslatePlugin.self, ScreenTextPlugin.self,
-        WireGuardPlugin.self, KeePassPlugin.self, CalendarPlugin.self, MessagesPlugin.self,
+        WireGuardPlugin.self, ExpressVPNPlugin.self, KeePassPlugin.self, CalendarPlugin.self, MessagesPlugin.self,
         BookmarksPlugin.self, PawPlugin.self, SystemPlugin.self,
     ]
 
@@ -19,7 +19,7 @@ nonisolated enum BuiltinPlugins {
         HopConfig.Clipboard.self, HopConfig.Notes.self, HopConfig.Files.self, HopConfig.Shelf.self,
         HopConfig.CalculatorSettings.self, HopConfig.System.self,
         HopConfig.Emoji.self, HopConfig.Translate.self, HopConfig.OCR.self,
-        HopConfig.WireGuard.self, HopConfig.KeePass.self, HopConfig.CalendarSettings.self,
+        HopConfig.WireGuard.self, HopConfig.ExpressVPN.self, HopConfig.KeePass.self, HopConfig.CalendarSettings.self,
         HopConfig.Messages.self, HopConfig.Bookmarks.self,
     ]
 
