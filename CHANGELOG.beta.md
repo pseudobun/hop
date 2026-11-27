@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.0-beta.29](https://github.com/pseudobun/hop/compare/v0.1.0-beta.28...v0.1.0-beta.29) (2026-11-27)
+
+
+### Features
+
+* **expressvpn:** add ExpressVPN plugin ([#88](https://github.com/pseudobun/hop/issues/88)) ([45ee9f7](https://github.com/pseudobun/hop/commit/45ee9f769a968f87c87437f92c3c4859b6efd5b3))
+
 ## [0.1.0-beta.28](https://github.com/pseudobun/hop/compare/v0.1.0-beta.27...v0.1.0-beta.28) (2026-11-25)
 
 
