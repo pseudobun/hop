@@ -6,6 +6,18 @@
     <description>hop releases</description>
     <language>en</language>
     <item>
+      <title>hop 0.1.0-beta.29</title>
+      <pubDate>Fri, 27 Nov 2026 10:41:48 +0000</pubDate>
+      <sparkle:version>184</sparkle:version>
+      <sparkle:shortVersionString>0.1.0-beta.29</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
+      <description><![CDATA[<style>body{font:13px -apple-system,sans-serif;margin:12px 14px;color:#222}h3{font-size:13px;margin:12px 0 4px}ul{padding-left:18px;margin:4px 0}li{margin:2px 0}code{font:12px ui-monospace,monospace}a{color:#0a64d0}@media(prefers-color-scheme:dark){body{color:#ddd}a{color:#6ab0ff}}</style><h3>Features</h3>
+<ul>
+<li><b>expressvpn:</b> add ExpressVPN plugin (<a href="https://github.com/pseudobun/hop/issues/88">#88</a>) (<a href="https://github.com/pseudobun/hop/commit/45ee9f769a968f87c87437f92c3c4859b6efd5b3">45ee9f7</a>)</li>
+</ul><p><a href="https://github.com/pseudobun/hop/releases/tag/v0.1.0-beta.29">Release on GitHub</a></p>]]></description>
+      <enclosure url="https://github.com/pseudobun/hop/releases/download/v0.1.0-beta.29/hop-0.1.0-beta.29-macos.zip" type="application/octet-stream" sparkle:edSignature="u9fIxqxeTyiIPbtMFA+N7E8HuzfNwgcYBdLZ7oAeF5kl7rR2hK/09SAsVxDlBxrnPGlM53dA2bFxQZYK/3j0BA==" length="5292046"/>
+    </item>
+    <item>
       <title>hop 0.1.0-beta.28</title>
       <pubDate>Wed, 25 Nov 2026 23:41:14 +0000</pubDate>
       <sparkle:version>182</sparkle:version>
@@ -233,18 +245,6 @@
 <li>split hop into core and plugins, with installable plugins and SDKs (<a href="https://github.com/pseudobun/hop/issues/25">#25</a>) (<a href="https://github.com/pseudobun/hop/commit/d29d658fd5f095b0721ecdcdfc3e9def4595d385">d29d658</a>)</li>
 </ul><p><a href="https://github.com/pseudobun/hop/releases/tag/v0.1.0-beta.9">Release on GitHub</a></p>]]></description>
       <enclosure url="https://github.com/pseudobun/hop/releases/download/v0.1.0-beta.9/hop-0.1.0-beta.9-macos.zip" type="application/octet-stream" sparkle:edSignature="+JTJ+dwQcHe4m7njU0BYByhC9Z9jPP+5x2ZItL60eBF8mFk3zs0CHAJxoYNG/1k+JJEiBzBJWHuNHX2ARFr3DQ==" length="5164657"/>
-    </item>
-    <item>
-      <title>hop 0.1.0-beta.8</title>
-      <pubDate>Thu, 12 Nov 2026 09:41:15 +0000</pubDate>
-      <sparkle:version>137</sparkle:version>
-      <sparkle:shortVersionString>0.1.0-beta.8</sparkle:shortVersionString>
-      <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
-      <description><![CDATA[<style>body{font:13px -apple-system,sans-serif;margin:12px 14px;color:#222}h3{font-size:13px;margin:12px 0 4px}ul{padding-left:18px;margin:4px 0}li{margin:2px 0}code{font:12px ui-monospace,monospace}a{color:#0a64d0}@media(prefers-color-scheme:dark){body{color:#ddd}a{color:#6ab0ff}}</style><h3>Bug Fixes</h3>
-<ul>
-<li><b>settings:</b> offer only the beta channel until a stable version exists (<a href="https://github.com/pseudobun/hop/issues/22">#22</a>) (<a href="https://github.com/pseudobun/hop/commit/d56a5f65a8af23d8b5f250bcf6e963e1353001be">d56a5f6</a>)</li>
-</ul><p><a href="https://github.com/pseudobun/hop/releases/tag/v0.1.0-beta.8">Release on GitHub</a></p>]]></description>
-      <enclosure url="https://github.com/pseudobun/hop/releases/download/v0.1.0-beta.8/hop-0.1.0-beta.8-macos.zip" type="application/octet-stream" sparkle:edSignature="nUO23KIeh08E85br4BoBTjK5QEWaoD77ZtaL4TK8ypB0ylap0C4BYHHzUWrUB8467BIqjcJ287hCIFe4S/aEDA==" length="4899877"/>
     </item>
   </channel>
 </rss>
